@@ -1125,17 +1125,24 @@ function handPos(side, i){
   const sr = stage.getBoundingClientRect();
   const tray = trayOf(side);
   const slot = document.getElementById("slot" + tray).getBoundingClientRect();
-  const k = .78;
+  /* 가로로 넓은 화면에서는 손패 자리가 꽤 넓다. 그 바깥 끝에 붙여 두면 판에서
+     멀어 눈이 두 번 움직인다. 조금 줄여서 판 옆에 붙인다 — 닿지는 않게 띄우고. */
+  const k = LAND ? .62 : .78;
   const vw = (LAND ? eh() : ew()) * k, vh = (LAND ? ew() : eh()) * k;  // 화면상 크기
   const gy = vh * .18, gx = vw * .14;
+  const pad = LAND ? Math.max(12, vw * .30) : 0;   // 판과 손패 사이
   /* 가로 손패는 위아래로 먼저 쌓고, 세로 손패는 옆으로 먼저 쌓는다. */
   let row, col;
   if (LAND){ const per = Math.max(1, Math.floor((slot.height + gy) / (vh + gy)));
              row = i % per; col = Math.floor(i / per); }
   else     { const per = Math.max(1, Math.floor((slot.width  + gx) / (vw + gx)));
              col = i % per; row = Math.floor(i / per); }
-  const cx = tray === 0 ? slot.right - sr.left - vw/2 - col*(vw+gx)
-                        : slot.left  - sr.left + vw/2 + col*(vw+gx);
+  /* 가로는 판에 붙은 안쪽 끝부터 바깥으로 쌓는다. 세로는 띠가 얇아 그대로 둔다 */
+  const cx = LAND
+    ? (tray === 0 ? slot.left  - sr.left + pad + vw/2 + col*(vw+gx)
+                  : slot.right - sr.left - pad - vw/2 - col*(vw+gx))
+    : (tray === 0 ? slot.right - sr.left - vw/2 - col*(vw+gx)
+                  : slot.left  - sr.left + vw/2 + col*(vw+gx));
   const cy = tray === 0 ? slot.bottom - sr.top - vh/2 - row*(vh+gy)
                         : slot.top    - sr.top + vh/2 + row*(vh+gy);
   return {x: cx - ew()/2, y: cy - eh()/2, rot: ROT(side), s: k};
