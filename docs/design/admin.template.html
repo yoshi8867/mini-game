@@ -1,0 +1,310 @@
+<!doctype html><html lang="ko"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>미니쇼기 대회 · 관리</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@400;700&family=Gowun+Batang:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --wall:#17181a; --wall-2:#1e2023; --wall-line:#2f3237;
+  --chalk:#e9e6df; --chalk-dim:#9a958c; --mark:#e0bd6b;
+  --win:#6fae7a; --lose:#b4655c; --wait:#6b8fb8;
+  --s1:4px; --s2:10px; --s3:16px; --s4:24px; --s5:36px;
+}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+body{margin:0;background:var(--wall);color:var(--chalk);
+  font:400 15px/1.6 'Gothic A1',system-ui,sans-serif;
+  padding:var(--s4) var(--s3) var(--s5)}
+.wrap{max-width:860px;margin:0 auto}
+h1{font-family:'Gowun Batang',serif;font-size:26px;margin:0 0 var(--s1)}
+.sub{color:var(--chalk-dim);font-size:13.5px;margin:0 0 var(--s4)}
+.card{background:var(--wall-2);border:1px solid var(--wall-line);border-radius:10px;
+  padding:var(--s3);margin-bottom:var(--s3)}
+h2{font-family:'Gowun Batang',serif;font-size:19px;margin:0 0 var(--s2)}
+label{display:block;font-size:12.5px;color:var(--chalk-dim);margin-bottom:5px}
+input{width:100%;background:var(--wall);color:var(--chalk);
+  border:1px solid var(--wall-line);border-radius:6px;padding:11px 12px;
+  font:400 15px/1 'Gothic A1',system-ui,sans-serif}
+input:focus{outline:none;border-color:var(--mark)}
+input.pin{font-family:'JetBrains Mono',monospace;letter-spacing:.3em}
+.row{display:flex;gap:var(--s2);align-items:flex-end;flex-wrap:wrap}
+.row>div{flex:1;min-width:130px}
+button{font:700 13.5px/1 'Gothic A1',system-ui,sans-serif;cursor:pointer;
+  border-radius:999px;padding:12px 18px;border:1px solid var(--wall-line);
+  background:none;color:var(--chalk-dim);white-space:nowrap}
+button:hover{color:var(--chalk);border-color:var(--chalk-dim)}
+button.go{background:var(--mark);color:#17181a;border-color:var(--mark)}
+button.go:hover{background:#e9d494;color:#17181a}
+button.bad{color:var(--lose);border-color:#4a2f2c}
+button.bad:hover{background:#2a1c1a;color:#d98079}
+button:disabled{opacity:.4;cursor:not-allowed}
+.msg{margin:var(--s2) 0 0;font-size:13.5px;min-height:1.3em;color:var(--chalk-dim)}
+.msg.bad{color:var(--lose)} .msg.good{color:var(--win)}
+
+/* 대회 카드 */
+.cup-head{display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap}
+.cup-head h2{margin:0;flex:1;min-width:150px}
+.code{font:700 15px/1 'JetBrains Mono',monospace;color:var(--mark);
+  letter-spacing:.14em}
+.tag{font:700 11px/1 'Gothic A1',system-ui,sans-serif;padding:5px 9px;
+  border-radius:999px;background:var(--wall);border:1px solid var(--wall-line);
+  color:var(--chalk-dim)}
+.tag.open{color:var(--wait);border-color:#2f4157}
+.tag.running{color:var(--mark);border-color:#4b3f22}
+.tag.done{color:var(--win);border-color:#2c4432}
+.facts{display:flex;gap:var(--s3);flex-wrap:wrap;margin:var(--s2) 0 0;
+  font-size:13px;color:var(--chalk-dim)}
+.facts b{color:var(--chalk);font-weight:700}
+.acts{display:flex;gap:8px;margin-top:var(--s3);flex-wrap:wrap}
+
+/* 참가자 */
+.who{display:flex;flex-wrap:wrap;gap:6px;margin-top:var(--s2)}
+.who span{font-size:12.5px;padding:5px 9px;border-radius:5px;background:var(--wall);
+  border:1px solid var(--wall-line)}
+.who span.out{color:var(--chalk-dim);text-decoration:line-through}
+.who span.top{color:var(--mark);border-color:#4b3f22}
+
+/* 대진표 */
+.board{display:flex;gap:var(--s2);overflow-x:auto;margin-top:var(--s3);
+  padding-bottom:var(--s2)}
+.col{flex:none;width:186px}
+.col h3{font:700 12px/1 'Gothic A1',system-ui,sans-serif;letter-spacing:.1em;
+  color:var(--chalk-dim);margin:0 0 8px;text-align:center}
+.bout{background:var(--wall);border:1px solid var(--wall-line);border-radius:6px;
+  padding:7px 9px;margin-bottom:6px;font-size:12.5px}
+.bout.playing{border-color:var(--mark)}
+.bout.done{opacity:.72}
+.side{display:flex;justify-content:space-between;gap:6px;padding:2px 0}
+.side.won{color:var(--mark);font-weight:700}
+.side.lost{color:var(--chalk-dim)}
+.side.tbd{color:#5d5a55;font-style:italic}
+.pill{font:700 9.5px/1 'Gothic A1',system-ui,sans-serif;padding:3px 6px;
+  border-radius:999px;background:var(--wall-2);color:var(--chalk-dim);flex:none}
+.watchers{font-size:11px;color:var(--wait);margin-top:3px}
+.hint{color:var(--chalk-dim);font-size:13px}
+.right{margin-left:auto}
+</style>
+
+<div class="wrap">
+  <h1>미니쇼기 대회</h1>
+  <p class="sub">관리자 화면입니다. 대회를 열고, 대진을 짜고, 닫습니다.</p>
+
+  <!-- 열쇠 -->
+  <form class="card" id="gate">
+    <h2>관리자 확인</h2>
+    <div class="row">
+      <div>
+        <label for="pw">관리자 비밀번호</label>
+        <input id="pw" type="password" autocomplete="current-password" autofocus>
+      </div>
+      <button class="go" type="submit">들어가기</button>
+    </div>
+    <p class="msg" id="gateMsg"></p>
+  </form>
+
+  <!-- 대회 열기 -->
+  <form class="card" id="maker" hidden>
+    <h2>새 대회 열기</h2>
+    <div class="row">
+      <div style="flex:2">
+        <label for="title">대회 이름</label>
+        <input id="title" value="미니쇼기 대회" maxlength="40">
+      </div>
+      <div style="max-width:140px">
+        <label for="pin">참가 비밀번호 (숫자 4자리)</label>
+        <input id="pin" class="pin" inputmode="numeric" maxlength="4" value="">
+      </div>
+      <button class="go" type="submit">열기</button>
+    </div>
+    <p class="msg" id="makeMsg"></p>
+  </form>
+
+  <div id="cups"></div>
+  <p class="hint" id="empty" hidden>열린 대회가 없습니다. 위에서 하나 여세요.</p>
+
+  <p class="sub" id="foot" hidden></p>
+</div>
+
+<script>
+(() => {
+const $ = s => document.querySelector(s);
+const el = id => document.getElementById(id);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c =>
+  ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/* 서버는 게임 페이지와 같은 곳이다 */
+const Q = new URLSearchParams(location.search);
+const local = /^(localhost|127\.|192\.168\.|10\.)/.test(location.hostname);
+const API = (Q.get("server") || (local ? "http://" + location.hostname + ":3000"
+                                      : "https://mini-shogi.onrender.com"))
+            .replace(/\/+$/, "");
+
+let token = null, timer = null;
+try { token = sessionStorage.getItem("shogi-admin") || null; } catch (e) {}
+
+async function call(what, body){
+  const r = await fetch(API + "/admin/" + what, {
+    method: "POST", headers: {"content-type": "application/json"},
+    body: JSON.stringify(Object.assign({token}, body || {})),
+  });
+  const j = await r.json().catch(() => ({ok: false, why: "깨진 응답"}));
+  if (!r.ok && j.why === "stale") signOut("표가 만료됐습니다. 다시 들어와 주세요.");
+  return j;
+}
+function say(node, text, kind){
+  const n = el(node);
+  n.textContent = text || "";
+  n.className = "msg" + (kind ? " " + kind : "");
+}
+function signOut(why){
+  token = null;
+  try { sessionStorage.removeItem("shogi-admin"); } catch (e) {}
+  clearInterval(timer); timer = null;
+  el("gate").hidden = false; el("maker").hidden = true;
+  el("cups").innerHTML = ""; el("empty").hidden = true; el("foot").hidden = true;
+  say("gateMsg", why || "", why ? "bad" : "");
+}
+
+/* ─── 들어가기 ─── */
+el("gate").addEventListener("submit", async e => {
+  e.preventDefault();
+  say("gateMsg", "확인하는 중입니다…");
+  let j;
+  try {
+    const r = await fetch(API + "/admin/login", {
+      method: "POST", headers: {"content-type": "application/json"},
+      body: JSON.stringify({pw: el("pw").value}),
+    });
+    j = await r.json();
+  } catch (err) {
+    return say("gateMsg", "서버에 닿지 않습니다. 무료 서버라 깨는 데 1분쯤 걸립니다.", "bad");
+  }
+  if (!j.ok) return say("gateMsg", "비밀번호가 맞지 않습니다.", "bad");
+  token = j.token;
+  try { sessionStorage.setItem("shogi-admin", token); } catch (e) {}
+  el("pw").value = "";
+  enter();
+});
+
+function enter(){
+  el("gate").hidden = true; el("maker").hidden = false;
+  say("gateMsg", "");
+  refresh();
+  clearInterval(timer);
+  timer = setInterval(refresh, 4000);       // 대회 중에는 저절로 따라간다
+}
+
+/* ─── 대회 열기 ─── */
+el("maker").addEventListener("submit", async e => {
+  e.preventDefault();
+  const pin = el("pin").value.replace(/[^0-9]/g, "");
+  if (pin.length !== 4) return say("makeMsg", "참가 비밀번호는 숫자 네 자리입니다.", "bad");
+  say("makeMsg", "여는 중입니다…");
+  const j = await call("open", {pin, title: el("title").value.trim()});
+  if (!j.ok) return say("makeMsg", ERR[j.why] || j.why, "bad");
+  say("makeMsg", "대회 " + j.cup.code + " 를 열었습니다.", "good");
+  el("pin").value = "";
+  refresh();
+});
+
+const ERR = {badpin:"비밀번호는 숫자 네 자리입니다", busy:"대회가 너무 많습니다",
+             nocup:"없는 대회입니다", few:"두 명은 있어야 시작합니다",
+             started:"이미 시작한 대회입니다", stale:"다시 들어와 주세요"};
+
+/* ─── 현황 ─── */
+async function refresh(){
+  const j = await call("state");
+  if (!j.ok) return;
+  paint(j);
+}
+
+const STATE = {open:"접수 중", running:"진행 중", done:"끝남"};
+function paint(j){
+  const box = el("cups");
+  el("empty").hidden = j.cups.length > 0;
+  el("foot").hidden = false;
+  el("foot").textContent =
+    "서버에 접속 중인 사람 " + j.players + "명 · 열린 대국 " + j.rooms + "개";
+
+  box.innerHTML = j.cups.map(c => {
+    const acts = [];
+    if (c.state === "open"){
+      acts.push(btn("start", c.code, "go", "대진 짜고 시작"));
+      acts.push(btn("mock", c.code, "", "연습 참가자 8명"));
+    }
+    acts.push(btn("close", c.code, "bad right", c.state === "running" ? "대회 중단" : "대회 닫기"));
+
+    return '<div class="card">' +
+      '<div class="cup-head">' +
+        '<h2>' + esc(c.title) + '</h2>' +
+        '<span class="code">' + esc(c.code) + '</span>' +
+        '<span class="tag ' + c.state + '">' + STATE[c.state] + '</span>' +
+      '</div>' +
+      '<div class="facts">' +
+        '<span>참가 <b>' + c.people + '</b>명</span>' +
+        '<span>참가 비번 <b>' + esc(c.pin || "없음") + '</b></span>' +
+        (c.state === "open" ? "" :
+          '<span>진행 중 <b>' + c.counts.playing + '</b></span>' +
+          '<span>남은 대국 <b>' + c.counts.pending + '</b></span>') +
+        (c.champion ? '<span>우승 <b>' + esc(c.champion) + '</b></span>' : "") +
+      '</div>' +
+      (c.state === "open" ? entrants(c) : board(c)) +
+      '<div class="acts">' + acts.join("") + '</div>' +
+    '</div>';
+  }).join("");
+
+  box.querySelectorAll("button[data-do]").forEach(b =>
+    b.addEventListener("click", () => act(b.dataset.do, b.dataset.code)));
+}
+function btn(what, code, cls, text){
+  return '<button class="' + cls + '" data-do="' + what + '" data-code="' + code + '">' +
+         text + '</button>';
+}
+function entrants(c){
+  if (!c.entrants.length)
+    return '<p class="hint" style="margin-top:12px">아직 아무도 안 들어왔습니다. ' +
+           '학생들에게 대회 비밀번호 <b>' + esc(c.pin) + '</b> 를 알려 주세요.</p>';
+  return '<div class="who">' +
+    c.entrants.map(p => '<span>' + esc(p.name) + '</span>').join("") + '</div>';
+}
+function board(c){
+  const cols = c.board.map(r =>
+    '<div class="col"><h3>' + r.name + '</h3>' +
+    r.matches.map(m => bout(m, r.round)).join("") + '</div>').join("");
+  return '<div class="board">' + cols + '</div>';
+}
+function bout(m, round){
+  const one = (p, other) => {
+    if (!p) return '<div class="side tbd"><span>' +
+                   (round === 0 ? "부전승" : "미정") + '</span></div>';
+    const won  = m.winner === p.pid;
+    const lost = m.state === "done" && !won;
+    return '<div class="side ' + (won ? "won" : lost ? "lost" : "") + '">' +
+           '<span>' + esc(p.name) + '</span>' +
+           (won ? '<span class="pill">승</span>' : "") + '</div>';
+  };
+  const watchers = m.watchers ?
+    '<div class="watchers">' + m.watchers + '명 관전 중</div>' : "";
+  return '<div class="bout ' + m.state + '">' + one(m.a) + one(m.b) + watchers + '</div>';
+}
+
+/* ─── 버튼 ─── */
+async function act(what, code){
+  if (what === "close" &&
+      !confirm("대회 " + code + " 를 닫습니다. 진행 중인 대국도 사라집니다. 닫을까요?"))
+    return;
+  if (what === "start" &&
+      !confirm("여기서 참가가 마감되고 대진표가 확정됩니다. 시작할까요?")) return;
+  const body = {code};
+  if (what === "mock") body.n = 8;
+  const j = await call(what, body);
+  if (!j.ok) return alert(ERR[j.why] || j.why);
+  if (what === "start")
+    alert(j.size + "강 대진 · 부전승 " + j.byes + "명 · " + j.cup.rounds + "라운드");
+  refresh();
+}
+
+if (token) enter();
+})();
+</script>

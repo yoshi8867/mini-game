@@ -8,6 +8,7 @@
    HTTP  GET  /healthz  깨우기용. 상태를 JSON 으로 돌려준다
          GET  /stats    얼마나 뒀는지 집계
          POST /local    브라우저가 혼자 둔 판의 결과를 보내온다
+         POST /admin/*  대회를 열고 닫는다. 관리자만
          GET  /         사람이 열었을 때 볼 한 줄
    WS    /ws           목록과 대국
    ══════════════════════════════════════════════════════════════════════ */
@@ -18,6 +19,8 @@ const http = require("http");
 const {WebSocketServer} = require("ws");
 const {Room, newCode, okPin, LIMIT_MS} = require("./room.js");
 const players = require("./players.js");
+const admin = require("./admin.js");
+const {Tourney, MAX_ENTRANTS} = require("./tourney.js");
 
 const PORT = process.env.PORT || 3000;
 const STARTED = Date.now();
@@ -25,6 +28,9 @@ const STARTED = Date.now();
 /* 대국은 메모리에만 둔다. 무료 인스턴스는 영구 디스크가 없고, 재배포하면
    어차피 다 날아간다. 기록으로 남길 것은 끝난 판의 승패뿐이다. */
 const rooms = new Map();
+const cups  = new Map();                 // 대회. 이것도 메모리에만 둔다 —
+                                         // 서버가 다시 뜨면 대회는 사라진다
+const MAX_CUPS = 20;
 const EMPTY_TTL = 10 * 60 * 1000;        // 아무도 없는 대국은 10분 뒤 치운다
 const MAX_ROOMS = 200;
 
@@ -84,6 +90,24 @@ function cors(res){
   res.setHeader("access-control-max-age", "86400");
 }
 
+/* 본문은 바이트로 모았다가 한 번에 읽는다. 글자로 이어 붙이면 한글 한 자가
+   덩이 두 개에 걸칠 때 깨진다. */
+function readBody(req, limit, then){
+  const bits = [];
+  let n = 0;
+  req.on("data", c => {
+    n += c.length;
+    if (n > limit){ bits.length = 0; return req.destroy(); }
+    bits.push(c);
+  });
+  req.on("end", () => {
+    let o = null;
+    try { o = JSON.parse(Buffer.concat(bits).toString("utf8") || "{}"); }
+    catch (e) {}
+    then(o);
+  });
+}
+
 /* 아무나 부를 수 있는 창구다. 한 곳에서 쏟아붓지 못하게 막아 둔다 */
 const RATE = new Map();                  // ip → {n, until}
 const RATE_MAX = 60, RATE_WINDOW = 10 * 60 * 1000;
@@ -135,14 +159,9 @@ const server = http.createServer((req, res) => {
       res.end(JSON.stringify(body));
     };
     if (tooMany(ip)) return done(429, {ok: false, why: "too many"});
-    let raw = "";
-    req.on("data", c => {
-      raw += c;
-      if (raw.length > 2000){ raw = ""; req.destroy(); }   // 결과 한 줄이 그리 클 리 없다
-    });
-    req.on("end", () => {
-      let g = null;
-      try { g = cleanLocal(JSON.parse(raw)); } catch (e) {}
+    /* 결과 한 줄이 그리 클 리 없다 */
+    readBody(req, 2000, o => {
+      const g = cleanLocal(o);
       if (!g) return done(400, {ok: false, why: "bad"});
       /* 기다리게 하지 않는다. 브라우저는 이미 다음 판을 놓고 있다 */
       done(202, {ok: true});
@@ -175,6 +194,25 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  /* ─── 관리자 ──────────────────────────────────────────────────────
+     검사는 여기서 한다. 페이지에서 하면 소스를 열어 건너뛴다. */
+  if (url.slice(0, 7) === "/admin/"){
+    if (req.method !== "POST"){
+      res.writeHead(405, {"content-type": "application/json; charset=utf-8"});
+      return res.end(JSON.stringify({ok: false, why: "post only"}));
+    }
+    const done = (code, body) => {
+      res.writeHead(code, {"content-type": "application/json; charset=utf-8",
+                           "cache-control": "no-store"});
+      res.end(JSON.stringify(body));
+    };
+    readBody(req, 4000, m => {
+      if (!m || typeof m !== "object") return done(400, {ok: false, why: "bad"});
+      onAdmin(url.slice(7), m, done);
+    });
+    return;
+  }
+
   if (url === "/stats"){
     if (!db.enabled()){
       res.writeHead(503, {"content-type": "application/json; charset=utf-8"});
@@ -195,6 +233,67 @@ const server = http.createServer((req, res) => {
   res.writeHead(404, {"content-type": "text/plain; charset=utf-8"});
   res.end("없는 주소입니다\n");
 });
+
+/* ─── 관리자가 시키는 일 ───────────────────────────────────────────── */
+function onAdmin(what, m, done){
+  /* 들어오는 문은 하나뿐이다. 나머지는 표를 들고 와야 한다 */
+  if (what === "login"){
+    if (!admin.ok(m.pw)) return done(401, {ok: false, why: "no"});
+    return done(200, {ok: true, token: admin.grant()});
+  }
+  if (!admin.holds(m.token)) return done(401, {ok: false, why: "stale"});
+
+  const cup = () => cups.get(String(m.code || "").toUpperCase());
+
+  switch (what){
+    case "state": {
+      const list = [...cups.values()].map(c => c.full());
+      list.sort((a, b) => b.made - a.made);
+      return done(200, {ok: true, cups: list, rooms: rooms.size,
+                        players: wss.clients.size});
+    }
+    case "open": {
+      if (cups.size >= MAX_CUPS) return done(409, {ok: false, why: "busy"});
+      if (!okPin(m.pin)) return done(400, {ok: false, why: "badpin"});
+      const code = newCode(c => cups.has(c) || rooms.has(c));
+      const c = new Tourney(code, {pin: m.pin, title: m.title});
+      cups.set(code, c);
+      pushList();
+      return done(200, {ok: true, cup: c.full()});
+    }
+    case "start": {
+      const c = cup();
+      if (!c) return done(404, {ok: false, why: "nocup"});
+      const r = c.start();
+      if (r.err) return done(409, {ok: false, why: r.err});
+      pushList();
+      return done(200, {ok: true, cup: c.full(), size: r.size, byes: r.byes});
+    }
+    case "close": {
+      const c = cup();
+      if (!c) return done(404, {ok: false, why: "nocup"});
+      cups.delete(c.code);
+      pushList();
+      return done(200, {ok: true});
+    }
+    /* 리허설용 — 수업 전에 대진표가 어떻게 그려지는지 보려고 쓴다.
+       접수 중인 대회에만 넣을 수 있다. */
+    case "mock": {
+      const c = cup();
+      if (!c) return done(404, {ok: false, why: "nocup"});
+      if (c.state !== "open") return done(409, {ok: false, why: "started"});
+      let n = m.n | 0;
+      if (n < 1) n = 1;
+      if (c.people.size + n > MAX_ENTRANTS) n = MAX_ENTRANTS - c.people.size;
+      for (let i = 0; i < n; i++)
+        c.join(players.get("mock-" + c.code + "-" + Date.now().toString(36) +
+                           "-" + i + "-" + Math.random().toString(36).slice(2, 8)));
+      return done(200, {ok: true, cup: c.full()});
+    }
+    default:
+      return done(404, {ok: false, why: "unknown"});
+  }
+}
 
 /* ─── WebSocket ────────────────────────────────────────────────────── */
 const wss = new WebSocketServer({server, path: "/ws"});
