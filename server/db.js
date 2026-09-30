@@ -8,6 +8,9 @@
 
    남기는 것은 한 판의 결과뿐이다 — 누가 이겼고, 어떻게 끝났고, 몇 수였는지.
    기보는 남기지 않는다. 얼마나 뒀는지 집계하는 데 그게 필요하지 않다.
+
+   온라인 판은 서버가 심판이라 그 자리에서 남기고, 오프라인 판은 브라우저가
+   /local 로 보낸다. mode 로 갈라 둔다 — online / duo(둘이 두기) / ai.
    ══════════════════════════════════════════════════════════════════════ */
 "use strict";
 
@@ -43,6 +46,9 @@ create table if not exists games (
 );
 create index if not exists games_ended_at_idx on games (ended_at desc);
 alter table games drop column if exists moves;   -- 기보는 안 남기기로 했다
+alter table games add column if not exists mode    text not null default 'online';
+alter table games add column if not exists ai_side smallint;   -- ai 판에서 기계가 앉은 자리
+create index if not exists games_mode_idx on games (mode);
 `;
 
 /* 처음 쓸 때 한 번만 스키마를 맞춘다. 실패하면 이후로는 조용히 꺼진다. */
@@ -61,9 +67,10 @@ async function saveGame(g){
   if (!(await init())) return false;
   try {
     await pool.query(
-      `insert into games (code, first_side, winner, why, plies, started_at)
-       values ($1,$2,$3,$4,$5,$6)`,
-      [g.code, g.first, g.winner, g.why, g.plies, new Date(g.startedAt)]);
+      `insert into games (code, first_side, winner, why, plies, started_at, mode, ai_side)
+       values ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [g.code, g.first, g.winner, g.why, g.plies, new Date(g.startedAt),
+       g.mode || "online", g.aiSide === 0 || g.aiSide === 1 ? g.aiSide : null]);
     return true;
   } catch (e){
     console.warn("db   결과 저장 실패:", e.message);   // 대국은 이미 끝났다. 넘어간다
@@ -75,7 +82,7 @@ async function saveGame(g){
 async function stats(){
   if (!pool || broken) return null;
   try {
-    const [total, byWhy] = await Promise.all([
+    const [total, byWhy, byMode] = await Promise.all([
       pool.query(`
         select count(*)::int                                         as games,
                coalesce(sum(plies),0)::int                           as plies,
@@ -89,9 +96,25 @@ async function stats(){
         from games`),
       pool.query(`select why, count(*)::int as n
                   from games group by why order by n desc`),
+      pool.query(`
+        select mode,
+               count(*)::int                                          as games,
+               coalesce(sum(plies),0)::int                            as plies,
+               count(*) filter (where winner is null)::int            as draws,
+               count(*) filter (where ai_side is not null
+                                  and winner = ai_side)::int          as ai_wins,
+               count(*) filter (where ai_side is not null
+                                  and winner is not null
+                                  and winner <> ai_side)::int         as human_wins
+        from games group by mode order by games desc`),
     ]);
     return {...total.rows[0],
-            why: Object.fromEntries(byWhy.rows.map(r => [r.why, r.n]))};
+            why: Object.fromEntries(byWhy.rows.map(r => [r.why, r.n])),
+            modes: Object.fromEntries(byMode.rows.map(r => {
+              const {mode, ...rest} = r;
+              if (mode !== "ai"){ delete rest.ai_wins; delete rest.human_wins; }
+              return [mode, rest];
+            }))};
   } catch (e){ console.warn("db   집계 실패:", e.message); return null; }
 }
 

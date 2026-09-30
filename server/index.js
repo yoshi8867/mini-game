@@ -5,9 +5,10 @@
    탐색은 하지 않는다. AI 는 클라이언트 워커에 있다. 그래서 이 서버는
    Render 무료 인스턴스에서도 논다.
 
-   HTTP  GET /healthz  깨우기용. 상태를 JSON 으로 돌려준다
-         GET /stats    얼마나 뒀는지 집계
-         GET /         사람이 열었을 때 볼 한 줄
+   HTTP  GET  /healthz  깨우기용. 상태를 JSON 으로 돌려준다
+         GET  /stats    얼마나 뒀는지 집계
+         POST /local    브라우저가 혼자 둔 판의 결과를 보내온다
+         GET  /         사람이 열었을 때 볼 한 줄
    WS    /ws           목록과 대국
    ══════════════════════════════════════════════════════════════════════ */
 "use strict";
@@ -74,8 +75,81 @@ function ended(room){
 }
 
 /* ─── HTTP ─────────────────────────────────────────────────────────── */
+/* 오프라인 판은 브라우저가 보내온다. 페이지는 github.io, 서버는 onrender.com
+   이라 남남이다 — 문을 열어 둔다. 남기는 것은 결과 숫자뿐이라 숨길 것이 없다. */
+function cors(res){
+  res.setHeader("access-control-allow-origin", "*");
+  res.setHeader("access-control-allow-methods", "GET, POST, OPTIONS");
+  res.setHeader("access-control-allow-headers", "content-type");
+  res.setHeader("access-control-max-age", "86400");
+}
+
+/* 아무나 부를 수 있는 창구다. 한 곳에서 쏟아붓지 못하게 막아 둔다 */
+const RATE = new Map();                  // ip → {n, until}
+const RATE_MAX = 60, RATE_WINDOW = 10 * 60 * 1000;
+function tooMany(ip){
+  const now = Date.now();
+  let r = RATE.get(ip);
+  if (!r || now > r.until){ r = {n: 0, until: now + RATE_WINDOW}; RATE.set(ip, r); }
+  if (RATE.size > 5000) RATE.clear();    // 무료 인스턴스다. 무한정 쌓지 않는다
+  return ++r.n > RATE_MAX;
+}
+
+const WHYS = ["catch", "try", "repeat", "stuck", "time", "resign"];
+/* 브라우저 말은 그대로 믿지 않는다. 모양이 맞는 것만 통과시킨다 */
+function cleanLocal(o){
+  if (!o || typeof o !== "object") return null;
+  const mode = o.mode === "ai" ? "ai" : o.mode === "duo" ? "duo" : null;
+  if (!mode) return null;
+  if (WHYS.indexOf(o.why) < 0) return null;
+  const plies = o.plies | 0;
+  if (plies < 0 || plies > 500) return null;
+  const winner = o.winner === 0 || o.winner === 1 ? o.winner : null;
+  const first  = o.first === 1 ? 1 : 0;
+  /* 3수 이하의 시간초과는 대국이 아니다. 열어만 두고 자리를 뜬 화면이다 */
+  if (o.why === "time" && plies <= 3) return null;
+  const now = Date.now();
+  let started = +o.startedAt;
+  if (!Number.isFinite(started) || started > now || now - started > 24 * 3600 * 1000)
+    started = now;
+  return {code: "LOCAL", mode, first, winner, why: o.why, plies, startedAt: started,
+          aiSide: mode === "ai" ? 1 : null};
+}
+
 const server = http.createServer((req, res) => {
   const url = (req.url || "/").split("?")[0];
+  cors(res);
+
+  if (req.method === "OPTIONS"){ res.writeHead(204); return res.end(); }
+
+  if (url === "/local"){
+    if (req.method !== "POST"){
+      res.writeHead(405, {"content-type": "application/json; charset=utf-8"});
+      return res.end(JSON.stringify({ok: false, why: "post only"}));
+    }
+    const ip = (req.headers["x-forwarded-for"] || "").split(",")[0].trim()
+            || (req.socket.remoteAddress || "?");
+    const done = (code, body) => {
+      res.writeHead(code, {"content-type": "application/json; charset=utf-8",
+                           "cache-control": "no-store"});
+      res.end(JSON.stringify(body));
+    };
+    if (tooMany(ip)) return done(429, {ok: false, why: "too many"});
+    let raw = "";
+    req.on("data", c => {
+      raw += c;
+      if (raw.length > 2000){ raw = ""; req.destroy(); }   // 결과 한 줄이 그리 클 리 없다
+    });
+    req.on("end", () => {
+      let g = null;
+      try { g = cleanLocal(JSON.parse(raw)); } catch (e) {}
+      if (!g) return done(400, {ok: false, why: "bad"});
+      /* 기다리게 하지 않는다. 브라우저는 이미 다음 판을 놓고 있다 */
+      done(202, {ok: true});
+      db.saveGame(g).catch(() => {});
+    });
+    return;
+  }
 
   if (url === "/healthz"){
     let people = 0, playing = 0;

@@ -146,8 +146,11 @@ body.portrait .grid{grid-template-columns:repeat(3,1fr);grid-template-rows:repea
 .bmsg.a{transform:rotate(-90deg)} .bmsg.b{transform:rotate(90deg)}
 body.portrait .banner{flex-direction:column;gap:7%}
 body.portrait .bmsg.a{transform:none} body.portrait .bmsg.b{transform:rotate(180deg)}
+/* display 를 주는 클래스는 브라우저 기본 [hidden] 규칙을 눌러 버린다.
+   그러면 hidden 을 켜도 안 사라진다 — 규칙 팝업이 안 닫히던 이유다. */
+[hidden]{display:none !important}
+
 /* 대국 목록 */
-.net [hidden]{display:none}        /* display 를 준 요소도 hidden 이면 숨는다 */
 .net-scrim{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.55)}
 .net{position:fixed;z-index:81;left:50%;top:50%;transform:translate(-50%,-50%);
   width:min(440px,94vw);max-height:86vh;overflow:auto;background:var(--wall-2);
@@ -344,11 +347,12 @@ body.ai .t1 .clock{display:none}        /* AI 차례에는 시계를 재지 않�
 
 /* 행마는 글로 적는 것보다 그려 보이는 편이 빠르다.
    가운데가 기물이고, 점이 갈 수 있는 칸이다. 위쪽이 앞이다. */
-.mv-list{margin:var(--s3) 0 0;display:grid;gap:10px}
-.mv-row{display:grid;grid-template-columns:54px 62px 1fr;align-items:center;gap:12px}
-.mv-name{font-weight:700;font-size:14px}
-.mv-what{font-size:13.5px;color:var(--chalk-dim);line-height:1.5}
-.mv{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;width:62px;
+.mv-list{margin:var(--s3) 0 0;display:grid;grid-template-columns:repeat(5,1fr);
+  gap:8px}
+.mv-row{min-width:0}
+.mv-name{display:block;margin-top:7px;text-align:center;font-weight:700;font-size:12.5px}
+.mv{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;
+  width:100%;max-width:66px;margin:0 auto;
   background:var(--wall-line);border:1px solid var(--wall-line);border-radius:4px;
   overflow:hidden}
 .mv .c{aspect-ratio:1;background:var(--wall);display:grid;place-items:center}
@@ -364,6 +368,7 @@ body.ai .t1 .clock{display:none}        /* AI 차례에는 시계를 재지 않�
   margin-top:2px}
 .rules-body h2{font-family:'Gowun Batang',serif;font-size:19px;margin:var(--s4) 0 0}
 .rules-body h2:first-child{margin-top:0}
+.rules-body .lede{margin:0 0 var(--s3);font-size:14px;color:var(--chalk);line-height:1.65}
 .rules-body p{margin:var(--s2) 0 0;font-size:13.5px;color:var(--chalk-dim);line-height:1.6}
 </style>
 
@@ -444,6 +449,9 @@ body.ai .t1 .clock{display:none}        /* AI 차례에는 시계를 재지 않�
     <button class="rules-close" id="rulesClose" aria-label="닫기">✕</button>
   </div>
   <div class="rules-body">
+  <p class="lede">쇼기<span lang="ja">将棋</span>는 일본 장기입니다.
+     잡은 상대의 말을 자기 것으로 활용하는 것이 특징입니다.</p>
+
   <h2>이기는 법</h2>
   <ol class="win">
     <li>상대 킹 잡기</li>
@@ -452,8 +460,9 @@ body.ai .t1 .clock{display:none}        /* AI 차례에는 시계를 재지 않�
   </ol>
 
   <h2>행마</h2>
-  <p>기물은 체스 모양이지만 규칙은 쇼기(일본 장기)입니다. 룩도 비숍도 한 칸만 갑니다.
-     가운데가 기물이고 점이 갈 수 있는 칸입니다 — 위쪽이 앞입니다.</p>
+  <p>기물은 체스 모양이지만 규칙은 쇼기입니다. 룩도 비숍도 한 칸만 갑니다.
+     가운데가 기물이고 점이 갈 수 있는 칸입니다 — 위쪽이 앞입니다.
+     폰은 상대 끝줄에 닿으면 퀸이 됩니다.</p>
   <div class="mv-list" id="mvList"></div>
 
   <h2>그 밖에</h2>
@@ -835,7 +844,9 @@ function freshGame(){
   put(0,0,"G",1); put(0,1,"L",1); put(0,2,"E",1); put(1,1,"C",1);
   put(2,1,"C",0); put(3,0,"E",0); put(3,1,"L",0); put(3,2,"G",0);
   hand = [[],[]]; turn = first; sel = null; busy = false; over = false; seen = new Map();
+  plies = 0; bornAt = Date.now();
 }
+let plies = 0, bornAt = Date.now();
 function movesOf(r,c){
   const p = cells[r][c], out = [];
   if (!p) return out;
@@ -940,7 +951,7 @@ function clockStart(keep){
     if (left <= 0){
       clockStop();
       if (ONLINE()) return;                  // 시간 초과 판정은 서버 몫이다
-      finish(1 - turn);
+      finish(1 - turn, "time");
     }
   }, 100);
 }
@@ -1080,7 +1091,7 @@ function say(msg, why, hold){
 }
 /* 알림은 두 벌이고 각각 한 사람을 보고 있다. 같은 말을 두 번 띄울 게 아니라
    이긴 쪽에는 `승리`, 진 쪽에는 `패배` 를 보여준다. 이유는 적지 않는다. */
-function finish(winner){                 // winner: 0 | 1 | null(무승부)
+function finish(winner, why){            // winner: 0 | 1 | null(무승부)
   if (over) return;                      // 서버 알림과 로컬 판정이 겹칠 수 있다
   over = true; busy = false;
   clockStop(); deselect();
@@ -1094,6 +1105,25 @@ function finish(winner){                 // winner: 0 | 1 | null(무승부)
   banner.querySelectorAll(".why").forEach(e => e.textContent = "");
   document.querySelectorAll(".tray").forEach(t => t.classList.remove("on"));
   log.innerHTML = draw ? "<b>무승부</b>" : `<b>${SIDE(winner)} 승리</b>`;
+  if (!ONLINE()) sendLocal(winner, why);   // 온라인 판은 서버가 이미 남겼다
+}
+
+/* ─── 오프라인 판도 집계에 넣는다 ─────────────────────────────────────
+   서버가 자고 있든 없든 대국은 상관없다. 보내고 잊는다.
+   preflight 를 부르지 않으려고 text/plain 으로 보낸다 — 서버는 어차피
+   본문을 JSON 으로 읽는다. */
+function sendLocal(winner, why){
+  if (!why) return;
+  if (why === "time" && plies <= 3) return;   // 열어만 두고 자리를 뜬 화면이다
+  const body = {mode: vs === "ai" ? "ai" : "duo",
+                winner, why, plies, first, startedAt: bornAt};
+  try {
+    fetch(SERVER.replace(/^ws/, "http").replace(/\/ws$/, "") + "/local", {
+      method: "POST", mode: "cors", keepalive: true,
+      headers: {"content-type": "text/plain;charset=UTF-8"},
+      body: JSON.stringify(body),
+    }).catch(() => {});
+  } catch (e) {}
 }
 
 /* ═══ 착수 지점 ═══ */
@@ -1173,7 +1203,7 @@ async function doMove(r, c, mv, dragged, server){
     if (dragged) place(p0.el, sqPos(r, c, p0.s), true);   // 끌어다 놓은 자리에서 제자리로
     return netSend(r*COLS + c, mv.r*COLS + mv.c, 0);
   }
-  busy = true; deselect();
+  busy = true; deselect(); plies++;
   const p = cells[r][c];
   const victim = mv.take, dest = sqPos(mv.r, mv.c, p.s);
   const lionTaken = victim && victim.t === "L";
@@ -1197,7 +1227,7 @@ async function doMove(r, c, mv, dragged, server){
     else { await hop(p.el, dest, {ms:300}); tak(); }
   }
   if (over) return;
-  if (lionTaken){ finish(p.s); return; }              // 캐치
+  if (lionTaken){ finish(p.s, "catch"); return; }      // 캐치
 
   if (p.t === "C" && mv.r === backRank(p.s)){          // 승격 — 강제
     await wait(120);
@@ -1208,7 +1238,7 @@ async function doMove(r, c, mv, dragged, server){
     await wait(320);
   }
   if (p.t === "L" && mv.r === backRank(p.s)){          // 트라이
-    if (!attacked(mv.r, mv.c, 1 - p.s)){ finish(p.s); return; }   // 트라이
+    if (!attacked(mv.r, mv.c, 1 - p.s)){ finish(p.s, "try"); return; }   // 트라이
     say("트라이 실패", "잡히는 자리", 1100);
     log.innerHTML += " · <b>끝줄 도달했으나 공격받는 칸</b>";
     await wait(600);
@@ -1225,7 +1255,7 @@ async function doDrop(p, r, c, dragged, server){
     if (dragged) place(p.el, handPos(at[0], at[1]), true);
     return netSend(-1, r*COLS + c, TIDX[p.t]);
   }
-  busy = true; deselect();
+  busy = true; deselect(); plies++;
   hand[at[0]].splice(at[1], 1);
   cells[r][c] = p;
   const dest = sqPos(r, c, p.s);
@@ -1243,9 +1273,9 @@ function endTurn(){
   if (ONLINE()){ busy = false; return netSync(); }
   const k = posKey(), n = (seen.get(k) || 0) + 1;
   seen.set(k, n);
-  if (n >= 3){ finish(null); return; }                // 같은 국면 3회
+  if (n >= 3){ finish(null, "repeat"); return; }       // 같은 국면 3회
   if (n === 2) log.innerHTML += " · <b>같은 국면 2회째</b>";
-  if (!hasAnyMove(turn)){ finish(1 - turn); return; }  // 둘 수 있는 수가 없다
+  if (!hasAnyMove(turn)){ finish(1 - turn, "stuck"); return; }  // 둘 수 있는 수가 없다
   busy = false;
   clockStart();
   maybeAI();
@@ -1883,26 +1913,19 @@ if (document.fonts && document.fonts.ready) document.fonts.ready.then(measure);
    처음 한 번은 저절로 뜬다. 그것을 닫는 순간이 대국 시작이다.
    보는 동안에는 시계를 멈춘다 — 규칙 읽느라 시간이 깎이면 억울하다.
    온라인은 못 멈춘다. 시계를 쥔 것은 서버이고, 여기서 멈춰 봐야 거짓말이다. */
-const MOVES = [
-  ["L", "킹",   "여덟 방향 한 칸"],
-  ["G", "룩",   "상하좌우 한 칸"],
-  ["E", "비숍", "대각 네 방향 한 칸"],
-  ["C", "폰",   "앞 한 칸. 상대 끝줄에 닿으면 퀸이 된다"],
-  ["H", "퀸",   "뒤 대각 둘을 뺀 여섯 방향 한 칸"],
-];
+const MOVES = [["L","킹"], ["G","룩"], ["E","비숍"], ["C","폰"], ["H","퀸"]];
 /* 그림은 STEP 에서 뽑는다. 글로 따로 적어 두면 언젠가 엔진과 어긋난다 */
 function drawMoves(){
   const box = $("#mvList");
   if (!box || box.childElementCount) return;
-  box.innerHTML = MOVES.map(([t, name, what]) => {
+  box.innerHTML = MOVES.map(([t, name]) => {
     const can = STEP[t].map(d => d.join(","));
     let g = "";
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++)
       g += (!dx && !dy) ? `<span class="c mid"><i class="art ${ART[t][0]}"></i></span>`
                         : `<span class="c${can.indexOf(dx+","+dy) >= 0 ? " go" : ""}"></span>`;
-    return `<div class="mv-row"><span class="mv-name">${name}</span>` +
-           `<span class="mv sk-chess" aria-hidden="true">${g}</span>` +
-           `<span class="mv-what">${what}</span></div>`;
+    return `<div class="mv-row"><span class="mv sk-chess" aria-hidden="true">${g}</span>` +
+           `<span class="mv-name">${name}</span></div>`;
   }).join("");
 }
 let ruleFirst = true, ruleHeld = false;
