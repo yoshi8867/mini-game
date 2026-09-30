@@ -150,6 +150,27 @@ body.portrait .bmsg.a{transform:none} body.portrait .bmsg.b{transform:rotate(180
    그러면 hidden 을 켜도 안 사라진다 — 규칙 팝업이 안 닫히던 이유다. */
 [hidden]{display:none !important}
 
+/* 상대를 기다리는 동안 — 화면 한가운데에 세운다.
+   좌하단 한 줄은 아무도 안 본다. 지금 할 일이 없다는 것을 크게 말해야 한다. */
+.wait-scrim{position:fixed;inset:0;z-index:70;background:rgba(0,0,0,.45)}
+.wait{position:fixed;z-index:71;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:min(320px,calc(100vw - 40px));text-align:center;
+  background:var(--wall-2);color:var(--chalk);border:1px solid var(--wall-line);
+  border-radius:10px;padding:var(--s4) var(--s3) var(--s3);
+  box-shadow:0 20px 50px rgba(0,0,0,.5)}
+.wait h3{font-family:'Gowun Batang',serif;font-size:20px;margin:0;color:var(--chalk)}
+.wait .code{margin:var(--s2) 0 0;font:400 12.5px/1.6 'Gothic A1',system-ui,sans-serif;
+  color:var(--chalk-dim)}
+.wait .code b{color:var(--mark);font:700 17px/1 'JetBrains Mono',monospace;
+  letter-spacing:.12em}
+.wait-dots{display:flex;justify-content:center;gap:7px;margin:var(--s3) 0}
+.wait-dots i{width:7px;height:7px;border-radius:50%;background:var(--chalk-dim);
+  animation:waitpulse 1.25s ease-in-out infinite}
+.wait-dots i:nth-child(2){animation-delay:.18s}
+.wait-dots i:nth-child(3){animation-delay:.36s}
+@keyframes waitpulse{0%,60%,100%{opacity:.22;transform:scale(.8)}
+                     30%{opacity:1;transform:scale(1)}}
+
 /* 대국 목록 */
 .net-scrim{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.55)}
 .net{position:fixed;z-index:81;left:50%;top:50%;transform:translate(-50%,-50%);
@@ -309,7 +330,9 @@ button:focus-visible,.hint:focus-visible,.pc:focus-visible{outline:2px solid var
 .sk-chess .a-chick   {--src:var(--ch-pawn);  --k:.55}
 /* ════ 규칙 서랍 — 구석에 접어두고 누르면 열린다 ════ */
 .wrap>section.block:first-child{margin-top:0}
-.bar{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:0 12px 9px;min-width:0}
+/* 기다리는 동안에도 규칙은 읽을 수 있어야 한다 — 어둠막(70) 위로 올린다 */
+.bar{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:0 12px 9px;
+  min-width:0;position:relative;z-index:72}
 .hud{display:flex;gap:6px;align-items:center;flex:none}
 .hud-btn{border:1px solid rgba(36,26,16,.2);cursor:pointer;background:rgba(255,255,255,.34);
   color:var(--ink-soft);font:700 12.5px/1 'Gothic A1',system-ui,sans-serif;
@@ -408,6 +431,13 @@ body.ai .t1 .clock{display:none}        /* AI 차례에는 시계를 재지 않�
       <button class="hud-btn primary" id="rulesFab" aria-expanded="false" aria-controls="rulesDrawer">규칙</button>
     </div>
   </div>
+</div>
+<div class="wait-scrim" id="waitScrim" hidden></div>
+<div class="wait" id="wait" hidden role="status" aria-live="polite">
+  <h3>상대를 기다립니다</h3>
+  <p class="code" id="waitCode"></p>
+  <div class="wait-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+  <button class="net-quiet" id="waitLeave" type="button">나가기</button>
 </div>
 <div class="net-scrim" id="netScrim" hidden></div>
 <div class="net" id="net" hidden role="dialog" aria-label="대국 목록">
@@ -1097,6 +1127,7 @@ function quitOnline(toList){
   return true;
 }
 $("#leaveBtn").addEventListener("click", () => quitOnline(true));
+nel("waitLeave").addEventListener("click", () => quitOnline(true));
 /* ═══ 기물 껍데기 ═══
    기본은 체스. 같은 기물을 일곱 번 연속 두드리면 바뀐다 — 버튼으로 내놓지 않는다.
      체스에서 킹 x7      → 동물
@@ -1280,7 +1311,7 @@ function netConnect(after){
     netRecv(m);
   });
   sock.addEventListener("close", () => {
-    sock = null; rows = []; clockStop(); showList();
+    sock = null; rows = []; clockStop(); waitShow(false); showList();
     if (!ONLINE()) return;
     /* 서버가 다시 뜨면 대국은 사라진다 — 메모리에만 있으니까. 가만히 두면
        영영 "상대를 기다립니다"에 머문다. 목록으로 데리고 나온다. */
@@ -1453,6 +1484,17 @@ function netRecv(msg){
 }
 function netOpenPanel(v){ nel("net").hidden = !v; nel("netScrim").hidden = !v; }
 
+/* 상대를 기다리는 동안 띄우는 한가운데 팝업 */
+let myPin = "";
+function waitShow(v){
+  nel("wait").hidden = !v;
+  nel("waitScrim").hidden = !v;
+  if (!v) return;
+  nel("waitCode").innerHTML =
+    "대국 <b>" + esc(netCode) + "</b>" +
+    (myPin ? "<br>비밀번호 <b>" + esc(myPin) + "</b>" : "");
+}
+
 /* 서버 소식은 연출이 도는 중에 들어온다. 그때 판을 갈아엎으면 애니메이션이
    중간에 끊기고 손패가 어긋난다. 한가해질 때까지 들고 있다가 반영한다. */
 let waitState = null, waitOver = null, netPeople = [null, null];
@@ -1474,9 +1516,13 @@ function netSync(){
     paintNames();
     if (!st.ready){
       clockHold();
-      log.innerHTML = "대국 <b>" + netCode + "</b> · 상대를 기다립니다";
+      waitShow(true);
+      log.textContent = "";
     }
-    else if (!st.over && !waitOver) clockStart();
+    else {
+      waitShow(false);
+      if (!st.over && !waitOver) clockStart();
+    }
   }
   if (waitOver){ const ov = waitOver; waitOver = null; netOver(ov); }
 }
@@ -1522,6 +1568,7 @@ function netOver(ov){
   netTell("list");
 }
 function netLeave(quiet){
+  waitShow(false);
   if (ONLINE()) netTell("leave");
   vs = "human"; mySide = 0; serverLeft = null; netCode = "";
   netPeople = [null, null];
@@ -1550,13 +1597,15 @@ nel("netOpen").addEventListener("change", e => {
 nel("netOpen").addEventListener("submit", e => {
   e.preventDefault();
   const shut = nel("netOpen").querySelector("input[value=shut]").checked;
-  if (!shut) return netConnect(() => netTell("open", {open: true}));
+  if (!shut){ myPin = ""; return netConnect(() => netTell("open", {open: true})); }
   const pin = pinNew.value();
   if (pin.length !== 4) return netSay("비밀번호는 숫자 네 자리입니다.");
+  myPin = pin;
   netConnect(() => netTell("open", {open: false, pin: pin}));
 });
 nel("netAsk").addEventListener("submit", e => {
   e.preventDefault();
+  myPin = "";
   const pin = pinAsk.value();
   if (pin.length !== 4) return netSay("비밀번호는 숫자 네 자리입니다.");
   netTell("join", {code: askCode, pin: pin});
