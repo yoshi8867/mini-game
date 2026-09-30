@@ -1130,26 +1130,35 @@ function handPos(side, i){
   const sr = stage.getBoundingClientRect();
   const tray = trayOf(side);
   const slot = document.getElementById("slot" + tray).getBoundingClientRect();
-  /* 가로로 넓은 화면에서는 손패 자리가 꽤 넓다. 그 바깥 끝에 붙여 두면 판에서
-     멀어 눈이 두 번 움직인다. 조금 줄여서 판 옆에 붙인다 — 닿지는 않게 띄우고. */
+  const br = board.getBoundingClientRect();
+  /* 판에서 멀면 잡은 기물을 보려고 눈이 두 번 움직인다. 되도록 판 옆에 붙인다.
+     붙일 자리가 없을 때만(폰 세로 화면) 예전처럼 판 위아래 띠에 눕힌다. */
   const k = LAND ? .62 : .78;
   const vw = (LAND ? eh() : ew()) * k, vh = (LAND ? ew() : eh()) * k;  // 화면상 크기
   const gy = vh * .18, gx = vw * .14;
-  const pad = LAND ? Math.max(12, vw * .30) : 0;   // 판과 손패 사이
-  /* 가로 손패는 위아래로 먼저 쌓고, 세로 손패는 옆으로 먼저 쌓는다. */
-  let row, col;
-  if (LAND){ const per = Math.max(1, Math.floor((slot.height + gy) / (vh + gy)));
-             row = i % per; col = Math.floor(i / per); }
-  else     { const per = Math.max(1, Math.floor((slot.width  + gx) / (vw + gx)));
-             col = i % per; row = Math.floor(i / per); }
-  /* 가로는 판에 붙은 안쪽 끝부터 바깥으로 쌓는다. 세로는 띠가 얇아 그대로 둔다 */
-  const cx = LAND
-    ? (tray === 0 ? slot.left  - sr.left + pad + vw/2 + col*(vw+gx)
-                  : slot.right - sr.left - pad - vw/2 - col*(vw+gx))
-    : (tray === 0 ? slot.right - sr.left - vw/2 - col*(vw+gx)
-                  : slot.left  - sr.left + vw/2 + col*(vw+gx));
-  const cy = tray === 0 ? slot.bottom - sr.top - vh/2 - row*(vh+gy)
-                        : slot.top    - sr.top + vh/2 + row*(vh+gy);
+  const pad = Math.max(12, vw * .30);          // 판과 손패 사이. 닿지는 않는다
+  const beside = br.width > 0 &&
+    (LAND || Math.min(sr.right - br.right, br.left - sr.left) >= vw + pad + 4);
+
+  let cx, cy;
+  if (beside){
+    /* 판 옆에 세로로 한 줄. 내 것은 오른쪽 아래, 상대 것은 왼쪽 위 — 마주 앉아
+       저마다 오른쪽에 두는 모양이다. 몇 개가 쌓이든 판은 가운데 그대로다. */
+    const per = Math.max(1, Math.floor((br.height + gy) / (vh + gy)));
+    const row = i % per, col = (i / per) | 0;
+    cx = tray === 0 ? br.right - sr.left + pad + vw/2 + col*(vw+gx)
+                    : br.left  - sr.left - pad - vw/2 - col*(vw+gx);
+    cy = tray === 0 ? br.bottom - sr.top - vh/2 - row*(vh+gy)
+                    : br.top    - sr.top + vh/2 + row*(vh+gy);
+  } else {
+    /* 판 위아래의 띠 — 좁으니 옆으로 먼저 쌓는다 */
+    const per = Math.max(1, Math.floor((slot.width + gx) / (vw + gx)));
+    const col = i % per, row = (i / per) | 0;
+    cx = tray === 0 ? slot.right - sr.left - vw/2 - col*(vw+gx)
+                    : slot.left  - sr.left + vw/2 + col*(vw+gx);
+    cy = tray === 0 ? slot.bottom - sr.top - vh/2 - row*(vh+gy)
+                    : slot.top    - sr.top + vh/2 + row*(vh+gy);
+  }
   return {x: cx - ew()/2, y: cy - eh()/2, rot: ROT(side), s: k};
 }
 const tf = t => `translate(${t.x}px,${t.y}px) rotate(${t.rot}deg) scale(${t.s})`;
