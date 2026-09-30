@@ -177,7 +177,10 @@ body.portrait .bmsg.a{transform:none} body.portrait .bmsg.b{transform:rotate(180
   font:700 11.5px/1 'Gothic A1',system-ui,sans-serif;letter-spacing:.06em;
   background:rgba(36,26,16,.8);color:#ffe9b0;border-radius:999px;padding:6px 13px;
   pointer-events:none;white-space:nowrap}
-body.portrait .fans{top:auto;bottom:86px}
+/* 세로 배치에서는 화면 위아래 끝이 이름표 자리다. 가운데에 두면 이름을 덮는다.
+   오른쪽 끝에 `다른 대국 보기` 아래로 쌓는다. */
+body.portrait .fans{left:auto;right:12px;top:12px;bottom:auto;transform:none}
+body.portrait.in-cup .fans{top:90px}
 .seeBtn{position:fixed;right:12px;top:12px;z-index:63}
 body.portrait .seeBtn{top:10px}
 
@@ -192,41 +195,43 @@ body.portrait .seeBtn{top:10px}
   gap:var(--s2);padding:14px var(--s3);border-bottom:1px solid var(--wall-line)}
 .see-head h3{font-family:'Gowun Batang',serif;font-size:19px;margin:0}
 .see .net-msg{margin:0;padding:10px var(--s3) 0}
-.board{display:flex;gap:0;overflow:auto;padding:var(--s3);flex:1;min-height:0}
-.col{flex:none;width:172px;display:flex;flex-direction:column;
+/* 대진표 — 이름이 흔한 것들뿐이라 .bracket 아래로 모두 가둔다.
+   예전에 이 블록의 .board 가 대국판 .board 를 덮어써서 판이 늘어났다. */
+.bracket{display:flex;gap:0;overflow:auto;padding:var(--s3);flex:1;min-height:0}
+.bracket .col{flex:none;width:172px;display:flex;flex-direction:column;
   justify-content:space-around}
-.col h4{font:700 11px/1 'Gothic A1',system-ui,sans-serif;letter-spacing:.12em;
+.bracket .col h4{font:700 11px/1 'Gothic A1',system-ui,sans-serif;letter-spacing:.12em;
   color:var(--chalk-dim);margin:0 0 8px;text-align:center;flex:none}
-.pair{flex:1;display:flex;flex-direction:column;justify-content:center;
+.bracket .pair{flex:1;display:flex;flex-direction:column;justify-content:center;
   position:relative;padding:5px 0}
 /* 잇는 선 — 대진표는 선이 있어야 대진표다 */
-.col:not(:last-child) .pair::after{content:"";position:absolute;right:-1px;top:50%;
+.bracket .col:not(:last-child) .pair::after{content:"";position:absolute;right:-1px;top:50%;
   width:14px;border-top:1px solid var(--wall-line)}
-.col:not(:first-child) .pair::before{content:"";position:absolute;left:-14px;
+.bracket .col:not(:first-child) .pair::before{content:"";position:absolute;left:-14px;
   top:25%;bottom:25%;width:14px;border:1px solid var(--wall-line);
   border-right:0;border-radius:3px 0 0 3px}
-.col:not(:last-child){padding-right:14px}
-.col:not(:first-child){margin-left:14px}
-.bout{background:var(--wall);border:1px solid var(--wall-line);border-radius:6px;
+.bracket .col:not(:last-child){padding-right:14px}
+.bracket .col:not(:first-child){margin-left:14px}
+.bracket .bout{background:var(--wall);border:1px solid var(--wall-line);border-radius:6px;
   padding:6px 9px;font-size:12.5px}
-.bout.playing{border-color:var(--mark);cursor:pointer}
-.bout.playing:hover{background:#202225}
-.bout.done{opacity:.66}
-.side{display:flex;justify-content:space-between;gap:6px;padding:2px 0}
-.side.won{color:var(--mark);font-weight:700}
-.side.lost{color:var(--chalk-dim)}
-.side.tbd{color:#5d5a55;font-style:italic}
-.side.me{text-decoration:underline}
-.pill{font:700 9.5px/1 'Gothic A1',system-ui,sans-serif;padding:3px 6px;
+.bracket .bout.playing{border-color:var(--mark);cursor:pointer}
+.bracket .bout.playing:hover{background:#202225}
+.bracket .bout.done{opacity:.66}
+.bracket .side{display:flex;justify-content:space-between;gap:6px;padding:2px 0}
+.bracket .side.won{color:var(--mark);font-weight:700}
+.bracket .side.lost{color:var(--chalk-dim)}
+.bracket .side.tbd{color:#5d5a55;font-style:italic}
+.bracket .side.me{text-decoration:underline}
+.bracket .pill{font:700 9.5px/1 'Gothic A1',system-ui,sans-serif;padding:3px 6px;
   border-radius:999px;background:var(--wall-2);color:var(--chalk-dim);flex:none}
-.eye{font-size:10.5px;color:#ffe9b0;margin-top:3px}
+.bracket .eye{font-size:10.5px;color:#ffe9b0;margin-top:3px}
 
 /* 몇 강인지는 판 위에 늘 보여야 한다 */
 .round{position:fixed;left:50%;top:10px;transform:translateX(-50%);z-index:62;
   font:700 12px/1 'Gothic A1',system-ui,sans-serif;letter-spacing:.1em;
   background:var(--ink);color:var(--paper);border-radius:999px;padding:8px 15px;
   pointer-events:none;white-space:nowrap}
-body.portrait .round{top:auto;bottom:52px}
+body.portrait .round{left:auto;right:12px;top:56px;bottom:auto;transform:none}
 
 /* 대회 — 시작이나 다음 대국을 기다리는 동안 */
 .cup-scrim{position:fixed;inset:0;z-index:74;background:rgba(0,0,0,.5)}
@@ -522,7 +527,7 @@ body.ai .t1 .clock{display:none}        /* AI 차례에는 시계를 재지 않�
     <button class="net-x" id="seeClose" aria-label="닫기">✕</button>
   </div>
   <p class="net-msg" id="seeMsg"></p>
-  <div class="board" id="seeBoard"></div>
+  <div class="bracket" id="seeBoard"></div>
 </div>
 <div class="cup-scrim" id="cupScrim" hidden></div>
 <div class="cup" id="cupBox" hidden role="dialog" aria-label="대회">
@@ -1432,6 +1437,8 @@ function paintSee(){
   f.hidden = !on;
   if (on) f.textContent = fans + "명이 관전 중입니다";
   nel("seeBtn").hidden = !(cup && cup.state === "running");
+  document.body.classList.toggle("in-cup", !!cup);  /* 뱃지를 쌓을 자리가 달라진다.
+     .cup 은 대회 팝업이 이미 쓰는 이름이라 몸에 붙이면 안 된다 */
 }
 function seeOpen(why){
   nel("see").hidden = false; nel("seeScrim").hidden = false;
