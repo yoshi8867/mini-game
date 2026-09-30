@@ -156,7 +156,7 @@ body.portrait .bmsg.a{transform:none} body.portrait .bmsg.b{transform:rotate(180
   box-shadow:0 22px 60px rgba(0,0,0,.55)}
 .net *{color:inherit}
 .net .net-msg,.net .vs,.net .lab,.net .tagline,.net .net-empty,
-.net .net-close,.net .net-quiet{color:var(--chalk-dim)}
+.net .net-x,.net .net-quiet{color:var(--chalk-dim)}
 .net .lock{color:var(--mark)}
 .net .badge{color:#fff}
 .net .badge.gold{color:#2a1f05}
@@ -164,7 +164,9 @@ body.portrait .bmsg.a{transform:none} body.portrait .bmsg.b{transform:rotate(180
 .net-head{display:flex;align-items:center;justify-content:space-between;gap:var(--s2)}
 .net h3{font-family:'Gowun Batang',serif;font-size:21px;margin:0}
 .net-msg{margin:var(--s2) 0 0;font-size:13px;color:var(--chalk-dim);min-height:1.2em}
-.net-row{display:flex;gap:8px;align-items:center;margin-top:var(--s2)}
+/* 무르는 쪽이 왼쪽, 실행이 오른쪽. 오른쪽에 모아 둔다 */
+.net-row{display:flex;gap:8px;align-items:center;justify-content:flex-end;
+  margin-top:var(--s2)}
 .net-go{font:700 13px/1 'Gothic A1',system-ui,sans-serif;cursor:pointer;
   background:var(--mark);color:#17181a;border:0;border-radius:999px;padding:11px 16px}
 .net-go:hover{background:#e9d494}
@@ -203,10 +205,11 @@ body.portrait .bmsg.a{transform:none} body.portrait .bmsg.b{transform:rotate(180
 .chip:hover .r{color:var(--mark)}
 .chip.spin .r{animation:roll .4s ease}
 @keyframes roll{from{transform:rotate(0)}to{transform:rotate(360deg)}}
-.me-hint{margin:6px 0 0;font-size:11.5px;color:var(--chalk-dim)}
-.net-close{margin-top:var(--s2);background:none;border:0;color:var(--chalk-dim);
-  font:700 12px/1 'Gothic A1',system-ui,sans-serif;cursor:pointer;padding:6px 0}
-.net-close:hover{color:var(--chalk)}
+/* 닫기는 우상단 X, 대국 열기는 우하단 — 읽고 나서 누르는 순서다 */
+.net-x{background:none;border:0;cursor:pointer;color:var(--chalk-dim);
+  font-size:17px;line-height:1;padding:4px 6px;border-radius:5px;flex:none}
+.net-x:hover{color:var(--chalk);background:var(--wall)}
+.net-foot{display:flex;justify-content:flex-end;margin-top:var(--s3)}
 
 /* 비밀번호 — 칸 네 개. 가리지 않는다 */
 .pin{display:flex;gap:8px;margin-top:var(--s2)}
@@ -312,18 +315,22 @@ button:focus-visible,.hint:focus-visible,.pc:focus-visible{outline:2px solid var
 .hud-btn[aria-pressed=false]{color:#a3927b}
 .hud-btn.primary{background:var(--ink);border-color:var(--ink);color:var(--paper)}
 .hud-btn.primary:hover{background:var(--vermilion);border-color:var(--vermilion);color:#fff}
-.rules-scrim{position:fixed;inset:0;z-index:41;background:rgba(0,0,0,.55)}
-.rules-drawer{position:fixed;top:0;right:0;bottom:0;z-index:42;width:min(580px,94vw);
-  background:var(--wall-2);border-left:1px solid var(--wall-line);overflow-y:auto;
-  box-shadow:-16px 0 44px rgba(0,0,0,.5)}
-.rules-head{position:sticky;top:0;z-index:1;background:var(--wall-2);
+/* 규칙은 한가운데 팝업이다. 승패 알림(60)과 대국 목록(81)보다 위에 있어야
+   한다 — 규칙을 보겠다는데 다른 창이 가리면 곤란하다. */
+.rules-scrim{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.62)}
+.rules-drawer{position:fixed;z-index:91;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:min(560px,calc(100vw - 28px));max-height:min(86vh,760px);display:flex;
+  flex-direction:column;border-radius:12px;
+  background:var(--wall-2);border:1px solid var(--wall-line);overflow:hidden;
+  box-shadow:0 24px 60px rgba(0,0,0,.55)}
+.rules-head{flex:none;background:var(--wall-2);
   border-bottom:1px solid var(--wall-line);display:flex;align-items:center;
   justify-content:space-between;padding:16px var(--s3)}
 .rules-head h2{font-family:'Gowun Batang',serif;font-size:24px;font-weight:700;margin:0}
 .rules-close{background:none;border:0;cursor:pointer;color:var(--chalk-dim);
   font-size:18px;line-height:1;padding:6px 8px}
 .rules-close:hover{color:var(--chalk)}
-.rules-body{padding:var(--s2) var(--s3) var(--s5)}
+.rules-body{padding:var(--s3);overflow-y:auto;flex:1;min-height:0}
 .rules-body .block{margin-top:var(--s4)}
 .rules-body .block:first-child{margin-top:var(--s2)}
 .rules-body a{color:var(--mark)}
@@ -334,6 +341,30 @@ button:focus-visible,.hint:focus-visible,.pc:focus-visible{outline:2px solid var
 .bar>.log b{color:var(--vermilion)}
 body.ai .t1 .clock{display:none}        /* AI 차례에는 시계를 재지 않는다 */
 .rules-drawer{color:var(--chalk)}
+
+/* 행마는 글로 적는 것보다 그려 보이는 편이 빠르다.
+   가운데가 기물이고, 점이 갈 수 있는 칸이다. 위쪽이 앞이다. */
+.mv-list{margin:var(--s3) 0 0;display:grid;gap:10px}
+.mv-row{display:grid;grid-template-columns:54px 62px 1fr;align-items:center;gap:12px}
+.mv-name{font-weight:700;font-size:14px}
+.mv-what{font-size:13.5px;color:var(--chalk-dim);line-height:1.5}
+.mv{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;width:62px;
+  background:var(--wall-line);border:1px solid var(--wall-line);border-radius:4px;
+  overflow:hidden}
+.mv .c{aspect-ratio:1;background:var(--wall);display:grid;place-items:center}
+.mv .c.go::after{content:"";width:34%;aspect-ratio:1;border-radius:50%;
+  background:var(--mark)}
+.mv .c.mid{background:#2a2c30}
+.mv .c.mid i{position:relative;display:block;width:82%;aspect-ratio:1;
+  -webkit-mask:var(--src) center/contain no-repeat;mask:var(--src) center/contain no-repeat;
+  background:var(--chalk);transform:scale(var(--k,1))}
+.win{margin:var(--s2) 0 0;padding-left:1.3em;font-size:15px;color:var(--chalk)}
+.win li{margin-bottom:7px}
+.win .but{display:block;font-size:13px;color:var(--chalk-dim);font-weight:400;
+  margin-top:2px}
+.rules-body h2{font-family:'Gowun Batang',serif;font-size:19px;margin:var(--s4) 0 0}
+.rules-body h2:first-child{margin-top:0}
+.rules-body p{margin:var(--s2) 0 0;font-size:13.5px;color:var(--chalk-dim);line-height:1.6}
 </style>
 
 <div class="app">
@@ -377,7 +408,7 @@ body.ai .t1 .clock{display:none}        /* AI 차례에는 시계를 재지 않�
 <div class="net" id="net" hidden role="dialog" aria-label="대국 목록">
   <div class="net-head">
     <h3>대국 목록</h3>
-    <button class="net-go" id="netNew">대국 열기</button>
+    <button class="net-x" id="netClose" aria-label="닫기">✕</button>
   </div>
 
   <form class="net-open" id="netOpen" hidden>
@@ -387,8 +418,8 @@ body.ai .t1 .clock{display:none}        /* AI 차례에는 시계를 재지 않�
     </div>
     <div class="pin" id="pinNew" hidden aria-label="비밀번호 네 자리"></div>
     <div class="net-row">
-      <button class="net-go" id="netCreate" type="submit">열기</button>
       <button class="net-quiet" id="netCancel" type="button">취소</button>
+      <button class="net-go" id="netCreate" type="submit">열기</button>
     </div>
   </form>
 
@@ -396,15 +427,15 @@ body.ai .t1 .clock{display:none}        /* AI 차례에는 시계를 재지 않�
     <p class="net-msg">비공개 대국입니다. 비밀번호 네 자리를 넣어 주세요.</p>
     <div class="pin" id="pinAsk" aria-label="비밀번호 네 자리"></div>
     <div class="net-row">
-      <button class="net-go" id="netEnter" type="submit">들어가기</button>
       <button class="net-quiet" id="netBack" type="button">뒤로</button>
+      <button class="net-go" id="netEnter" type="submit">들어가기</button>
     </div>
   </form>
 
   <ul class="net-list" id="netList"></ul>
   <p class="net-msg" id="netMsg"></p>
   <div class="net-me" id="netMe"></div>
-  <button class="net-close" id="netClose">닫기</button>
+  <div class="net-foot"><button class="net-go" id="netNew">대국 열기</button></div>
 </div>
 <div class="rules-scrim" id="rulesScrim" hidden></div>
 <aside class="rules-drawer" id="rulesDrawer" hidden aria-label="규칙">
@@ -413,31 +444,23 @@ body.ai .t1 .clock{display:none}        /* AI 차례에는 시계를 재지 않�
     <button class="rules-close" id="rulesClose" aria-label="닫기">✕</button>
   </div>
   <div class="rules-body">
-<section class="block">
-  <p class="lede">기물은 체스 모양이지만 규칙은 동물쇼기입니다. 룩도 비숍도 <b>한 칸만</b> 갑니다 — 기물에 찍힌 점이 갈 수 있는 방향입니다.</p>
-
-  <table class="tbl">
-    <tr><th>기물</th><th>움직임</th></tr>
-    <tr><td>킹</td><td>여덟 방향 한 칸</td></tr>
-    <tr><td>룩</td><td>상하좌우 한 칸</td></tr>
-    <tr><td>비숍</td><td>대각 네 방향 한 칸</td></tr>
-    <tr><td>폰</td><td>앞 한 칸. 상대 끝줄에 닿으면 <b>퀸</b>이 된다</td></tr>
-    <tr><td>퀸</td><td>뒤 대각 둘을 뺀 여섯 방향 한 칸</td></tr>
-  </table>
-
-  <h2>이기는 방법</h2>
+  <h2>이기는 법</h2>
   <ol class="win">
-    <li><b>상대 킹을 잡는다.</b></li>
-    <li><b>내 킹이 상대 끝줄에 닿는다.</b>
-        단, 그 자리가 상대에게 잡히는 자리면 안 된다.</li>
+    <li>상대 킹 잡기</li>
+    <li>내 킹이 상대 끝 줄에 닿기
+        <span class="but">단, 그 자리가 상대에게 잡히는 자리면 안 됨</span></li>
   </ol>
 
-  <ul class="notes">
-    <li>잡은 기물은 내 것이 되어 <b>빈 칸 아무 곳에나</b> 놓을 수 있습니다. 놓은 폰은 그 자리에서 승격하지 않습니다.</li>
-    <li>같은 국면이 세 번 나오면 무승부입니다.</li>
-    <li>한 수는 <b>30초</b>. 넘기면 집니다.</li>
-  </ul>
-</section>
+  <h2>행마</h2>
+  <p>기물은 체스 모양이지만 규칙은 쇼기(일본 장기)입니다. 룩도 비숍도 한 칸만 갑니다.
+     가운데가 기물이고 점이 갈 수 있는 칸입니다 — 위쪽이 앞입니다.</p>
+  <div class="mv-list" id="mvList"></div>
+
+  <h2>그 밖에</h2>
+  <p>잡은 기물은 내 것이 되어 빈 칸 아무 곳에나 놓을 수 있습니다.
+     폰이 <b>이동해서</b> 끝 줄에 닿으면 승격되지만, 폰을 끝 줄에 <b>내려놓으면</b>
+     승격하지 않습니다.<br>
+     같은 국면이 세 번 나오면 무승부입니다.</p>
   </div>
 </aside>
 
@@ -595,12 +618,13 @@ function clockHold(){
   [0,1].forEach(i => $("#clk"+i).style.display = "");
   left = limit(); lastTick = -1; clockShow();
 }
-function clockStart(){
+function clockStart(keep){
   clockStop();
   if (vs === "ai" && turn === AI) return;   // AI 를 재촉하지 않는다
   if (!limit() || over){ [0,1].forEach(i => $("#clk"+i).style.display = limit() ? "" : "none"); return; }
   [0,1].forEach(i => $("#clk"+i).style.display = "");
-  left = (ONLINE() && serverLeft !== null) ? serverLeft : limit();
+  /* keep 이면 멈춘 자리에서 이어 간다 — 규칙을 보느라 멈춘 시계다 */
+  if (!keep) left = (ONLINE() && serverLeft !== null) ? serverLeft : limit();
   lastTick = -1; clockShow();
   let prev = performance.now();
   tid = setInterval(() => {
@@ -1306,7 +1330,7 @@ function showList(){
 function paintMe(){
   const box = nel("netMe");
   if (!me){
-    box.innerHTML = `<div class="me-row"><span class="lab">나</span>` +
+    box.innerHTML = `<div class="me-row"><span class="lab">나의 닉네임:</span>` +
                     `<span class="vs">연결하는 중…</span></div>`;
     return;
   }
@@ -1316,10 +1340,9 @@ function paintMe(){
     `<button class="chip" type="button" data-part="${k}" title="${t}">` +
     `<span class="w">${esc(w)}</span><span class="r">⟳</span></button>`;
   box.innerHTML =
-    `<div class="me-row"><span class="lab">나</span>` +
+    `<div class="me-row"><span class="lab">나의 닉네임:</span>` +
     chip("head", head, "앞말 다시 뽑기") + chip("tail", tail, "뒷말 다시 뽑기") +
-    badgeHTML(me) + `</div>` +
-    `<p class="me-hint">이름은 고를 수 없습니다. 칸을 누르면 다시 뽑습니다.</p>`;
+    badgeHTML(me) + `</div>`;
   box.querySelectorAll(".chip").forEach(b => b.addEventListener("click", () => {
     b.classList.add("spin");
     setTimeout(() => b.classList.remove("spin"), 400);
@@ -1553,27 +1576,63 @@ addEventListener("resize", applyOrient);
 addEventListener("orientationchange", () => setTimeout(applyOrient, 80));
 if (window.ResizeObserver){ const ro = new ResizeObserver(() => measure()); ro.observe(stage); }
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(measure);
+/* ═══ 규칙 팝업 ═══════════════════════════════════════════════════
+   처음 한 번은 저절로 뜬다. 그것을 닫는 순간이 대국 시작이다.
+   보는 동안에는 시계를 멈춘다 — 규칙 읽느라 시간이 깎이면 억울하다.
+   온라인은 못 멈춘다. 시계를 쥔 것은 서버이고, 여기서 멈춰 봐야 거짓말이다. */
+const MOVES = [
+  ["L", "킹",   "여덟 방향 한 칸"],
+  ["G", "룩",   "상하좌우 한 칸"],
+  ["E", "비숍", "대각 네 방향 한 칸"],
+  ["C", "폰",   "앞 한 칸. 상대 끝줄에 닿으면 퀸이 된다"],
+  ["H", "퀸",   "뒤 대각 둘을 뺀 여섯 방향 한 칸"],
+];
+/* 그림은 STEP 에서 뽑는다. 글로 따로 적어 두면 언젠가 엔진과 어긋난다 */
+function drawMoves(){
+  const box = $("#mvList");
+  if (!box || box.childElementCount) return;
+  box.innerHTML = MOVES.map(([t, name, what]) => {
+    const can = STEP[t].map(d => d.join(","));
+    let g = "";
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++)
+      g += (!dx && !dy) ? `<span class="c mid"><i class="art ${ART[t][0]}"></i></span>`
+                        : `<span class="c${can.indexOf(dx+","+dy) >= 0 ? " go" : ""}"></span>`;
+    return `<div class="mv-row"><span class="mv-name">${name}</span>` +
+           `<span class="mv sk-chess" aria-hidden="true">${g}</span>` +
+           `<span class="mv-what">${what}</span></div>`;
+  }).join("");
+}
+let ruleFirst = true, ruleHeld = false;
+function rulesShow(v){
+  const dr = $("#rulesDrawer");
+  dr.hidden = !v; $("#rulesScrim").hidden = !v; $("#hud").hidden = v;
+  $("#rulesFab").setAttribute("aria-expanded", String(v));
+  if (v){
+    drawMoves();
+    dr.querySelector(".rules-body").scrollTop = 0;
+    $("#rulesClose").focus();
+    ruleHeld = !!tid && !ONLINE();
+    if (ruleHeld) clockStop();
+    return;
+  }
+  $("#rulesFab").focus();
+  if (ruleFirst){ ruleFirst = false; clockStart(); maybeAI(); return; }
+  if (ruleHeld){ ruleHeld = false; clockStart(true); }
+}
+$("#rulesFab").addEventListener("click", () => rulesShow(true));
+$("#rulesClose").addEventListener("click", () => rulesShow(false));
+$("#rulesScrim").addEventListener("click", () => rulesShow(false));
+addEventListener("keydown", e => {
+  if (e.key === "Escape" && !$("#rulesDrawer").hidden) rulesShow(false);
+});
+
 applyOrient();
 paintHud();
 start();
+clockHold();              /* 규칙을 닫기 전에는 시계가 돌지 않는다 */
+rulesShow(true);
 applyBoardWood();
 requestAnimationFrame(applyOrient);
 setTimeout(applyOrient, 400);
-})();
-</script>
-<script>
-(() => {
-  const fab = document.getElementById("rulesFab"), dr = document.getElementById("rulesDrawer"),
-        hud = document.getElementById("hud"),
-        sc  = document.getElementById("rulesScrim"), cl = document.getElementById("rulesClose");
-  const show = v => {
-    dr.hidden = !v; sc.hidden = !v; hud.hidden = v;
-    fab.setAttribute("aria-expanded", String(v));
-    if (v) { dr.scrollTop = 0; cl.focus(); } else fab.focus();
-  };
-  fab.addEventListener("click", () => show(true));
-  cl.addEventListener("click", () => show(false));
-  sc.addEventListener("click", () => show(false));
-  addEventListener("keydown", e => { if (e.key === "Escape" && !dr.hidden) show(false); });
 })();
 </script>
