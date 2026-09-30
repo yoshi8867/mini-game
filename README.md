@@ -83,6 +83,16 @@ tools/                        # 원본 이미지 → 알파 마스크 추출 스
 ```bash
 cd docs/design
 python build.py motion      # motion.template.html → motion.html
+
+빌드한 뒤에는 페이지를 실제로 한 번 띄워 본다.
+
+```bash
+python tools/page-check.py        # index.html 과 admin.html 을 헤드리스로 열어
+                                  # 콘솔에 오류가 있으면 실패한다
+```
+
+문법 검사만으로는 부족하다. 선언보다 먼저 쓴 const 하나에 스크립트가 통째로
+멎어 판도 규칙 창도 안 뜬 채 배포된 적이 있다. 문법은 멀쩡했다.
 ```
 
 `build.py`가 하는 일은 두 가지다.
