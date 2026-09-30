@@ -1222,10 +1222,16 @@ function onGrab(e, p){
   if (busy || over || p.s !== turn){ pick(p); return; }
   audio();
   const [r,c] = find(p);
-  pick(p);
-  if (sel !== p) return;
+  /* 이미 고른 기물을 다시 누르는 것은 고르기를 푸는 동작이다. 그런데 누르는
+     순간 풀어 버리면 끌기가 시작되지 않았다 — 한 번 눌러 갈 곳을 본 다음
+     끌어다 놓는 것이 자연스러운 순서인데, 그때마다 기물이 꿈쩍도 안 했다.
+     특히 손패가 그랬다. 그래서 누를 때는 고른 채로 두고, 움직이지 않고
+     뗐을 때(그러니까 탭이었을 때) 푼다. */
+  const had = sel === p;
+  if (!had){ pick(p); if (sel !== p) return; }
   drag = {p, r, c, moves: r < 0 ? emptyCells() : movesOf(r,c), fromHand: r < 0,
-          start:{...p.el._t}, moved:false, px:e.clientX, py:e.clientY, t:performance.now()};
+          start:{...p.el._t}, moved:false, had,
+          px:e.clientX, py:e.clientY, t:performance.now()};
   p.el.setPointerCapture(e.pointerId);
   p.el.addEventListener("pointermove", onDrag);
   p.el.addEventListener("pointerup", onDrop);
@@ -1246,7 +1252,7 @@ async function onDrop(e){
   d.p.el.removeEventListener("pointermove", onDrag);
   d.p.el.removeEventListener("pointerup", onDrop);
   d.p.el.removeEventListener("pointercancel", onDrop);
-  if (!d.moved) return;
+  if (!d.moved){ if (d.had) deselect(); return; }   // 끌지 않았으면 그냥 탭이다
   const unlift = () => d.p.el.classList.remove("drag");
   const cx = d.p.el._t.x + ew()/2, cy = d.p.el._t.y + eh()/2;
   const sc  = Math.round((cx - bx - cw/2) / (cw + GAP));
