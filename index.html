@@ -171,6 +171,56 @@ body.portrait .bmsg.a{transform:none} body.portrait .bmsg.b{transform:rotate(180
 @keyframes waitpulse{0%,60%,100%{opacity:.22;transform:scale(.8)}
                      30%{opacity:1;transform:scale(1)}}
 
+/* 관전자 수 — 두는 사람에게 보인다. 누가 내 판을 본다는 것은 대회에서
+   꽤 큰 일이다. 우쭐하거나 긴장되거나 한다. */
+.fans{position:fixed;left:50%;top:44px;transform:translateX(-50%);z-index:62;
+  font:700 11.5px/1 'Gothic A1',system-ui,sans-serif;letter-spacing:.06em;
+  background:rgba(36,26,16,.8);color:#ffe9b0;border-radius:999px;padding:6px 13px;
+  pointer-events:none;white-space:nowrap}
+body.portrait .fans{top:auto;bottom:86px}
+.seeBtn{position:fixed;right:12px;top:12px;z-index:63}
+body.portrait .seeBtn{top:10px}
+
+/* 대진표 */
+.see-scrim{position:fixed;inset:0;z-index:84;background:rgba(0,0,0,.6)}
+.see{position:fixed;z-index:85;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:min(760px,calc(100vw - 24px));max-height:88vh;display:flex;
+  flex-direction:column;background:var(--wall-2);color:var(--chalk);
+  border:1px solid var(--wall-line);border-radius:10px;overflow:hidden;
+  box-shadow:0 24px 60px rgba(0,0,0,.6)}
+.see-head{flex:none;display:flex;align-items:center;justify-content:space-between;
+  gap:var(--s2);padding:14px var(--s3);border-bottom:1px solid var(--wall-line)}
+.see-head h3{font-family:'Gowun Batang',serif;font-size:19px;margin:0}
+.see .net-msg{margin:0;padding:10px var(--s3) 0}
+.board{display:flex;gap:0;overflow:auto;padding:var(--s3);flex:1;min-height:0}
+.col{flex:none;width:172px;display:flex;flex-direction:column;
+  justify-content:space-around}
+.col h4{font:700 11px/1 'Gothic A1',system-ui,sans-serif;letter-spacing:.12em;
+  color:var(--chalk-dim);margin:0 0 8px;text-align:center;flex:none}
+.pair{flex:1;display:flex;flex-direction:column;justify-content:center;
+  position:relative;padding:5px 0}
+/* 잇는 선 — 대진표는 선이 있어야 대진표다 */
+.col:not(:last-child) .pair::after{content:"";position:absolute;right:-1px;top:50%;
+  width:14px;border-top:1px solid var(--wall-line)}
+.col:not(:first-child) .pair::before{content:"";position:absolute;left:-14px;
+  top:25%;bottom:25%;width:14px;border:1px solid var(--wall-line);
+  border-right:0;border-radius:3px 0 0 3px}
+.col:not(:last-child){padding-right:14px}
+.col:not(:first-child){margin-left:14px}
+.bout{background:var(--wall);border:1px solid var(--wall-line);border-radius:6px;
+  padding:6px 9px;font-size:12.5px}
+.bout.playing{border-color:var(--mark);cursor:pointer}
+.bout.playing:hover{background:#202225}
+.bout.done{opacity:.66}
+.side{display:flex;justify-content:space-between;gap:6px;padding:2px 0}
+.side.won{color:var(--mark);font-weight:700}
+.side.lost{color:var(--chalk-dim)}
+.side.tbd{color:#5d5a55;font-style:italic}
+.side.me{text-decoration:underline}
+.pill{font:700 9.5px/1 'Gothic A1',system-ui,sans-serif;padding:3px 6px;
+  border-radius:999px;background:var(--wall-2);color:var(--chalk-dim);flex:none}
+.eye{font-size:10.5px;color:#ffe9b0;margin-top:3px}
+
 /* 몇 강인지는 판 위에 늘 보여야 한다 */
 .round{position:fixed;left:50%;top:10px;transform:translateX(-50%);z-index:62;
   font:700 12px/1 'Gothic A1',system-ui,sans-serif;letter-spacing:.1em;
@@ -463,6 +513,17 @@ body.ai .t1 .clock{display:none}        /* AI 차례에는 시계를 재지 않�
   <button class="net-quiet" id="waitLeave" type="button">나가기</button>
 </div>
 <div class="round" id="roundTag" hidden></div>
+<div class="fans" id="fansTag" hidden></div>
+<button class="hud-btn primary seeBtn" id="seeBtn" hidden>다른 대국 보기</button>
+<div class="see-scrim" id="seeScrim" hidden></div>
+<div class="see" id="see" hidden role="dialog" aria-label="대진표">
+  <div class="see-head">
+    <h3 id="seeTitle">대진표</h3>
+    <button class="net-x" id="seeClose" aria-label="닫기">✕</button>
+  </div>
+  <p class="net-msg" id="seeMsg"></p>
+  <div class="board" id="seeBoard"></div>
+</div>
 <div class="cup-scrim" id="cupScrim" hidden></div>
 <div class="cup" id="cupBox" hidden role="dialog" aria-label="대회">
   <p class="cup-tag" id="cupTag"></p>
@@ -874,7 +935,11 @@ let vs = "human";                       // human | ai | online
 let mySide = 0;                         // 온라인에서 내가 앉은 자리
 let serverLeft = null;                  // 서버가 알려준 남은 시간(초)
 const ONLINE = () => vs === "online";
-const FLIP   = () => ONLINE() && mySide === 1;
+/* 관전 — 온라인이지만 내 판이 아니다. 손을 대지 못하고, 오프라인 대국처럼
+   둘이 마주 앉은 모양으로 본다. 그래야 양쪽이 공평하게 보인다. */
+let spect = null;                        // {code, people:[a,b], fans}
+const SPECT = () => !!spect;
+const FLIP   = () => ONLINE() && !SPECT() && mySide === 1;
 const trayOf = s => FLIP() ? 1 - s : s; // 자리 → 화면에서 그 자리가 쓰는 띠
 const SCOLS = () => LAND ? ROWS : COLS;
 const SROWS = () => LAND ? COLS : ROWS;
@@ -907,9 +972,9 @@ function snapshot(t){
   hand.forEach((hh, s) => hh.forEach(p => hd[s][EG.HSLOT[TIDX[p.t]]]++));
   return {b, hand:hd, turn: t === undefined ? turn : t};
 }
-const ROT = s => ONLINE() ? (s === mySide ? 0 : 180)
-              : LAND     ? (s === 0 ? -90 : 90)
-                         : (s === 0 ? 0 : 180);
+const ROT = s => (ONLINE() && !SPECT()) ? (s === mySide ? 0 : 180)
+              : LAND ? (s === 0 ? -90 : 90)
+                     : (s === 0 ? 0 : 180);
 const backRank = s => s === 0 ? 0 : ROWS - 1;
 
 let cells, hand, turn, sel, busy, over, seen;
@@ -1242,6 +1307,7 @@ function updateCounts(){
   [0,1].forEach(s => $("#cnt"+trayOf(s)).textContent = hand[s].length ? "손패 " + hand[s].length : "");
 }
 function pick(p){
+  if (SPECT()) return;                   // 보는 사람은 손을 대지 않는다
   if (busy || over || p.s !== turn) return;
   if (ONLINE() && turn !== mySide) return;
   audio();
@@ -1358,6 +1424,49 @@ function endTurn(){
   if (ONLINE()) netSync();
 }
 /* 이름표는 자리가 아니라 화면의 띠를 따른다. 온라인이면 나/상대로 부른다 */
+/* 관전자 수와 대진표 버튼 */
+let fans = 0, seeBoard = null;
+function paintSee(){
+  const f = nel("fansTag");
+  const on = ONLINE() && !SPECT() && fans > 0;
+  f.hidden = !on;
+  if (on) f.textContent = fans + "명이 관전 중입니다";
+  nel("seeBtn").hidden = !(cup && cup.state === "running");
+}
+function seeOpen(why){
+  nel("see").hidden = false; nel("seeScrim").hidden = false;
+  nel("seeMsg").textContent = why || "";
+  seeBoard = null; paintBoard();
+  netTell("cupboard");
+}
+function seeShow(v){ nel("see").hidden = !v; nel("seeScrim").hidden = !v; }
+
+function paintBoard(){
+  const box = nel("seeBoard");
+  if (!seeBoard){ box.innerHTML = '<p class="net-msg">대진표를 받는 중…</p>'; return; }
+  nel("seeTitle").textContent = seeBoard.title + " 대진표";
+  const mine = seeBoard.me;
+  box.innerHTML = seeBoard.rounds.map(r =>
+    '<div class="col"><h4>' + r.name + '</h4>' +
+    r.matches.map(m => {
+      const one = p => {
+        if (!p) return '<div class="side tbd"><span>' +
+                       (r.round === 0 ? "부전승" : "미정") + '</span></div>';
+        const won  = m.winner === p.pid;
+        const lost = m.state === "done" && !won;
+        return '<div class="side ' + (won ? "won" : lost ? "lost" : "") +
+               (p.pid === mine ? " me" : "") + '"><span>' + esc(p.name) + '</span>' +
+               (won ? '<span class="pill">승</span>' : "") + '</div>';
+      };
+      const eye = m.fans ? '<div class="eye">' + m.fans + '명 관전</div>' : "";
+      return '<div class="pair"><div class="bout ' + m.state +
+             (m.state === "playing" ? '" data-room="' + m.room : "") + '">' +
+             one(m.a) + one(m.b) + eye + '</div></div>';
+    }).join("") + '</div>').join("");
+  box.querySelectorAll(".bout[data-room]").forEach(b =>
+    b.addEventListener("click", () => watchGo(b.dataset.room)));
+}
+
 function paintNames(){
   const tag = nel("roundTag");
   if (tag){
@@ -1369,7 +1478,9 @@ function paintNames(){
     const el = $("#tray" + trayOf(s) + " .nm");
     if (!ONLINE()){ el.textContent = SIDE(s); return; }
     const who = netPeople[s];
-    el.innerHTML = (who ? esc(who.name) : (s === mySide ? "나" : "상대")) + badgeHTML(who);
+    el.innerHTML = (who ? esc(who.name)
+                        : (SPECT() ? (s === 0 ? "선공" : "후공")
+                                   : (s === mySide ? "나" : "상대"))) + badgeHTML(who);
   });
 }
 function updateTurn(){
@@ -1381,6 +1492,7 @@ function updateTurn(){
 let drag = null;
 function onGrab(e, p){
   secretTap(p);
+  if (SPECT()) return;
   if (ONLINE() && p.s !== mySide) return;
   if (busy || over || p.s !== turn){ pick(p); return; }
   audio();
@@ -1615,9 +1727,13 @@ const SERVER = NETQ.get("server") || (
   /^(localhost|127\.|192\.168\.|10\.)/.test(location.hostname)
     ? "ws://" + (location.hostname || "127.0.0.1") + ":3000/ws"
     : "wss://mini-shogi.onrender.com/ws");
+const CUPWHY = {repeat: "무승부 · 선공 진출", gone: "연결이 끊겨 몰수패",
+                leave: "기권", time: "시간 초과"};
 const WHY = {catch:"캐치", try:"트라이", repeat:"같은 국면 3회", stuck:"둘 수가 없음",
              leave:"나감", time:"시간 초과", gone:"연결이 끊겨 중단"};
 const NETERR = {nocode:"없는 대국입니다", full:"자리가 찼습니다",
+                nocup:"없는 대회입니다", notyours:"내 대국이 아닙니다",
+                playing:"두는 중에는 관전할 수 없습니다",
                 taken:"그 자리는 사용 중입니다", held:"먼저 있던 분을 기다리는 중입니다",
                 turn:"내 차례가 아닙니다", illegal:"둘 수 없는 수입니다",
                 stale:"수가 엇갈렸습니다", over:"이미 끝난 판입니다",
@@ -1881,8 +1997,30 @@ function cupJoin(code, pin){
   netConnect(() => netTell("cupjoin", pin ? {code, pin} : {code}));
 }
 /* 대회가 대국을 배정했다. 그 방으로 들어간다 */
+/* ─── 관전 ───────────────────────────────────────────────────────────
+   내 대국이 없을 때만 본다. 서버가 볼 만한 대국을 골라 주고, 없으면
+   대진표를 띄워 고르게 한다. */
+function watchGo(code){
+  if (!code) return;
+  if (netCode === code) return;
+  spect = {code};
+  vs = "online"; mySide = 0; netCode = code;
+  document.body.classList.remove("ai");
+  netTell("watch", {code});
+  seeShow(false);
+  applyOrient(); paintHud();
+}
+function watchStop(){
+  if (!spect) return;
+  netTell("unwatch");
+  spect = null; netCode = ""; serverLeft = null;
+  netPeople = [null, null];
+  applyOrient();
+}
+
 function cupSit(m){
-  if (netCode === m.room) return;
+  if (netCode === m.room && !spect) return;
+  if (spect) watchStop();
   cupRound = m.round; cupFoe = m.foe;
   netTell("join", {code: m.room});
 }
@@ -1893,12 +2031,31 @@ function netRecv(msg){
   switch (msg.t){
     case "me":    me = msg; showList(); break;   // 목록의 내 이름도 같이 바뀐다
     case "cups":  cups = msg.cups || []; showCups(); break;
-    case "cupme":
+    case "cupme": {
       cup = msg && msg.code ? msg : null;
-      if (cup && cup.match) cupSit(cup.match);
-      if (!cup){ cupRound = ""; cupFoe = ""; }
-      forms({}); cupShow(); paintMe(); paintNames();
+      if (!cup){ cupRound = ""; cupFoe = ""; watchStop(); }
+      else if (cup.match) cupSit(cup.match);
+      else if (cup.state !== "open"){
+        cupRound = "";
+        /* 내 대국이 없다. 서버가 골라 준 대국을 보거나, 볼 것이 없으면
+           대진표를 띄워 고르게 한다. 보던 대국이 아직 돌고 있으면 그대로 둔다. */
+        if (cup.watch) watchGo(cup.watch.room);
+        else if (spect && !spect.ended){ /* 보던 대국이 아직 안 끝났다 */ }
+        else {
+          watchStop();
+          if (cup.state === "running") seeOpen("관전할 대국을 선택하세요.");
+        }
+      }
+      forms({}); cupShow(); paintMe(); paintNames(); paintSee();
       break;
+    }
+    case "watching":
+      spect = {code: msg.code};
+      netPeople = msg.people || [null, null];
+      applyOrient(); paintNames(); paintHud();
+      log.innerHTML = "<b>관전 중</b>";
+      break;
+    case "cupboard": seeBoard = msg; paintBoard(); break;
     case "cupgone":
       cup = null; cupRound = ""; cupFoe = "";
       netLeave(true); cupShow();
@@ -1948,6 +2105,7 @@ function waitShow(v){
    중간에 끊기고 손패가 어긋난다. 한가해질 때까지 들고 있다가 반영한다. */
 let waitState = null, waitOver = null, netPeople = [null, null];
 function netState(st){
+  fans = st.fans | 0; paintSee();
   netPly = st.ply; serverLeft = st.left / 1000; first = st.first;
   netPeople = st.people || [null, null];
   waitState = st; netSync();
@@ -2010,11 +2168,22 @@ function netMoved(msg){
 }
 function netOver(ov){
   finish(ov.winner);
-  const word = ov.why === "gone" ? "<b>중단</b>"
-             : ov.winner === null ? "<b>무승부</b>"
-             : ov.winner === mySide ? "<b>승리</b>" : "<b>패배</b>";
-  log.innerHTML = word + " · " + (WHY[ov.why] || ov.why);
-  netTell("list");
+  if (SPECT()){
+    spect.ended = true;
+    const who = ov.winner === null ? null : netPeople[ov.winner];
+    log.innerHTML = (ov.winner === null ? "<b>무승부</b>"
+                     : "<b>" + esc(who ? who.name : (ov.winner ? "후공" : "선공")) + " 승</b>")
+                  + " · " + (WHY[ov.why] || ov.why);
+    return;
+  }
+  /* 대회는 무승부가 없다. 선공이 올라간다 */
+  const cupWin = cup && ov.winner === null ? first : ov.winner;
+  const word = !cup && ov.why === "gone" ? "<b>중단</b>"
+             : !cup && ov.winner === null ? "<b>무승부</b>"
+             : cupWin === mySide ? "<b>승리</b>" : "<b>패배</b>";
+  const why = (cup && CUPWHY[ov.why]) || WHY[ov.why] || ov.why;
+  log.innerHTML = word + " · " + why;
+  if (!cup) netTell("list");
 }
 function netLeave(quiet){
   waitShow(false);
@@ -2049,6 +2218,9 @@ nel("cupAsk").addEventListener("submit", e => {
   if (pin.length !== 4) return netSay("비밀번호는 숫자 네 자리입니다.");
   cupJoin(cupPick, pin);
 });
+nel("seeBtn").addEventListener("click", () => seeOpen(""));
+nel("seeClose").addEventListener("click", () => seeShow(false));
+nel("seeScrim").addEventListener("click", () => seeShow(false));
 nel("cupOut").addEventListener("click", () => {
   if (cup && cup.state === "running" && !cup.out &&
       !confirm("대회에서 나갑니다. 다시 들어올 수 없습니다. 나갈까요?")) return;
@@ -2106,7 +2278,7 @@ $("#foeBtn").addEventListener("click", () => {
 });
 /* 화면 비율이 배치를 정한다 */
 function applyOrient(){
-  LAND = !ONLINE() && innerWidth >= innerHeight;
+  LAND = (!ONLINE() || SPECT()) && innerWidth >= innerHeight;
   document.body.classList.toggle("portrait", !LAND);
   document.body.classList.toggle("online", ONLINE());
   if (cells) paintNames();

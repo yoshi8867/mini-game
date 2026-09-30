@@ -65,14 +65,23 @@ button:disabled{opacity:.4;cursor:not-allowed}
 .who span.out{color:var(--chalk-dim);text-decoration:line-through}
 .who span.top{color:var(--mark);border-color:#4b3f22}
 
-/* 대진표 */
-.board{display:flex;gap:var(--s2);overflow-x:auto;margin-top:var(--s3);
-  padding-bottom:var(--s2)}
-.col{flex:none;width:186px}
+/* 대진표 — 선이 있어야 대진표다 */
+.board{display:flex;overflow-x:auto;margin-top:var(--s3);padding-bottom:var(--s2);
+  min-height:120px}
+.col{flex:none;width:182px;display:flex;flex-direction:column}
 .col h3{font:700 12px/1 'Gothic A1',system-ui,sans-serif;letter-spacing:.1em;
-  color:var(--chalk-dim);margin:0 0 8px;text-align:center}
+  color:var(--chalk-dim);margin:0 0 8px;text-align:center;flex:none}
+.pair{flex:1;display:flex;flex-direction:column;justify-content:center;
+  position:relative;padding:5px 0}
+.col:not(:last-child) .pair::after{content:"";position:absolute;right:-1px;top:50%;
+  width:14px;border-top:1px solid var(--wall-line)}
+.col:not(:first-child) .pair::before{content:"";position:absolute;left:-14px;
+  top:25%;bottom:25%;width:14px;border:1px solid var(--wall-line);
+  border-right:0;border-radius:3px 0 0 3px}
+.col:not(:last-child){padding-right:14px}
+.col:not(:first-child){margin-left:14px}
 .bout{background:var(--wall);border:1px solid var(--wall-line);border-radius:6px;
-  padding:7px 9px;margin-bottom:6px;font-size:12.5px}
+  padding:7px 9px;font-size:12.5px}
 .bout.playing{border-color:var(--mark)}
 .bout.done{opacity:.72}
 .side{display:flex;justify-content:space-between;gap:6px;padding:2px 0}
@@ -231,7 +240,7 @@ function paint(j){
     const acts = [];
     if (c.state === "open"){
       acts.push(btn("start", c.code, "go", "대진 짜고 시작"));
-      acts.push(btn("mock", c.code, "", "연습 참가자 8명"));
+      acts.push(btn("mock", c.code, "", "연습 참가자 넣기"));
     }
     acts.push(btn("close", c.code, "bad right", c.state === "running" ? "대회 중단" : "대회 닫기"));
 
@@ -249,7 +258,7 @@ function paint(j){
           '<span>남은 대국 <b>' + c.counts.pending + '</b></span>') +
         (c.champion ? '<span>우승 <b>' + esc(c.champion) + '</b></span>' : "") +
       '</div>' +
-      (c.state === "open" ? entrants(c) : board(c)) +
+      (c.state === "open" ? entrants(c) : board(c) + ranks(c)) +
       '<div class="acts">' + acts.join("") + '</div>' +
     '</div>';
   }).join("");
@@ -268,10 +277,19 @@ function entrants(c){
   return '<div class="who">' +
     c.entrants.map(p => '<span>' + esc(p.name) + '</span>').join("") + '</div>';
 }
+/* 끝난 뒤 등수 — 시상할 때 본다 */
+function ranks(c){
+  const done = c.entrants.filter(p => p.place).sort((a, b) => a.place - b.place);
+  if (!done.length) return "";
+  return '<div class="who" style="margin-top:14px">' +
+    done.map(p => '<span class="' + (p.place === 1 ? "top" : p.out ? "out" : "") + '">' +
+      p.place + '위 · ' + esc(p.name) + '</span>').join("") + '</div>';
+}
 function board(c){
   const cols = c.board.map(r =>
     '<div class="col"><h3>' + r.name + '</h3>' +
-    r.matches.map(m => bout(m, r.round)).join("") + '</div>').join("");
+    r.matches.map(m => '<div class="pair">' + bout(m, r.round) + '</div>').join("") +
+    '</div>').join("");
   return '<div class="board">' + cols + '</div>';
 }
 function bout(m, round){
@@ -297,11 +315,18 @@ async function act(what, code){
   if (what === "start" &&
       !confirm("여기서 참가가 마감되고 대진표가 확정됩니다. 시작할까요?")) return;
   const body = {code};
-  if (what === "mock") body.n = 8;
+  if (what === "mock"){
+    const n = prompt("연습 참가자를 몇 명 넣을까요? (서버가 대신 둡니다)", "15");
+    if (n === null) return;
+    body.n = Math.max(1, Math.min(63, parseInt(n, 10) || 0));
+    if (!body.n) return;
+  }
   const j = await call(what, body);
   if (!j.ok) return alert(ERR[j.why] || j.why);
   if (what === "start")
     alert(j.size + "강 대진 · 부전승 " + j.byes + "명 · " + j.cup.rounds + "라운드");
+  if (what === "mock")
+    say("makeMsg", "연습 참가자를 넣었습니다. 지금 " + j.cup.people + "명입니다.", "good");
   refresh();
 }
 

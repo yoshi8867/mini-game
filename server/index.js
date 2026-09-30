@@ -17,7 +17,7 @@ require("./env.js");                     // .env 를 먼저 읽는다 (로컬 �
 const db = require("./db.js");
 const http = require("http");
 const {WebSocketServer} = require("ws");
-const {Room, newCode, okPin, LIMIT_MS} = require("./room.js");
+const {Room, newCode, okPin, LIMIT_MS, EG} = require("./room.js");
 const players = require("./players.js");
 const admin = require("./admin.js");
 const {Tourney, MAX_ENTRANTS} = require("./tourney.js");
@@ -37,7 +37,10 @@ const MAX_ROOMS = 200;
 const send = (ws, t, o) => {
   if (ws && ws.readyState === 1) ws.send(JSON.stringify(Object.assign({t: t}, o || {})));
 };
-function toRoom(room, t, o){ for (const ws of room.seats) send(ws, t, o); }
+function toRoom(room, t, o){
+  for (const ws of room.seats) send(ws, t, o);
+  if (room.fans) for (const ws of room.fans) send(ws, t, o);
+}
 
 /* ─── 대국 목록 ────────────────────────────────────────────────────── */
 function listing(){
@@ -61,16 +64,50 @@ function pushList(){                     // 한 박자 모아서 한 번만 보�
 
 function pushState(room){
   const st = room.state();
+  st.fans = room.fans ? room.fans.size : 0;
   for (const ws of room.seats)
     if (ws) send(ws, "state", Object.assign({side: ws.side}, st));
+  if (room.fans)
+    for (const ws of room.fans) send(ws, "state", Object.assign({spect: true}, st));
+}
+
+/* ─── 관전 ─────────────────────────────────────────────────────────────
+   두는 사람에게도 몇 명이 보고 있는지 알려 준다. 누가 내 판을 본다는 것은
+   대회에서 꽤 큰 일이다 — 우쭐하거나 긴장되거나 한다. */
+function watchStop(ws){
+  const room = ws.fan;
+  if (!room) return;
+  ws.fan = null;
+  if (room.fans){
+    room.fans.delete(ws);
+    if (rooms.has(room.code)) pushState(room);     // 관전자 수가 줄었다
+  }
+}
+function onWatch(ws, msg){
+  if (!ws.person) return send(ws, "error", {why: "nohello"});
+  const room = rooms.get(String(msg.code || "").toUpperCase());
+  if (!room) return send(ws, "error", {why: "nocode"});
+  if (room.seats.indexOf(ws) >= 0) return send(ws, "error", {why: "playing"});
+  watchStop(ws);
+  if (!room.fans) room.fans = new Set();
+  room.fans.add(ws); ws.fan = room;
+  send(ws, "watching", {code: room.code,
+                        people: room.people.map(players.view)});
+  pushState(room);
 }
 
 /* 끝난 판의 승패를 남긴다. 끊겨서 끝난 판은 남기지 않는다 — 결과가 아니다. */
 function record(room){
-  if (!room.over || room.saved || room.over.why === "gone") return;
+  if (!room.over || room.saved) return;
+  /* 끊겨서 끝난 판은 결과가 아니다. 다만 대회에서는 몰수패라 결과가 맞다 */
+  if (room.over.why === "gone" && !room.cup) return;
+  /* 연습 참가자끼리 둔 판은 집계에 넣지 않는다. 사람이 둔 것이 아니다 */
+  if (room.seats.some(w => w && w.bot) ||
+      (room.only && room.only.some(isBot))) return;
   room.saved = true;
   db.saveGame({code: room.code, first: room.first, winner: room.over.winner,
-               why: room.over.why, plies: room.ply, startedAt: room.startedAt})
+               why: room.over.why, plies: room.ply, startedAt: room.startedAt,
+               mode: room.cup ? "cup" : "online"})
     .catch(() => {});
 }
 function ended(room){
@@ -79,6 +116,39 @@ function ended(room){
   pushState(room);
   pushList();
   if (room.cup) cupDone(room);
+}
+
+/* ─── 연습 상대 ────────────────────────────────────────────────────────
+   대회 리허설용이다. mock- 으로 시작하는 참가자는 사람이 아니라 서버가
+   대신 둔다. 수업 전에 대진표가 어떻게 굴러가는지 눈으로 보려는 것이다.
+
+   서버는 원래 탐색을 하지 않는다 — 그래야 무료 인스턴스가 논다. 이것은
+   그 원칙의 예외이므로 생각하는 시간을 아주 짧게 준다. */
+const isBot  = pid => typeof pid === "string" && pid.slice(0, 5) === "mock-";
+const BOT_MS = +(process.env.BOT_MS || 1100);    // 사람이 따라 볼 수 있는 속도
+const BOT_THINK = 25;
+
+function botTick(room){
+  if (!room || room.over || !rooms.has(room.code)) return;
+  const side = room.pos.turn;
+  const seat = room.seats[side];
+  if (!seat || !seat.bot) return;
+  setTimeout(() => {
+    if (room.over || !rooms.has(room.code)) return;
+    if (room.pos.turn !== side) return;
+    const now = room.seats[side];
+    if (!now || !now.bot) return;
+    const past = [...room.seen].filter(e => e[1] >= 2).map(e => e[0]);
+    const res = EG.best({b: room.pos.b, hand: room.pos.hand, turn: side},
+                        {ms: BOT_THINK, margin: 120, past});
+    if (!res || !res.move) return;
+    const r = room.play(side, res.move, room.ply);
+    if (r.err) return;
+    toRoom(room, "moved", {m: r.m, by: side, ply: r.ply, left: r.left});
+    if (r.over) return ended(room);
+    pushState(room);
+    botTick(room);
+  }, BOT_MS);
 }
 
 /* ─── 대회 ─────────────────────────────────────────────────────────────
@@ -94,6 +164,11 @@ function runCup(cup){
     room.onEvent = (r, what) => { if (what === "over") ended(r); };
     rooms.set(code, room);
     m.room = code; m.state = "playing"; m.began = Date.now();
+    /* 연습 참가자는 사람이 안 오니 서버가 대신 앉는다 */
+    [m.a, m.b].forEach(pid => {
+      if (isBot(pid)) room.seat({bot: true}, players.get(pid), null);
+    });
+    botTick(room);
   }
   pushCup(cup);
 }
@@ -112,6 +187,7 @@ function cupDone(room){
      못 앉는다. 결과는 이미 양쪽에 보냈다. */
   for (const ws of room.seats) if (ws){ ws.room = null; ws.side = null; }
   room.seats = [null, null];
+  if (room.fans){ for (const ws of room.fans) ws.fan = null; room.fans.clear(); }
   room.stopClock();
   rooms.delete(room.code);
 
@@ -137,6 +213,10 @@ function cupView(cup, pid){
   } else if (m){
     out.waiting = true;                      // 상대가 아직 안 정해졌다
   }
+  /* 볼 만한 대국을 골라 준다. 없으면 대진표를 띄우게 한다 */
+  const w = cup.watchFor(pid);
+  if (w && w.room) out.watch = {room: w.room, id: w.id,
+                                a: cup.nameOf(w.a), b: cup.nameOf(w.b)};
   return out;
 }
 function pushCup(cup){
@@ -352,7 +432,7 @@ function onAdmin(what, m, done){
           toRoom(room, "cupgone", {});
           room.stopClock(); rooms.delete(code);
         }
-      for (const ws of wss.clients) if (ws.cup === c.code) ws.cup = null;
+      for (const ws of wss.clients) if (ws.cup === c.code){ watchStop(ws); ws.cup = null; }
       cups.delete(c.code);
       pushList();
       return done(200, {ok: true});
@@ -381,6 +461,7 @@ const wss = new WebSocketServer({server, path: "/ws"});
 
 wss.on("connection", ws => {
   ws.alive = true; ws.room = null; ws.side = null; ws.person = null;
+  ws.cup = null; ws.fan = null;
   ws.on("pong", () => { ws.alive = true; });
 
   ws.on("message", raw => {
@@ -396,6 +477,9 @@ wss.on("connection", ws => {
       case "cups":    return send(ws, "cups", {cups: cupList()});
       case "cupjoin": return onCupJoin(ws, msg);
       case "cupleave":return onCupLeave(ws);
+      case "cupboard":return onCupBoard(ws);
+      case "watch":   return onWatch(ws, msg);
+      case "unwatch": return watchStop(ws);
       case "rename":  return onRename(ws, msg);
       case "rematch": return onRematch(ws);
       case "leave":   return onLeave(ws);
@@ -404,6 +488,7 @@ wss.on("connection", ws => {
   });
 
   ws.on("close", () => {
+    watchStop(ws);
     const room = ws.room;
     if (!room) return;
     room.drop(ws);
@@ -453,8 +538,24 @@ function onCupJoin(ws, msg){
   send(ws, "cupme", v);
   pushCup(cup);
 }
+/* 대진표. 관전할 대국을 고르라고 내려 준다 */
+function onCupBoard(ws){
+  const cup = ws.cup && cups.get(ws.cup);
+  if (!cup) return send(ws, "error", {why: "nocup"});
+  send(ws, "cupboard", {code: cup.code, title: cup.title, state: cup.state,
+                        me: ws.person && ws.person.pid,
+                        champion: cup.champion && cup.nameOf(cup.champion),
+                        rounds: cup.board().map(r => Object.assign({}, r, {
+                          matches: r.matches.map(m => Object.assign({}, m, {
+                            fans: m.room && rooms.get(m.room)
+                                ? (rooms.get(m.room).fans || {size: 0}).size : 0,
+                          })),
+                        }))});
+}
+
 function onCupLeave(ws){
   const cup = ws.cup && cups.get(ws.cup);
+  watchStop(ws);
   ws.cup = null;
   send(ws, "cupme", null);
   if (!cup || !ws.person) return;
@@ -503,6 +604,7 @@ function sit(ws, room, token){
   const peer = room.seats[1 - got.side];
   if (peer) send(peer, "peer", {what: "joined"});
   pushList();
+  botTick(room);
 }
 
 function onMove(ws, msg){
@@ -516,6 +618,7 @@ function onMove(ws, msg){
   toRoom(room, "moved", {m: r.m, by: ws.side, ply: r.ply, left: r.left});
   if (r.over) return ended(room);
   pushState(room);
+  botTick(room);
 }
 
 function onRematch(ws){

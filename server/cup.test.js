@@ -88,7 +88,8 @@ async function playOut(a, b, room){
 (async () => {
   const srv = spawn(process.execPath, [path.join(__dirname, "index.js")], {
     env: Object.assign({}, process.env, {PORT: String(PORT), DATABASE_URL: "",
-                                         MOVE_MS: "600000", GRACE_MS: "800"}),
+                                         MOVE_MS: "600000", GRACE_MS: "800",
+                                         BOT_MS: "35"}),
     stdio: ["ignore", "pipe", "pipe"],
   });
   srv.stdout.on("data", () => {});
@@ -222,6 +223,51 @@ async function playOut(a, b, room){
     const pub = await P[0].next("rooms");
     assert.strictEqual(pub.rooms.length, 0, "대회 대국이 공개 목록에 샜다");
     console.log("board   우승 1 · 공동3 둘 · 대국 3판 · 공개 목록에는 안 샘");
+
+    /* ── 7-1. 관전 ─────────────────────────────────────────────────── */
+    {
+      const {body: c2} = await admin("open", {token: T, pin: "1357", title: "관전 검사"});
+      const CUP2 = c2.cup.code;
+      const eye = await hello("pid-cup-eye-1");
+      eye.send("cupjoin", {code: CUP2, pin: "1357"});
+      await eye.next("cupme");
+      /* 나까지 여덟이면 부전승 없이 네 대국이 선다. 셋은 연습끼리 둔다 */
+      await admin("mock", {token: T, code: CUP2, n: 7});
+      await admin("start", {token: T, code: CUP2});
+
+      /* 구경꾼은 대진표를 받아 고른다 */
+      eye.send("cupboard");
+      const bd = await eye.next("cupboard");
+      const playing = bd.rounds[0].matches.filter(m =>
+        m.state === "playing" && m.a.pid !== bd.me && m.b.pid !== bd.me);
+      assert.strictEqual(bd.rounds[0].matches.length, 4, "8명인데 첫 라운드가 넷이 아니다");
+      assert.ok(playing.length >= 2, "연습끼리 두는 대국이 안 섰다");
+
+      eye.send("watch", {code: playing[0].room});
+      const w = await eye.next("watching");
+      assert.strictEqual(w.code, playing[0].room);
+      assert.strictEqual(w.people.length, 2, "관전 화면에 둘이 안 실렸다");
+
+      /* 관전자에게는 판이 오고, 두는 사람에게는 관전자 수가 간다 */
+      const st = await eye.next("state", 6000, x => x.spect);
+      assert.strictEqual(st.spect, true);
+      assert.ok(st.fans >= 1, "관전자 수가 안 실렸다");
+      assert.strictEqual(st.side, undefined, "관전자에게 자리가 갔다");
+
+      /* 연습 상대가 실제로 둔다 */
+      const mv = await eye.next("moved", 8000);
+      assert.ok(Number.isInteger(mv.m), "연습 상대가 안 둔다");
+      console.log(`watch   관전 ${w.code} · 관전자 ${st.fans}명 · 연습 상대가 스스로 둔다`);
+
+      /* 그 대국이 끝나면 구경꾼에게도 결과가 온다 */
+      const done = await eye.next("over", 60000);
+      assert.ok(done, "끝났는데 구경꾼이 결과를 못 받았다");
+      console.log(`watch   관전하던 대국이 ${done.why} 로 끝나는 것까지 받는다`);
+
+      eye.send("unwatch");
+      eye.close();
+      await admin("close", {token: T, code: CUP2});
+    }
 
     /* ── 8. 대회 닫기 ──────────────────────────────────────────────── */
     assert.ok((await admin("close", {token: T, code: CUP})).body.ok);
