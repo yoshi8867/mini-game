@@ -42,7 +42,7 @@ function toRoom(room, t, o){ for (const ws of room.seats) send(ws, t, o); }
 /* ─── 대국 목록 ────────────────────────────────────────────────────── */
 function listing(){
   const out = [];
-  for (const r of rooms.values()) if (!r.empty) out.push(r.info());
+  for (const r of rooms.values()) if (!r.empty && !r.cup) out.push(r.info());
   /* 기다리는 대국이 위로. 그 다음은 만들어진 순서 */
   out.sort((a, b) => (a.state === b.state ? 0 : a.state === "waiting" ? -1 : 1));
   return out;
@@ -78,6 +78,80 @@ function ended(room){
   record(room);
   pushState(room);
   pushList();
+  if (room.cup) cupDone(room);
+}
+
+/* ─── 대회 ─────────────────────────────────────────────────────────────
+   대진표가 "이제 둘 수 있다"고 하면 그 자리에 방을 하나 세우고, 두 사람에게
+   알린다. 판이 끝나면 결과를 대진표에 돌려주고 다음 대국을 세운다. */
+function runCup(cup){
+  for (const m of cup.ready()){
+    if (m.room) continue;
+    const code = newCode(c => rooms.has(c) || cups.has(c));
+    const room = new Room(code, {open: false, pin: null});
+    room.cup  = {code: cup.code, match: m.id};
+    room.only = [m.a, m.b];                  // 이 둘만 앉는다. a 가 선공
+    room.onEvent = (r, what) => { if (what === "over") ended(r); };
+    rooms.set(code, room);
+    m.room = code; m.state = "playing"; m.began = Date.now();
+  }
+  pushCup(cup);
+}
+
+/* 대회 대국이 끝났다. 무승부는 선공 승으로 바꿔 올린다. */
+function cupDone(room){
+  const cup = cups.get(room.cup.code);
+  if (!cup) return;
+  const m = cup.find(room.cup.match);
+  if (!m || m.state === "done") return;
+  const r = room.cupResult();
+  if (!r) return;
+  cup.report(m.id, r.winner === 0 ? m.a : m.b, r.why);
+
+  /* 끝난 대회 대국은 그 자리에서 치운다. 자리를 붙들고 있으면 다음 라운드에
+     못 앉는다. 결과는 이미 양쪽에 보냈다. */
+  for (const ws of room.seats) if (ws){ ws.room = null; ws.side = null; }
+  room.seats = [null, null];
+  room.stopClock();
+  rooms.delete(room.code);
+
+  runCup(cup);                               // 다음 대국이 섰을 수도 있다
+}
+
+/* 그 사람이 지금 대회에서 어떤 처지인지 */
+function cupView(cup, pid){
+  const me = cup.people.get(pid);
+  if (!me) return null;
+  const out = {code: cup.code, title: cup.title, state: cup.state,
+               people: cup.people.size, rounds: cup.rounds.length,
+               name: me.name, out: me.out, place: me.place,
+               champion: cup.champion && cup.nameOf(cup.champion)};
+  const m = cup.matchOf(pid);
+  if (m && m.state === "playing"){
+    const foe = m.a === pid ? m.b : m.a;
+    out.match = {room: m.room, id: m.id,
+                 round: cup.rounds[m.round].length === 1 ? "결승"
+                      : cup.rounds[m.round].length === 2 ? "준결승"
+                      : (cup.rounds[m.round].length * 2) + "강",
+                 side: m.a === pid ? 0 : 1, foe: cup.nameOf(foe)};
+  } else if (m){
+    out.waiting = true;                      // 상대가 아직 안 정해졌다
+  }
+  return out;
+}
+function pushCup(cup){
+  for (const ws of wss.clients){
+    if (ws.readyState !== 1 || ws.cup !== cup.code || !ws.person) continue;
+    const v = cupView(cup, ws.person.pid);
+    if (v) send(ws, "cupme", v);
+  }
+}
+/* 학생이 고르는 목록 — 접수 중인 대회가 위로 */
+function cupList(){
+  const out = [...cups.values()].map(c => ({
+    code: c.code, title: c.title, state: c.state, people: c.people.size}));
+  out.sort((a, b) => (a.state === b.state ? 0 : a.state === "open" ? -1 : 1));
+  return out;
 }
 
 /* ─── HTTP ─────────────────────────────────────────────────────────── */
@@ -266,12 +340,19 @@ function onAdmin(what, m, done){
       if (!c) return done(404, {ok: false, why: "nocup"});
       const r = c.start();
       if (r.err) return done(409, {ok: false, why: r.err});
+      runCup(c);
       pushList();
       return done(200, {ok: true, cup: c.full(), size: r.size, byes: r.byes});
     }
     case "close": {
       const c = cup();
       if (!c) return done(404, {ok: false, why: "nocup"});
+      for (const [code, room] of rooms)
+        if (room.cup && room.cup.code === c.code){
+          toRoom(room, "cupgone", {});
+          room.stopClock(); rooms.delete(code);
+        }
+      for (const ws of wss.clients) if (ws.cup === c.code) ws.cup = null;
       cups.delete(c.code);
       pushList();
       return done(200, {ok: true});
@@ -312,6 +393,9 @@ wss.on("connection", ws => {
       case "open":    return onOpen(ws, msg);
       case "join":    return onJoin(ws, msg);
       case "move":    return onMove(ws, msg);
+      case "cups":    return send(ws, "cups", {cups: cupList()});
+      case "cupjoin": return onCupJoin(ws, msg);
+      case "cupleave":return onCupLeave(ws);
       case "rename":  return onRename(ws, msg);
       case "rematch": return onRematch(ws);
       case "leave":   return onLeave(ws);
@@ -352,6 +436,32 @@ function onRename(ws, msg){
   send(ws, "me", players.view(ws.person));
 }
 
+/* ─── 대회 참가 ───────────────────────────────────────────────────── */
+function onCupJoin(ws, msg){
+  if (!ws.person) return send(ws, "error", {why: "nohello"});
+  const cup = cups.get(String(msg.code || "").toUpperCase());
+  if (!cup) return send(ws, "error", {why: "nocup"});
+  /* 이미 참가한 사람은 비번 없이 돌아온다 — 새로고침했을 뿐이다 */
+  const back = cup.people.has(ws.person.pid);
+  if (!back){
+    if (cup.pin && msg.pin !== cup.pin) return send(ws, "error", {why: "badpin"});
+    const r = cup.join(ws.person);
+    if (r.err) return send(ws, "error", {why: r.err});
+  }
+  ws.cup = cup.code;
+  const v = cupView(cup, ws.person.pid);
+  send(ws, "cupme", v);
+  pushCup(cup);
+}
+function onCupLeave(ws){
+  const cup = ws.cup && cups.get(ws.cup);
+  ws.cup = null;
+  send(ws, "cupme", null);
+  if (!cup || !ws.person) return;
+  if (cup.state === "open"){ cup.quit(ws.person.pid); pushCup(cup); }
+  send(ws, "rooms", {rooms: listing()});
+}
+
 function onOpen(ws, msg){
   if (!ws.person) return send(ws, "error", {why: "nohello"});
   if (ws.room)    return send(ws, "error", {why: "joined"});
@@ -372,6 +482,11 @@ function onJoin(ws, msg){
   const room = rooms.get(code);
   if (!room) return send(ws, "error", {why: "nocode"});
   const token = typeof msg.token === "string" ? msg.token : null;
+  if (room.only){                            // 대회 대국 — 비번이 아니라 명단이다
+    if (room.only.indexOf(ws.person.pid) < 0)
+      return send(ws, "error", {why: "notyours"});
+    return sit(ws, room, token);
+  }
   const known = token && room.tokens.indexOf(token) >= 0;
   if (!room.open && !known && msg.pin !== room.pin)
     return send(ws, "error", {why: "badpin"});
@@ -405,7 +520,7 @@ function onMove(ws, msg){
 
 function onRematch(ws){
   const room = ws.room;
-  if (!room) return;
+  if (!room || room.cup) return;             // 대회에 재대국은 없다
   if (room.wantRematch(ws.side)) toRoom(room, "restart", {});
   else toRoom(room, "peer", {what: "rematch", side: ws.side});
   pushState(room);
@@ -420,6 +535,7 @@ function onLeave(ws){
   ws.room = null; ws.side = null;
   if (room.over) toRoom(room, "over", room.over);
   record(room);
+  if (room.cup && room.over) cupDone(room);
   toRoom(room, "peer", {what: "left"});
   pushState(room);
   if (room.empty) rooms.delete(room.code);

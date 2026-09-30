@@ -46,6 +46,8 @@ class Room {
     this.timer  = null;
     this.grace  = [null, null];
     this.onEvent = null;                      // 방 밖으로 알릴 일이 생겼을 때
+    this.cup = null;                          // 대회 대국이면 {code, match}
+    this.only = null;                         // 대회 대국은 정해진 둘만 앉는다
     this.reset();
   }
 
@@ -121,8 +123,11 @@ class Room {
         return {side: s, token: token};
       }
     }
-    const s = this.seats.indexOf(null);
+    /* 대회는 자리가 정해져 있다. m.a 가 선공, m.b 가 후공이다 —
+       먼저 들어온 순서로 정하면 무승부 보정(선공 승)이 운에 좌우된다. */
+    const s = this.only ? this.only.indexOf(person.pid) : this.seats.indexOf(null);
     if (s < 0) return {err: "full"};
+    if (this.seats[s] && this.seats[s] !== ws) return {err: "taken"};
     if (this.grace[s]) return {err: "held"};  // 끊긴 사람을 아직 기다리는 중이다
     this.seats[s]  = ws;
     this.people[s] = person;
@@ -131,18 +136,21 @@ class Room {
     return {side: s, token: this.tokens[s]};
   }
 
-  /* 소켓이 끊겼다. 패로 치지 않고 잠시 기다린다. */
+  /* 소켓이 끊겼다. 패로 치지 않고 잠시 기다린다.
+     대회는 다르다 — 단판제라 승자가 안 나오면 대진표가 멈춘다. 돌아오지
+     않으면 몰수패다. 한 수도 두기 전이어도 그렇다. */
   drop(ws){
     const s = this.seats.indexOf(ws);
     if (s < 0) return -1;
     this.seats[s] = null;
     this.touched = Date.now();
     this.stopClock();
-    if (!this.over && this.ply > 0){
+    if (!this.over && (this.ply > 0 || this.cup)){
       this.grace[s] = setTimeout(() => {
         this.grace[s] = null;
         if (this.seats[s] || this.over) return;
-        this.finish(null, "gone", s);
+        if (this.cup) this.finish(1 - s, "gone");
+        else this.finish(null, "gone", s);
         this.tokens[s] = null; this.people[s] = null;
         if (this.onEvent) this.onEvent(this, "over");
       }, GRACE_MS);
@@ -154,11 +162,12 @@ class Room {
   }
   clearGrace(s){ if (this.grace[s]){ clearTimeout(this.grace[s]); this.grace[s] = null; } }
 
-  /* 나가기 버튼. 두던 중이면 진 것으로 친다. */
+  /* 나가기 버튼. 두던 중이면 진 것으로 친다.
+     대회에서는 첫 수 전에 나가도 기권패다. 빈자리로 둘 수 없다. */
   leave(ws){
     const s = this.seats.indexOf(ws);
     if (s < 0) return -1;
-    if (!this.over && this.ply > 0) this.finish(1 - s, "leave");
+    if (!this.over && (this.ply > 0 || this.cup)) this.finish(1 - s, "leave");
     this.clearGrace(s);
     this.seats[s] = null; this.tokens[s] = null; this.people[s] = null;
     this.stopClock();
@@ -215,6 +224,15 @@ class Room {
       people: this.people.map(players.view),
       code: this.code, open: this.open,
     };
+  }
+
+  /* 대회가 읽는 결과. 무승부는 선공 승이다 — 이 게임은 후수 필승이라
+     그 불리함을 조금이나마 갚아 주는 규칙이다. */
+  cupResult(){
+    if (!this.over) return null;
+    const {winner, why} = this.over;
+    return {winner: winner === null ? this.first : winner, why,
+            drawn: winner === null};
   }
 
   /* 대국 목록에서 보는 사실 */

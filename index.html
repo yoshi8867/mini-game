@@ -171,6 +171,29 @@ body.portrait .bmsg.a{transform:none} body.portrait .bmsg.b{transform:rotate(180
 @keyframes waitpulse{0%,60%,100%{opacity:.22;transform:scale(.8)}
                      30%{opacity:1;transform:scale(1)}}
 
+/* 몇 강인지는 판 위에 늘 보여야 한다 */
+.round{position:fixed;left:50%;top:10px;transform:translateX(-50%);z-index:62;
+  font:700 12px/1 'Gothic A1',system-ui,sans-serif;letter-spacing:.1em;
+  background:var(--ink);color:var(--paper);border-radius:999px;padding:8px 15px;
+  pointer-events:none;white-space:nowrap}
+body.portrait .round{top:auto;bottom:52px}
+
+/* 대회 — 시작이나 다음 대국을 기다리는 동안 */
+.cup-scrim{position:fixed;inset:0;z-index:74;background:rgba(0,0,0,.5)}
+.cup{position:fixed;z-index:75;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:min(340px,calc(100vw - 40px));text-align:center;
+  background:var(--wall-2);color:var(--chalk);border:1px solid var(--wall-line);
+  border-radius:10px;padding:var(--s4) var(--s3) var(--s3);
+  box-shadow:0 20px 50px rgba(0,0,0,.55)}
+.cup h3{font-family:'Gowun Batang',serif;font-size:21px;margin:var(--s1) 0 0;
+  color:var(--chalk)}
+.cup-tag{margin:0;font:700 11px/1 'JetBrains Mono',monospace;letter-spacing:.16em;
+  color:var(--mark)}
+.cup-say{margin:var(--s2) 0 0;font-size:13.5px;color:var(--chalk-dim);line-height:1.6}
+.cup-me{margin:var(--s3) 0 0;font-size:13px;color:var(--chalk-dim)}
+.cup-me b{color:var(--chalk)}
+.net-list li.cup-row .tagline{color:var(--mark)}
+
 /* 대국 목록 */
 .net-scrim{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.55)}
 .net{position:fixed;z-index:81;left:50%;top:50%;transform:translate(-50%,-50%);
@@ -439,6 +462,18 @@ body.ai .t1 .clock{display:none}        /* AI 차례에는 시계를 재지 않�
   <div class="wait-dots" aria-hidden="true"><i></i><i></i><i></i></div>
   <button class="net-quiet" id="waitLeave" type="button">나가기</button>
 </div>
+<div class="round" id="roundTag" hidden></div>
+<div class="cup-scrim" id="cupScrim" hidden></div>
+<div class="cup" id="cupBox" hidden role="dialog" aria-label="대회">
+  <p class="cup-tag" id="cupTag"></p>
+  <h3 id="cupTitle"></h3>
+  <p class="cup-say" id="cupSay"></p>
+  <div class="wait-dots" id="cupDots" aria-hidden="true"><i></i><i></i><i></i></div>
+  <p class="cup-me" id="cupMe"></p>
+  <div class="net-row" style="justify-content:center">
+    <button class="net-quiet" id="cupOut">대회 나가기</button>
+  </div>
+</div>
 <div class="net-scrim" id="netScrim" hidden></div>
 <div class="net" id="net" hidden role="dialog" aria-label="대국 목록">
   <div class="net-head">
@@ -468,9 +503,23 @@ body.ai .t1 .clock{display:none}        /* AI 차례에는 시계를 재지 않�
   </form>
 
   <ul class="net-list" id="netList"></ul>
+  <ul class="net-list" id="cupList" hidden></ul>
+
+  <form class="net-ask" id="cupAsk" hidden>
+    <p class="net-msg">대회 비밀번호 네 자리를 넣어 주세요.</p>
+    <div class="pin" id="pinCup" aria-label="대회 비밀번호"></div>
+    <div class="net-row">
+      <button class="net-quiet" id="cupBack" type="button">뒤로</button>
+      <button class="net-go" id="cupEnter" type="submit">참가</button>
+    </div>
+  </form>
+
   <p class="net-msg" id="netMsg"></p>
   <div class="net-me" id="netMe"></div>
-  <div class="net-foot"><button class="net-go" id="netNew">대국 열기</button></div>
+  <div class="net-foot">
+    <button class="net-quiet" id="cupBtn">대회 참가</button>
+    <button class="net-go" id="netNew">대국 열기</button>
+  </div>
 </div>
 <div class="rules-scrim" id="rulesScrim" hidden></div>
 <aside class="rules-drawer" id="rulesDrawer" hidden aria-label="규칙">
@@ -1310,6 +1359,12 @@ function endTurn(){
 }
 /* 이름표는 자리가 아니라 화면의 띠를 따른다. 온라인이면 나/상대로 부른다 */
 function paintNames(){
+  const tag = nel("roundTag");
+  if (tag){
+    const on = ONLINE() && cupRound;
+    tag.hidden = !on;
+    if (on) tag.textContent = cupRound;
+  }
   [0,1].forEach(s => {
     const el = $("#tray" + trayOf(s) + " .nm");
     if (!ONLINE()){ el.textContent = SIDE(s); return; }
@@ -1697,6 +1752,14 @@ function paintMe(){
   }
   const part = me.name ? me.name.split(" ") : ["", ""];
   const head = me.head || part[0], tail = me.tail || part[1];
+  /* 대회에 들어가면 이름이 굳는다. 바꿔 가며 대진표를 헷갈리게 할 수 없다 */
+  if (cup){
+    box.innerHTML =
+      `<div class="me-row"><span class="lab">나의 닉네임:</span>` +
+      `<b>${esc(cup.name)}</b>${badgeHTML(me)}` +
+      `<span class="vs">대회 중에는 못 바꿉니다</span></div>`;
+    return;
+  }
   const chip = (k, w, t) =>
     `<button class="chip" type="button" data-part="${k}" title="${t}">` +
     `<span class="w">${esc(w)}</span><span class="r">⟳</span></button>`;
@@ -1748,17 +1811,100 @@ function makePin(box){
   };
 }
 const pinNew = makePin(nel("pinNew")), pinAsk = makePin(nel("pinAsk"));
+const pinCup = makePin(nel("pinCup"));
 
 function forms(show){
   nel("netOpen").hidden = !show.open;
   nel("netAsk").hidden  = !show.ask;
-  nel("netList").hidden = !!(show.open || show.ask);
+  nel("cupAsk").hidden  = !show.cupAsk;
+  nel("cupList").hidden = !show.cups;
+  nel("netList").hidden = !!(show.open || show.ask || show.cupAsk || show.cups);
+  nel("netNew").hidden  = !!(show.open || show.ask || show.cupAsk || show.cups);
+  nel("cupBtn").hidden  = !!(show.open || show.ask || show.cupAsk || show.cups);
 }
+
+/* ═══ 대회 ═══════════════════════════════════════════════════════════
+   참가하면 닉네임이 그 자리에서 굳는다. 대회 중에는 다시 뽑을 수 없다 —
+   이름을 바꿔 가며 대진표를 헷갈리게 할 수는 없다. */
+let cups = [], cup = null, cupPick = null;
+const CUPSTATE = {open:"접수 중", running:"진행 중", done:"끝남"};
+
+function showCups(){
+  const ul = nel("cupList");
+  ul.innerHTML = "";
+  if (!cups.length){
+    const li = document.createElement("li");
+    li.className = "net-empty";
+    li.textContent = "열린 대회가 없습니다.";
+    return ul.appendChild(li);
+  }
+  cups.forEach(c => {
+    const li = document.createElement("li");
+    const can = c.state === "open";
+    li.className = "cup-row " + (can ? "can" : "busy");
+    li.innerHTML = `<span class="tagline">${CUPSTATE[c.state]}</span>` +
+                   `<span class="who"><b>${esc(c.title)}</b></span>` +
+                   `<span class="tagline">${c.people}명</span>`;
+    if (can) li.addEventListener("click", () => {
+      cupPick = c.code;
+      forms({cupAsk:true}); netSay("");
+      pinCup.clear(); pinCup.focus();
+    });
+    ul.appendChild(li);
+  });
+}
+
+/* 대회 팝업 — 지금 무엇을 기다리는지 한 화면에 */
+function cupShow(){
+  const box = nel("cupBox"), on = !!cup && !cup.match;
+  box.hidden = !on; nel("cupScrim").hidden = !on;
+  if (!on) return;
+  nel("cupTag").textContent = "대회 " + cup.code;
+  nel("cupTitle").textContent = cup.title;
+  nel("cupMe").innerHTML = "나 <b>" + esc(cup.name) + "</b>";
+  nel("cupDots").hidden = cup.state === "done";
+  nel("cupOut").hidden = cup.state === "running" && !cup.out;
+  const say = nel("cupSay");
+  if (cup.state === "open")
+    say.textContent = `시작을 기다립니다 · 지금 ${cup.people}명`;
+  else if (cup.state === "done")
+    say.innerHTML = cup.place === 1 ? "<b>우승했습니다</b>"
+                  : "우승 <b>" + esc(cup.champion || "") + "</b>" +
+                    (cup.place ? " · 나 " + cup.place + "위" : "");
+  else if (cup.out)
+    say.innerHTML = "탈락했습니다" + (cup.place ? " · " + cup.place + "위" : "");
+  else
+    say.textContent = "다음 상대를 기다립니다";
+}
+
+function cupJoin(code, pin){
+  netConnect(() => netTell("cupjoin", pin ? {code, pin} : {code}));
+}
+/* 대회가 대국을 배정했다. 그 방으로 들어간다 */
+function cupSit(m){
+  if (netCode === m.room) return;
+  cupRound = m.round; cupFoe = m.foe;
+  netTell("join", {code: m.room});
+}
+let cupRound = "", cupFoe = "";
 
 /* ─── 서버 소식 ─── */
 function netRecv(msg){
   switch (msg.t){
     case "me":    me = msg; showList(); break;   // 목록의 내 이름도 같이 바뀐다
+    case "cups":  cups = msg.cups || []; showCups(); break;
+    case "cupme":
+      cup = msg && msg.code ? msg : null;
+      if (cup && cup.match) cupSit(cup.match);
+      if (!cup){ cupRound = ""; cupFoe = ""; }
+      forms({}); cupShow(); paintMe(); paintNames();
+      break;
+    case "cupgone":
+      cup = null; cupRound = ""; cupFoe = "";
+      netLeave(true); cupShow();
+      netSay("대회가 닫혔습니다.");
+      netOpenPanel(true);
+      break;
     case "rooms": rows = msg.rooms || []; showList(); break;
     case "seated":
       vs = "online"; mySide = msg.side; netCode = msg.code; netPly = 0;
@@ -1890,6 +2036,26 @@ nel("netNew").addEventListener("click", () => {
   nel("pinNew").hidden = nel("netOpen").querySelector("input[value=shut]").checked === false;
 });
 nel("netCancel").addEventListener("click", () => { forms({}); netSay(""); });
+nel("cupBtn").addEventListener("click", () => {
+  if (cup) return cupShow();                 // 이미 참가했다 — 대회 화면을 본다
+  forms({cups:true}); netSay("");
+  showCups();
+  netConnect(() => netTell("cups"));
+});
+nel("cupBack").addEventListener("click", () => { forms({cups:true}); netSay(""); });
+nel("cupAsk").addEventListener("submit", e => {
+  e.preventDefault();
+  const pin = pinCup.value();
+  if (pin.length !== 4) return netSay("비밀번호는 숫자 네 자리입니다.");
+  cupJoin(cupPick, pin);
+});
+nel("cupOut").addEventListener("click", () => {
+  if (cup && cup.state === "running" && !cup.out &&
+      !confirm("대회에서 나갑니다. 다시 들어올 수 없습니다. 나갈까요?")) return;
+  netTell("cupleave");
+  cup = null; cupRound = ""; cupFoe = "";
+  cupShow(); paintMe(); netOpenPanel(true);
+});
 nel("netBack").addEventListener("click", () => { forms({}); netSay(""); askCode = null; });
 nel("netOpen").addEventListener("change", e => {
   if (e.target.name !== "vis") return;
