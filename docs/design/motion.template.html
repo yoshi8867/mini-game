@@ -1699,20 +1699,20 @@ function cupJoin(code, pin){
    대진표를 띄워 고르게 한다. */
 function watchGo(code){
   if (!code) return;
-  if (netCode === code) return;
-  spect = {code};
+  if (netCode === code && spect && !spect.ended) return;
+  spect = {code, asked: true};
   vs = "online"; mySide = 0; netCode = code;
   document.body.classList.remove("ai");
   netTell("watch", {code});
   seeShow(false);
   applyOrient(); paintHud();
 }
-function watchStop(){
+function watchStop(quiet){
   if (!spect) return;
-  netTell("unwatch");
+  if (!quiet) netTell("unwatch");
   spect = null; netCode = ""; serverLeft = null;
-  netPeople = [null, null];
-  applyOrient();
+  netPeople = [null, null]; fans = 0;
+  applyOrient(); paintSee();
 }
 
 function cupSit(m){
@@ -1748,6 +1748,7 @@ function netRecv(msg){
     }
     case "watching":
       spect = {code: msg.code};
+      netCode = msg.code;
       netPeople = msg.people || [null, null];
       applyOrient(); paintNames(); paintHud();
       log.innerHTML = "<b>관전 중</b>";
@@ -1778,6 +1779,7 @@ function netRecv(msg){
                     : msg.what === "rematch" ? "<b>상대가 다시 두자고 합니다</b>" : "";
       break;
     case "error":
+      if (spect && spect.asked && !netPeople[0]) watchStop(true);
       netSay(NETERR[msg.why] || msg.why);
       if (msg.why === "badpin"){ pinAsk.clear(); pinAsk.focus(); }
       if (!ONLINE()) netOpenPanel(true);
@@ -1884,6 +1886,7 @@ function netOver(ov){
 }
 function netLeave(quiet){
   waitShow(false);
+  watchStop(true);
   if (ONLINE()) netTell("leave");
   vs = "human"; mySide = 0; serverLeft = null; netCode = "";
   netPeople = [null, null];

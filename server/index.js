@@ -15,15 +15,15 @@
 "use strict";
 require("./env.js");                     // .env 를 먼저 읽는다 (로컬 전용)
 const db = require("./db.js");
-const http = require("http");
 const {WebSocketServer} = require("ws");
-const {Room, newCode, okPin, LIMIT_MS, EG} = require("./room.js");
+const httpSide = require("./http.js");
+const bots = require("./bots.js");
+const {Room, newCode, okPin, LIMIT_MS} = require("./room.js");
 const players = require("./players.js");
 const admin = require("./admin.js");
-const {Tourney, MAX_ENTRANTS} = require("./tourney.js");
+const {Tourney, roundName, MAX_ENTRANTS} = require("./tourney.js");
 
 const PORT = process.env.PORT || 3000;
-const STARTED = Date.now();
 
 /* 대국은 메모리에만 둔다. 무료 인스턴스는 영구 디스크가 없고, 재배포하면
    어차피 다 날아간다. 기록으로 남길 것은 끝난 판의 승패뿐이다. */
@@ -87,6 +87,10 @@ function onWatch(ws, msg){
   if (!ws.person) return send(ws, "error", {why: "nohello"});
   const room = rooms.get(String(msg.code || "").toUpperCase());
   if (!room) return send(ws, "error", {why: "nocode"});
+  /* 관전은 대회 안에서만이다. 그러지 않으면 코드만 알면 남의 비공개 대국을
+     들여다볼 수 있다 — 관전 창구가 엿보기 창구가 된다. */
+  if (!room.cup || room.cup.code !== ws.cup)
+    return send(ws, "error", {why: "notyours"});
   if (room.seats.indexOf(ws) >= 0) return send(ws, "error", {why: "playing"});
   watchStop(ws);
   if (!room.fans) room.fans = new Set();
@@ -103,7 +107,7 @@ function record(room){
   if (room.over.why === "gone" && !room.cup) return;
   /* 연습 참가자끼리 둔 판은 집계에 넣지 않는다. 사람이 둔 것이 아니다 */
   if (room.seats.some(w => w && w.bot) ||
-      (room.only && room.only.some(isBot))) return;
+      (room.only && room.only.some(bots.isBot))) return;
   room.saved = true;
   db.saveGame({code: room.code, first: room.first, winner: room.over.winner,
                why: room.over.why, plies: room.ply, startedAt: room.startedAt,
@@ -118,38 +122,15 @@ function ended(room){
   if (room.cup) cupDone(room);
 }
 
-/* ─── 연습 상대 ────────────────────────────────────────────────────────
-   대회 리허설용이다. mock- 으로 시작하는 참가자는 사람이 아니라 서버가
-   대신 둔다. 수업 전에 대진표가 어떻게 굴러가는지 눈으로 보려는 것이다.
-
-   서버는 원래 탐색을 하지 않는다 — 그래야 무료 인스턴스가 논다. 이것은
-   그 원칙의 예외이므로 생각하는 시간을 아주 짧게 준다. */
-const isBot  = pid => typeof pid === "string" && pid.slice(0, 5) === "mock-";
-const BOT_MS = +(process.env.BOT_MS || 1100);    // 사람이 따라 볼 수 있는 속도
-const BOT_THINK = 25;
-
-function botTick(room){
-  if (!room || room.over || !rooms.has(room.code)) return;
-  const side = room.pos.turn;
-  const seat = room.seats[side];
-  if (!seat || !seat.bot) return;
-  setTimeout(() => {
-    if (room.over || !rooms.has(room.code)) return;
-    if (room.pos.turn !== side) return;
-    const now = room.seats[side];
-    if (!now || !now.bot) return;
-    const past = [...room.seen].filter(e => e[1] >= 2).map(e => e[0]);
-    const res = EG.best({b: room.pos.b, hand: room.pos.hand, turn: side},
-                        {ms: BOT_THINK, margin: 120, past});
-    if (!res || !res.move) return;
-    const r = room.play(side, res.move, room.ply);
-    if (r.err) return;
-    toRoom(room, "moved", {m: r.m, by: side, ply: r.ply, left: r.left});
-    if (r.over) return ended(room);
-    pushState(room);
-    botTick(room);
-  }, BOT_MS);
-}
+/* 연습 상대는 소켓을 모른다. 알리는 일은 여기서 한다 */
+const BOT = {
+  alive: room => rooms.has(room.code),
+  moved: (room, r, side) =>
+    toRoom(room, "moved", {m: r.m, by: side, ply: r.ply, left: r.left}),
+  ended: room => ended(room),
+  state: room => pushState(room),
+};
+const botTick = room => bots.tick(room, BOT);
 
 /* ─── 대회 ─────────────────────────────────────────────────────────────
    대진표가 "이제 둘 수 있다"고 하면 그 자리에 방을 하나 세우고, 두 사람에게
@@ -166,7 +147,7 @@ function runCup(cup){
     m.room = code; m.state = "playing"; m.began = Date.now();
     /* 연습 참가자는 사람이 안 오니 서버가 대신 앉는다 */
     [m.a, m.b].forEach(pid => {
-      if (isBot(pid)) room.seat({bot: true}, players.get(pid), null);
+      if (bots.isBot(pid)) room.seat({bot: true}, players.get(pid), null);
     });
     botTick(room);
   }
@@ -205,10 +186,7 @@ function cupView(cup, pid){
   const m = cup.matchOf(pid);
   if (m && m.state === "playing"){
     const foe = m.a === pid ? m.b : m.a;
-    out.match = {room: m.room, id: m.id,
-                 round: cup.rounds[m.round].length === 1 ? "결승"
-                      : cup.rounds[m.round].length === 2 ? "준결승"
-                      : (cup.rounds[m.round].length * 2) + "강",
+    out.match = {room: m.room, id: m.id, round: roundName(cup.rounds[m.round].length),
                  side: m.a === pid ? 0 : 1, foe: cup.nameOf(foe)};
   } else if (m){
     out.waiting = true;                      // 상대가 아직 안 정해졌다
@@ -234,164 +212,13 @@ function cupList(){
   return out;
 }
 
-/* ─── HTTP ─────────────────────────────────────────────────────────── */
-/* 오프라인 판은 브라우저가 보내온다. 페이지는 github.io, 서버는 onrender.com
-   이라 남남이다 — 문을 열어 둔다. 남기는 것은 결과 숫자뿐이라 숨길 것이 없다. */
-function cors(res){
-  res.setHeader("access-control-allow-origin", "*");
-  res.setHeader("access-control-allow-methods", "GET, POST, OPTIONS");
-  res.setHeader("access-control-allow-headers", "content-type");
-  res.setHeader("access-control-max-age", "86400");
-}
-
-/* 본문은 바이트로 모았다가 한 번에 읽는다. 글자로 이어 붙이면 한글 한 자가
-   덩이 두 개에 걸칠 때 깨진다. */
-function readBody(req, limit, then){
-  const bits = [];
-  let n = 0;
-  req.on("data", c => {
-    n += c.length;
-    if (n > limit){ bits.length = 0; return req.destroy(); }
-    bits.push(c);
-  });
-  req.on("end", () => {
-    let o = null;
-    try { o = JSON.parse(Buffer.concat(bits).toString("utf8") || "{}"); }
-    catch (e) {}
-    then(o);
-  });
-}
-
-/* 아무나 부를 수 있는 창구다. 한 곳에서 쏟아붓지 못하게 막아 둔다 */
-const RATE = new Map();                  // ip → {n, until}
-const RATE_MAX = 60, RATE_WINDOW = 10 * 60 * 1000;
-function tooMany(ip){
-  const now = Date.now();
-  let r = RATE.get(ip);
-  if (!r || now > r.until){ r = {n: 0, until: now + RATE_WINDOW}; RATE.set(ip, r); }
-  if (RATE.size > 5000) RATE.clear();    // 무료 인스턴스다. 무한정 쌓지 않는다
-  return ++r.n > RATE_MAX;
-}
-
-const WHYS = ["catch", "try", "repeat", "stuck", "time", "resign"];
-/* 브라우저 말은 그대로 믿지 않는다. 모양이 맞는 것만 통과시킨다 */
-function cleanLocal(o){
-  if (!o || typeof o !== "object") return null;
-  const mode = o.mode === "ai" ? "ai" : o.mode === "duo" ? "duo" : null;
-  if (!mode) return null;
-  if (WHYS.indexOf(o.why) < 0) return null;
-  const plies = o.plies | 0;
-  if (plies < 0 || plies > 500) return null;
-  const winner = o.winner === 0 || o.winner === 1 ? o.winner : null;
-  const first  = o.first === 1 ? 1 : 0;
-  /* 3수 이하의 시간초과는 대국이 아니다. 열어만 두고 자리를 뜬 화면이다 */
-  if (o.why === "time" && plies <= 3) return null;
-  const now = Date.now();
-  let started = +o.startedAt;
-  if (!Number.isFinite(started) || started > now || now - started > 24 * 3600 * 1000)
-    started = now;
-  return {code: "LOCAL", mode, first, winner, why: o.why, plies, startedAt: started,
-          aiSide: mode === "ai" ? 1 : null};
-}
-
-const server = http.createServer((req, res) => {
-  const url = (req.url || "/").split("?")[0];
-  cors(res);
-
-  if (req.method === "OPTIONS"){ res.writeHead(204); return res.end(); }
-
-  if (url === "/local"){
-    if (req.method !== "POST"){
-      res.writeHead(405, {"content-type": "application/json; charset=utf-8"});
-      return res.end(JSON.stringify({ok: false, why: "post only"}));
-    }
-    const ip = (req.headers["x-forwarded-for"] || "").split(",")[0].trim()
-            || (req.socket.remoteAddress || "?");
-    const done = (code, body) => {
-      res.writeHead(code, {"content-type": "application/json; charset=utf-8",
-                           "cache-control": "no-store"});
-      res.end(JSON.stringify(body));
-    };
-    if (tooMany(ip)) return done(429, {ok: false, why: "too many"});
-    /* 결과 한 줄이 그리 클 리 없다 */
-    readBody(req, 2000, o => {
-      const g = cleanLocal(o);
-      if (!g) return done(400, {ok: false, why: "bad"});
-      /* 기다리게 하지 않는다. 브라우저는 이미 다음 판을 놓고 있다 */
-      done(202, {ok: true});
-      db.saveGame(g).catch(() => {});
-    });
-    return;
-  }
-
-  if (url === "/healthz"){
-    let people = 0, playing = 0;
-    for (const r of rooms.values()){
-      people += (r.seats[0] ? 1 : 0) + (r.seats[1] ? 1 : 0);
-      if (r.ready && !r.over) playing++;
-    }
-    const done = body => {
-      res.writeHead(200, {"content-type": "application/json; charset=utf-8",
-                          "cache-control": "no-store"});
-      res.end(JSON.stringify(body));
-    };
-    const base = {ok: true, uptime: Math.round((Date.now() - STARTED) / 1000),
-                  rooms: rooms.size, players: people, playing,
-                  db: db.enabled() ? "on" : "off", node: process.version};
-    /* DB 가 잠들어 있으면 응답이 늦는다. healthz 는 깨우는 용도라 기다리지 않는다. */
-    if (!db.enabled()) return done(base);
-    let sent = false;
-    const once = extra => { if (!sent){ sent = true; done(Object.assign(base, extra)); } };
-    const t = setTimeout(() => once({games: null}), 1500);
-    db.count().then(n => { clearTimeout(t); once({games: n}); })
-              .catch(() => { clearTimeout(t); once({games: null}); });
-    return;
-  }
-
-  /* ─── 관리자 ──────────────────────────────────────────────────────
-     검사는 여기서 한다. 페이지에서 하면 소스를 열어 건너뛴다. */
-  if (url.slice(0, 7) === "/admin/"){
-    if (req.method !== "POST"){
-      res.writeHead(405, {"content-type": "application/json; charset=utf-8"});
-      return res.end(JSON.stringify({ok: false, why: "post only"}));
-    }
-    const done = (code, body) => {
-      res.writeHead(code, {"content-type": "application/json; charset=utf-8",
-                           "cache-control": "no-store"});
-      res.end(JSON.stringify(body));
-    };
-    readBody(req, 4000, m => {
-      if (!m || typeof m !== "object") return done(400, {ok: false, why: "bad"});
-      onAdmin(url.slice(7), m, done);
-    });
-    return;
-  }
-
-  if (url === "/stats"){
-    if (!db.enabled()){
-      res.writeHead(503, {"content-type": "application/json; charset=utf-8"});
-      return res.end(JSON.stringify({ok: false, why: "db off"}));
-    }
-    db.stats().then(s => {
-      res.writeHead(s ? 200 : 503, {"content-type": "application/json; charset=utf-8",
-                                    "cache-control": "no-store"});
-      res.end(JSON.stringify(s ? Object.assign({ok: true}, s) : {ok: false, why: "db error"}));
-    });
-    return;
-  }
-
-  if (url === "/"){
-    res.writeHead(200, {"content-type": "text/plain; charset=utf-8"});
-    return res.end("미니쇼기 온라인 서버입니다. 대국은 웹 페이지에서 엽니다.\n");
-  }
-  res.writeHead(404, {"content-type": "text/plain; charset=utf-8"});
-  res.end("없는 주소입니다\n");
-});
-
 /* ─── 관리자가 시키는 일 ───────────────────────────────────────────── */
-function onAdmin(what, m, done){
+function onAdmin(what, m, done, ip){
   /* 들어오는 문은 하나뿐이다. 나머지는 표를 들고 와야 한다 */
   if (what === "login"){
+    /* scrypt 는 한 번에 0.2초를 쓴다. 문지기가 없으면 비번을 마구 넣어 보는
+       것만으로 무료 인스턴스가 멎는다. */
+    if (httpSide.tooMany("admin:" + ip, 20)) return done(429, {ok: false, why: "toomany"});
     if (!admin.ok(m.pw)) return done(401, {ok: false, why: "no"});
     return done(200, {ok: true, token: admin.grant()});
   }
@@ -456,7 +283,20 @@ function onAdmin(what, m, done){
   }
 }
 
-/* ─── WebSocket ────────────────────────────────────────────────────── */
+/* ─── 서버 ─────────────────────────────────────────────────────────────
+   HTTP 쪽은 http.js 가 맡는다. 여기서는 안쪽 사정을 알려 줄 뿐이다. */
+const server = httpSide.create({
+  db,
+  snapshot(){
+    let people = 0, playing = 0;
+    for (const r of rooms.values()){
+      people += (r.seats[0] ? 1 : 0) + (r.seats[1] ? 1 : 0);
+      if (r.ready && !r.over) playing++;
+    }
+    return {rooms: rooms.size, players: people, playing, cups: cups.size};
+  },
+  admin: (what, m, done, ip) => onAdmin(what, m, done, ip),
+});
 const wss = new WebSocketServer({server, path: "/ws"});
 
 wss.on("connection", ws => {

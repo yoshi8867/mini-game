@@ -16,7 +16,7 @@
 "use strict";
 
 const MAX_ENTRANTS = 128;
-const okPin = p => typeof p === "string" && /^[0-9]{4}$/.test(p);
+const {okPin} = require("./room.js");    // 비번 모양은 대국과 같은 규칙이다
 
 /* 그 라운드에 대국이 n 개면 사람은 2n 명이다 */
 const roundName = n => n === 1 ? "결승" : n === 2 ? "준결승" : (n * 2) + "강";

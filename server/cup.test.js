@@ -254,6 +254,14 @@ async function playOut(a, b, room){
       assert.ok(st.fans >= 1, "관전자 수가 안 실렸다");
       assert.strictEqual(st.side, undefined, "관전자에게 자리가 갔다");
 
+      /* 대회 밖 사람은 못 본다. 코드만 알면 남의 비공개 대국을 들여다볼 수
+         있다면, 관전 창구가 엿보기 창구가 된다 */
+      const peep = await hello("pid-cup-peep-1");
+      peep.send("watch", {code: playing[0].room});
+      assert.strictEqual((await peep.next("error")).why, "notyours",
+                         "대회 밖 사람이 관전했다");
+      peep.close();
+
       /* 연습 상대가 실제로 둔다 */
       const mv = await eye.next("moved", 8000);
       assert.ok(Number.isInteger(mv.m), "연습 상대가 안 둔다");
