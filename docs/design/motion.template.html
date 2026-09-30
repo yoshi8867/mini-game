@@ -138,11 +138,16 @@ body.portrait .grid{grid-template-columns:repeat(3,1fr);grid-template-rows:repea
   letter-spacing:.04em;white-space:nowrap}
 .bmsg .why{font-size:clamp(9px,1vw,11px);color:#c8b48c;font-family:'JetBrains Mono',monospace;
   letter-spacing:.06em;white-space:nowrap;margin-top:-4px}
-.bmsg .again{display:none;font:inherit;font-size:clamp(10px,1.1vw,12px);font-weight:700;
+.bmsg .bacts{display:none;gap:8px}
+.banner.end .bacts{display:flex}
+.bmsg .bbtn{font:inherit;font-size:clamp(10px,1.1vw,12px);font-weight:700;
   padding:6px 16px;border-radius:2px;border:1.5px solid #f3e6c6;background:transparent;
   color:#f3e6c6;cursor:pointer;font-family:'Gothic A1',sans-serif}
-.bmsg .again:hover{background:#f3e6c6;color:var(--ink)}
-.banner.end .again{display:block}
+.bmsg .bbtn:hover{background:#f3e6c6;color:var(--ink)}
+/* 나갈 자리는 온라인에만 있고, 대회에는 재대국이 없다 */
+.bmsg .bquit{display:none}
+body.online .bmsg .bquit{display:block}
+body.in-cup .bmsg .again{display:none}
 .bmsg.a{transform:rotate(-90deg)} .bmsg.b{transform:rotate(90deg)}
 body.portrait .banner{flex-direction:column;gap:7%}
 body.portrait .bmsg.a{transform:none} body.portrait .bmsg.b{transform:rotate(180deg)}
@@ -495,8 +500,8 @@ body.ai .t1 .clock{display:none}        /* AI 차례에는 시계를 재지 않�
       <div class="pieces" id="layer"></div>
       <div class="hints" id="hints"></div>
       <div class="banner" id="banner">
-        <div class="bmsg b"><span class="txt"></span><span class="why"></span><button class="again">다시 두기</button></div>
-        <div class="bmsg a"><span class="txt"></span><span class="why"></span><button class="again">다시 두기</button></div>
+        <div class="bmsg b"><span class="txt"></span><span class="why"></span><span class="bacts"><button class="bbtn again">다시 두기</button><button class="bbtn bquit">나가기</button></span></div>
+        <div class="bmsg a"><span class="txt"></span><span class="why"></span><span class="bacts"><button class="bbtn again">다시 두기</button><button class="bbtn bquit">나가기</button></span></div>
       </div>
   </div></div>
   <div class="bar">
@@ -1298,6 +1303,8 @@ banner.querySelectorAll(".again").forEach(b =>
     e.stopPropagation();
     if (ONLINE()) netTell("rematch"); else start();
   }));
+banner.querySelectorAll(".bquit").forEach(b =>
+  b.addEventListener("click", e => { e.stopPropagation(); quitOnline(true); }));
 /* 두던 중에 나가면 진 것으로 처리된다. 물어보고 나간다.
    나가기는 목록으로 돌려보내고, 오프라인은 그냥 판으로 돌려보낸다. */
 function quitOnline(toList){
@@ -1547,7 +1554,9 @@ function showList(){
   if (!rows.length){
     const li = document.createElement("li");
     li.className = "net-empty";
-    li.textContent = sock ? "열린 대국이 없습니다. 하나 열어 보세요." : "서버에 연결하는 중…";
+    li.textContent = !sock ? "서버에 연결하는 중…"
+                   : cup   ? "다른 대회 참가자를 기다리고 있습니다."
+                           : "열린 대국이 없습니다. 하나 열어 보세요.";
     ul.appendChild(li);
   }
   rows.forEach(r => {
@@ -1645,9 +1654,11 @@ function forms(show){
   nel("netAsk").hidden  = !show.ask;
   nel("cupAsk").hidden  = !show.cupAsk;
   nel("cupList").hidden = !show.cups;
-  nel("netList").hidden = !!(show.open || show.ask || show.cupAsk || show.cups);
-  nel("netNew").hidden  = !!(show.open || show.ask || show.cupAsk || show.cups);
-  nel("cupBtn").hidden  = !!(show.open || show.ask || show.cupAsk || show.cups);
+  const other = !!(show.open || show.ask || show.cupAsk || show.cups);
+  nel("netList").hidden = other;
+  /* 대회 중에는 따로 대국을 열 수도, 다른 대회에 들어갈 수도 없다 */
+  nel("netNew").hidden  = other || !!cup;
+  nel("cupBtn").hidden  = other || !!cup;
 }
 
 /* ═══ 대회 ═══════════════════════════════════════════════════════════
@@ -1787,11 +1798,16 @@ function netRecv(msg){
     case "moved":   netMoved(msg); break;
     case "over":    waitOver = msg; netSync(); break;
     case "restart": log.textContent = "새 판입니다."; break;
-    case "peer":
+    case "peer": {
+      /* 재대국 알림은 방 전체로 간다. 내가 누른 것을 남이 누른 것처럼 말하면 안 된다 */
+      const mine = !SPECT() && msg.side === mySide;
       log.innerHTML = msg.what === "joined"  ? "<b>상대가 들어왔습니다</b>"
                     : msg.what === "left"    ? "<b>상대가 자리를 떴습니다</b>"
-                    : msg.what === "rematch" ? "<b>상대가 다시 두자고 합니다</b>" : "";
+                    : msg.what !== "rematch" ? ""
+                    : mine ? "<b>다시 두자고 했습니다</b> · 상대를 기다립니다"
+                           : "<b>상대가 다시 두자고 합니다</b>";
       break;
+    }
     case "error":
       if (spect && spect.asked && !netPeople[0]) watchStop(true);
       netSay(NETERR[msg.why] || msg.why);
