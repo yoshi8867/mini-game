@@ -89,7 +89,8 @@ class Quiz {
     if (this.state !== "open") return {err: "closed"};
     if (this.people.has(person.pid)) return {ok: true, again: true};
     if (this.people.size >= MAX_ENTRANTS) return {err: "full"};
-    this.people.set(person.pid, {pid: person.pid, name: person.name, team: null});
+    this.people.set(person.pid, {pid: person.pid, name: person.name, team: null,
+                                 hits: 0, miss: 0});
     return {ok: true};
   }
   quit(pid){                                 // 시작 전에만 뺄 수 있다
@@ -172,6 +173,7 @@ class Quiz {
       const seen = this.ask.said.get(team.id) || new Set();
       if (seen.has(said)) return {ok: true, right: false, again: true};
       seen.add(said); this.ask.said.set(team.id, seen);
+      me.miss++;
       team.score -= MISS;
       return {ok: true, right: false, lost: MISS, team: team.id};
     }
@@ -180,6 +182,7 @@ class Quiz {
     let got = Math.min(this.spent(now), cap);
     const topped = got >= cap;
     if (team.full && !topped) got = Math.floor(got * CUT);
+    me.hits++;
     team.score += got;
 
     const nowRanks = this.ranks();
@@ -216,16 +219,18 @@ class Quiz {
     });
     return out;
   }
-  namesOf(id){
+  /* 한 팀의 사람들 — 이름과, 몇 번 맞히고 몇 번 틀렸는지 */
+  folk(id){
     const t = this.teams[id];
     if (!t) return [];
-    return t.pids.map(p => (this.people.get(p) || {}).name).filter(Boolean);
+    return t.pids.map(p => this.people.get(p)).filter(Boolean)
+            .map(p => ({name: p.name, hits: p.hits, miss: p.miss}));
   }
   board(){
     const rank = this.ranks();
     return this.teams.map(t => ({id: t.id, name: t.name, score: t.score,
                                  rank: rank[t.id], full: t.full,
-                                 mates: this.namesOf(t.id)}))
+                                 mates: this.folk(t.id)}))
                      .sort((a, b) => a.rank - b.rank || a.id - b.id);
   }
 
@@ -236,11 +241,10 @@ class Quiz {
     if (!me) return null;
     const out = {code: this.code, title: this.title, state: this.state,
                  name: me.name, people: this.people.size,
-                 nth: this.nth + 1, total: this.order.length,
-                 teams: this.teams.length};
+                 nth: this.nth + 1, teams: this.teams.length};
     if (me.team !== null){
       const t = this.teams[me.team];
-      out.team = {id: t.id, name: t.name, full: t.full, mates: this.namesOf(t.id)};
+      out.team = {id: t.id, name: t.name, full: t.full, mates: this.folk(t.id)};
     }
     if (this.state === "running" && this.ask && !this.reveal)
       out.ask = {page: this.ask.page, sheet: this.ask.sheets[this.ask.page],
@@ -251,7 +255,7 @@ class Quiz {
       out.reveal = {word: r.word, whole: D.whole(r.word),
                     sheets: this.ask.sheets,
                     by: r.by, team: r.by === null ? null : this.teams[r.by].name,
-                    mates: r.by === null ? [] : this.namesOf(r.by),
+                    mates: r.by === null ? [] : this.folk(r.by),
                     who: r.who || null, got: r.got, topped: !!r.topped,
                     from: r.from, to: r.to,
                     whole_ms: WHOLE, show_ms: SHOW, quick: QUICK,

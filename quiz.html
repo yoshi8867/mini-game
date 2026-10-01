@@ -83,7 +83,10 @@ button:disabled{opacity:.4}
   background:#fdf5e2;border:1px solid #e3c88a;text-align:center}
 .shout .word{font-family:'Gowun Batang',serif;font-size:34px;font-weight:700;
   color:var(--lose);letter-spacing:.1em;margin-bottom:6px}
-.shout .mates{font-size:22px;font-weight:800;line-height:1.35;color:var(--chalk)}
+.shout .scorer{font-size:27px;font-weight:800;color:var(--mark);line-height:1.3}
+.shout .mates{font-size:17px;font-weight:700;line-height:1.5;color:var(--chalk);
+  margin-top:6px}
+.shout .bdg{font-size:12px;padding:3px 7px}
 .shout .got{display:inline-block;margin-top:8px;padding:6px 14px;border-radius:999px;
   background:var(--gold);color:#16171a;font:800 17px/1 'JetBrains Mono',monospace}
 .shout .move{margin-top:10px;font:800 26px/1 'Gothic A1',system-ui,sans-serif;
@@ -107,6 +110,15 @@ button:disabled{opacity:.4}
 .pts{font:700 16px/1 'JetBrains Mono',monospace;color:var(--mark);flex:none}
 .pill{font:700 10px/1 'Gothic A1',system-ui,sans-serif;padding:3px 6px;
   border-radius:999px;background:var(--wall);color:var(--chalk-dim);margin-left:5px}
+
+/* 닉네임에 붙는 뱃지 — 금은 맞힌 횟수, 붉은 것은 틀린 횟수. 횟수만 적는다 */
+.mate{white-space:nowrap}
+.mate.hero{color:var(--mark);font-weight:800}
+.dot{color:var(--chalk-dim);margin:0 5px}
+.bdg{font:700 10px/1 'JetBrains Mono',monospace;padding:2px 5px;border-radius:999px;
+  margin-left:3px;vertical-align:middle;display:inline-block}
+.bdg.hit{background:var(--gold);color:#16171a}
+.bdg.miss{background:#f7dad7;color:var(--lose)}
 </style>
 
 <div class="wrap">
@@ -324,8 +336,8 @@ function take(v){
 function paintPlay(){
   const v = V;
   if (!v) return;
-  el("nth").textContent = v.state === "done"
-    ? "끝" : "문제 " + v.nth + " / " + v.total;
+  /* 몇 문제가 남았는지는 밝히지 않는다 — 「끝」을 맞히면 그때 안다 */
+  el("nth").textContent = v.state === "done" ? "끝" : "문제 " + v.nth;
   el("myteam").textContent = v.team ? v.team.name : "";
   el("sayBox").hidden = !v.ask;
   if (v.ask) el("text").focus();
@@ -391,7 +403,8 @@ function shout(){
     ? '<div class="shout none"><div class="word">' + esc(r.word) + '</div>' +
       '<div class="mates">아무도 못 맞혔습니다</div></div>'
     : '<div class="shout"><div class="word">' + esc(r.word) + '</div>' +
-      '<div class="mates">' + r.mates.map(esc).join(" · ") + '</div>' +
+      '<div class="scorer">' + esc(r.who || "") + '</div>' +
+      '<div class="mates">' + folks(r.mates, r.who) + '</div>' +
       '<div class="got">+' + clock(r.got) + (r.topped ? " 만점" : "") + '</div>' +
       move + '</div>';
 
@@ -408,6 +421,14 @@ function shout(){
   film = setInterval(paint, 80);
 }
 
+/* 닉네임에 뱃지를 달아 늘어놓는다. hero 는 방금 맞힌 사람 */
+const bdg = p =>
+  (p.hits ? '<i class="bdg hit">' + p.hits + '</i>' : "") +
+  (p.miss ? '<i class="bdg miss">' + p.miss + '</i>' : "");
+const folks = (list, hero) => (list || []).map(p =>
+  '<span class="mate' + (hero && p.name === hero ? " hero" : "") + '">' +
+  esc(p.name) + bdg(p) + '</span>').join('<span class="dot">·</span>');
+
 /* ── 순위판 ───────────────────────────────────────────────────────── */
 function ranks(){
   const v = V;
@@ -418,7 +439,7 @@ function ranks(){
       '<span class="place">' + t.rank + '위</span>' +
       '<span class="tname">' + esc(t.name) +
         (t.full ? '<span class="pill">4인</span>' : "") + '</span>' +
-      '<span class="mates">' + t.mates.map(esc).join(" · ") + '</span>' +
+      '<span class="mates">' + folks(t.mates) + '</span>' +
       '<span class="pts">' + clock(t.score) + '</span>' +
     '</div>').join("");
 }

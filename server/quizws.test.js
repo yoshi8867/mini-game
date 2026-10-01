@@ -85,7 +85,7 @@ async function admin(what, body){
   assert.ok(made.ok, "퀴즈가 안 열렸다: " + made.why);
   const code = made.quiz.code;
   assert.strictEqual(made.quiz.state, "open");
-  assert.strictEqual(made.quiz.total, 23, "문제가 스물셋이 아니다");
+  assert.strictEqual(made.quiz.total, 24, "문제가 스물넷이 아니다");
 
   /* ─── 학생이 목록을 보고 들어온다 ─── */
   const kids = [];

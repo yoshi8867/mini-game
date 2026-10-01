@@ -428,7 +428,9 @@ function qboard(q){
       '<span class="place">' + t.rank + '위</span>' +
       '<span class="tname">' + esc(t.name) +
         (t.full ? '<span class="pill">4인</span>' : "") + '</span>' +
-      '<span class="mates">' + t.mates.map(esc).join(" · ") + '</span>' +
+      '<span class="mates">' + t.mates.map(p =>
+        esc(p.name) + (p.hits ? " +" + p.hits : "") + (p.miss ? " -" + p.miss : "")
+      ).join(" · ") + '</span>' +
       '<span class="pts">' + clock(t.score) + '</span>' +
     '</div>').join("") + '</div>';
 }
