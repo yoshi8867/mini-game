@@ -346,25 +346,29 @@ setInterval(tick, 250);
 
 /* ── 점판 ─────────────────────────────────────────────────────────── */
 /* 16진수 네 자리 한 줄이 가로 14칸이다. 맨 왼쪽 칸이 비트 13 */
-function ink(sheet, color){
+function ink(sheet, color, over, overColor){
   const cv = el("board");
   const n = sheet.length;
   const wide = n * N + (n - 1) * GAP;
-  const z = Math.max(2, Math.min(18, Math.floor(620 / wide)));
+  const z = Math.max(2, Math.min(28, Math.floor(620 / wide)));
   cv.width = wide * z; cv.height = N * z;
   /* 한 글자짜리가 화면을 다 먹지 않게 — 칸 하나는 20px 까지다 */
-  cv.style.maxWidth = (wide * 20) + "px";
+  cv.style.maxWidth = (wide * 28) + "px";
   const g = cv.getContext("2d");
   g.clearRect(0, 0, cv.width, cv.height);
-  g.fillStyle = color;
-  sheet.forEach((hexed, i) => {
-    const ox = i * (N + GAP) * z;
-    for (let y = 0; y < N; y++){
-      const row = parseInt(hexed.substr(y * 4, 4), 16);
-      for (let x = 0; x < N; x++)
-        if (row & (1 << (N - 1 - x))) g.fillRect(ox + x * z, y * z, z, z);
-    }
-  });
+  const lay = (one, c) => {
+    g.fillStyle = c;
+    one.forEach((hexed, i) => {
+      const ox = i * (N + GAP) * z;
+      for (let y = 0; y < N; y++){
+        const row = parseInt(hexed.substr(y * 4, 4), 16);
+        for (let x = 0; x < N; x++)
+          if (row & (1 << (N - 1 - x))) g.fillRect(ox + x * z, y * z, z, z);
+      }
+    });
+  };
+  lay(sheet, color);
+  if (over) lay(over, overColor);        /* 덮어 칠한다 — 낱장은 성한 글자의 일부다 */
 }
 
 /* 정답 공개 — 성한 글씨를 붉게 세운 다음, 세 낱장을 0.5초마다 돌린다.
@@ -396,9 +400,9 @@ function shout(){
   if (film) clearInterval(film);
   const paint = () => {
     const t = Date.now() - began;
-    if (t < r.whole_ms) ink(r.whole, "#c62828");
-    else ink(r.sheets[Math.floor((t - r.whole_ms) / r.quick) % r.sheets.length],
-             "#c62828");
+    if (t < r.whole_ms) return ink(r.whole, "#c62828");
+    const k = Math.floor((t - r.whole_ms) / r.quick) % r.sheets.length;
+    ink(r.whole, "#c62828", r.sheets[k], "#16171a");
   };
   paint();
   film = setInterval(paint, 80);
