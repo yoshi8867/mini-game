@@ -1,14 +1,18 @@
 <!doctype html><html lang="ko"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light">
 <title>한글 퀴즈</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@400;700;800&family=Gowun+Batang:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
+/* 흰 바탕에 검정 글씨로 고정한다. 기기가 어둡든 말든 이 판은 밝다 —
+   color-scheme 와 meta 둘이 안드로이드 크롬의 강제 어둠기를 막는다 */
 :root{
-  --wall:#17181a; --wall-2:#1e2023; --wall-line:#2f3237;
-  --chalk:#e9e6df; --chalk-dim:#9a958c; --mark:#e0bd6b;
-  --win:#6fae7a; --lose:#d9584c; --wait:#6b8fb8;
+  color-scheme:light;
+  --wall:#ffffff; --wall-2:#f6f6f7; --wall-line:#dcdce1;
+  --chalk:#16171a; --chalk-dim:#63646b; --mark:#8a5a00; --gold:#f0c75e;
+  --win:#1f7a3d; --lose:#c62828; --wait:#2d5f9a;
   --s1:4px; --s2:10px; --s3:16px; --s4:24px; --s5:36px;
 }
 *{box-sizing:border-box}
@@ -33,7 +37,7 @@ input.pin{font-family:'JetBrains Mono',monospace;letter-spacing:.3em;text-align:
 button{font:700 14px/1 'Gothic A1',system-ui,sans-serif;cursor:pointer;
   border-radius:999px;padding:13px 20px;border:1px solid var(--wall-line);
   background:none;color:var(--chalk-dim);white-space:nowrap}
-button.go{background:var(--mark);color:#17181a;border-color:var(--mark)}
+button.go{background:var(--gold);color:#16171a;border-color:#d9ad38}
 button:disabled{opacity:.4}
 .msg{margin:var(--s2) 0 0;font-size:13.5px;min-height:1.3em;color:var(--chalk-dim)}
 .msg.bad{color:var(--lose)} .msg.good{color:var(--win)}
@@ -43,16 +47,16 @@ button:disabled{opacity:.4}
 /* 고를 퀴즈 목록 */
 .pickrow{display:flex;align-items:center;gap:var(--s2);width:100%;
   padding:13px var(--s3);margin-bottom:8px;border-radius:8px;text-align:left}
-.pickrow.on{border-color:var(--mark);background:#24262a}
+.pickrow.on{border-color:var(--mark);background:#fdf5e2}
 .pickrow .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;
   white-space:nowrap;color:var(--chalk);font-weight:700}
 .pickrow .n{font-size:12px;color:var(--chalk-dim);flex:none}
 .tag{font:700 11px/1 'Gothic A1',system-ui,sans-serif;padding:5px 9px;
   border-radius:999px;background:var(--wall);border:1px solid var(--wall-line);
   color:var(--chalk-dim);flex:none}
-.tag.open{color:var(--wait);border-color:#2f4157}
-.tag.running{color:var(--mark);border-color:#4b3f22}
-.tag.done{color:var(--win);border-color:#2c4432}
+.tag.open{color:var(--wait);border-color:#bcd0e6}
+.tag.running{color:var(--mark);border-color:#e3c88a}
+.tag.done{color:var(--win);border-color:#b7d8c2}
 
 /* 판 머리 */
 .top{display:flex;align-items:baseline;gap:var(--s2);flex-wrap:wrap;
@@ -64,7 +68,7 @@ button:disabled{opacity:.4}
 .top .spent.full{color:var(--lose)}
 
 /* 점판 */
-.pit{background:#101113;border:1px solid var(--wall-line);border-radius:10px;
+.pit{background:#fff;border:1px solid var(--wall-line);border-radius:10px;
   padding:var(--s2);display:flex;align-items:center;justify-content:center;
   min-height:120px}
 .pit canvas{display:block;width:100%;height:auto;image-rendering:pixelated}
@@ -76,12 +80,12 @@ button:disabled{opacity:.4}
 
 /* 정답 공개 */
 .shout{margin-top:var(--s3);padding:var(--s3);border-radius:10px;
-  background:#2a1f12;border:1px solid #4b3f22;text-align:center}
+  background:#fdf5e2;border:1px solid #e3c88a;text-align:center}
 .shout .word{font-family:'Gowun Batang',serif;font-size:34px;font-weight:700;
   color:var(--lose);letter-spacing:.1em;margin-bottom:6px}
 .shout .mates{font-size:22px;font-weight:800;line-height:1.35;color:var(--chalk)}
 .shout .got{display:inline-block;margin-top:8px;padding:6px 14px;border-radius:999px;
-  background:var(--mark);color:#17181a;font:800 17px/1 'JetBrains Mono',monospace}
+  background:var(--gold);color:#16171a;font:800 17px/1 'JetBrains Mono',monospace}
 .shout .move{margin-top:10px;font:800 26px/1 'Gothic A1',system-ui,sans-serif;
   color:var(--win)}
 .shout .move.down{color:var(--lose)}
@@ -93,7 +97,7 @@ button:disabled{opacity:.4}
 .rankrow{display:flex;align-items:baseline;gap:var(--s2);padding:9px 11px;
   background:var(--wall-2);border:1px solid var(--wall-line);border-radius:7px}
 .rankrow.mine{border-color:var(--wait)}
-.rankrow.hot{border-color:var(--mark);background:#2a1f12}
+.rankrow.hot{border-color:var(--mark);background:#fdf5e2}
 .place{font:700 13px/1 'JetBrains Mono',monospace;color:var(--chalk-dim);
   flex:none;width:36px}
 .rankrow.hot .place{color:var(--mark)}
@@ -372,7 +376,7 @@ function shout(){
   if (!v.reveal){
     if (film){ clearInterval(film); film = null; }
     box.innerHTML = "";
-    if (v.ask) ink(v.ask.sheet, "#e9e6df");
+    if (v.ask) ink(v.ask.sheet, "#16171a");
     return;
   }
   const r = v.reveal;
@@ -392,9 +396,9 @@ function shout(){
   if (film) clearInterval(film);
   const paint = () => {
     const t = Date.now() - began;
-    if (t < r.whole_ms) ink(r.whole, "#d9584c");
+    if (t < r.whole_ms) ink(r.whole, "#c62828");
     else ink(r.sheets[Math.floor((t - r.whole_ms) / r.quick) % r.sheets.length],
-             "#d9584c");
+             "#c62828");
   };
   paint();
   film = setInterval(paint, 80);
