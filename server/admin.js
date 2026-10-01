@@ -22,6 +22,14 @@ const N = 1 << 15, R = 8, P = 1;
    timingSafeEqual 은 언제나 같은 시간을 쓴다. */
 function ok(pw){
   if (typeof pw !== "string" || !pw || pw.length > 128) return false;
+  /* 로커에서 여는 못 — ADMIN_PW 가 있으면 그것이 바로 뱄밀번호다.
+     장소에는 값이 없고, Render 대시보드에 넣지 않으면 박아 둔 해시가
+     그대로 쓰인다. 소켓 검사도 이 못으로 들어온다. */
+  const local = process.env.ADMIN_PW;
+  if (local){
+    const a = Buffer.from(pw), b = Buffer.from(local);
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+  }
   let got;
   try {
     got = crypto.scryptSync(pw, SALT, 32, {N, r: R, p: P, maxmem: 128 * N * R * 2});

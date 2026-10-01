@@ -70,9 +70,15 @@ shared/
 server/                   # 온라인 대전 (Render)
 ├── index.js              # HTTP(/healthz) + WebSocket(/ws)
 ├── room.js               # 대국 하나의 심판
+├── tourney.js            # 대회 — 단판 토너먼트
+├── quiz.js               # 한글 퀴즈 — 팀·점수·순위
+├── dots.js               # 낱말을 낱장 셋으로 가른다 (화면으로 안 내려간다)
+├── glyphs.js             # 점판 — tools/glyphs.py 가 찍는다. 손으로 안 고친다
 ├── players.js            # 닉네임과 연승 (pid 로 알아본다)
 ├── db.js                 # 승패 기록 (Neon Postgres, 없으면 꺼진 채로 돈다)
 ├── room.test.js          # node room.test.js
+├── quiz.test.js          # node quiz.test.js — 팀·점수·공개·순위
+├── quizws.test.js        # node quizws.test.js — 서버를 띄워 퀴즈 한 바퀴
 └── ws.test.js            # node ws.test.js — 서버를 띄워 한 판 끝까지
 assets/source/                # 원본 생성 이미지
 tools/                        # 원본 이미지 → 알파 마스크 추출 스크립트
@@ -195,3 +201,36 @@ index.html?server=ws://127.0.0.1:3001/ws
 상시 가동은 월 744시간이라 무료 750시간을 거의 다 쓴다 — 그 워크스페이스에
 다른 무료 서비스는 올리지 않는 편이 좋다.
 
+---
+
+## 한글 퀴즈
+
+같은 서버, 같은 관리자 화면에 **대국이 아닌 판**이 하나 더 붙는다. 찢긴
+글자를 팀으로 맞힌다. 19~24명을 3명씩(남으면 4명) 무작위로 묶고, 정해진
+23개 낱말을 순서대로 낸다. **점수는 시간이다** — 문제가 뜬 뒤 흐른 초를
+그대로 받고, 오답은 20초를 깎는다.
+
+| | |
+|---|---|
+| 관리자 | `admin.html` — 대회와 같은 자리에서 열고, 팀 짜고, 넘기고, 닫는다 |
+| 학생 | `quiz.html` — 목록에서 고르고 비번 넣으면 대기. 닉네임은 쇼기와 같은 것 |
+| 문제 | `docs/문제.txt` 에 적힌 순서대로 23개 |
+| 글자 | 14x14 점판. 셋으로 찢어 **한 장씩만** 4초마다 보여 준다 |
+| 공개 | 성한 글씨를 붉게 2초, 그 뒤 세 낱장을 0.5초마다 5초간 |
+
+규칙 전문과 정한 까닭은 [`docs/퀴즈.md`](docs/퀴즈.md).
+
+```bash
+python tools/glyphs.py        # docs/문제.txt 를 고쳤으면 다시 찍는다
+python docs/design/build.py quiz ../../quiz.html
+```
+
+`server/glyphs.js` 와 `server/dots.js` 가 `shared/` 가 아닌 것은 일부러다.
+답도 낱장 셋도 화면으로 내려가지 않아야 한다.
+
+### 관리자 비밀번호
+
+박아 둔 scrypt 해시가 기본이다. `server/.env` 에 `ADMIN_PW` 를 넣으면
+그것이 비밀번호가 된다 — 해시를 다시 굽지 않고 바꾸고 싶을 때와, 소켓
+검사가 들어올 때 쓴다. 저장소에는 값이 없고, Render 대시보드에 넣지
+않으면 박아 둔 해시가 그대로 쓰인다.

@@ -22,6 +22,7 @@ const {Room, newCode, okPin, LIMIT_MS} = require("./room.js");
 const players = require("./players.js");
 const admin = require("./admin.js");
 const {Tourney, roundName, MAX_ENTRANTS} = require("./tourney.js");
+const {Quiz, MAX_ENTRANTS: QUIZ_MAX} = require("./quiz.js");
 
 const PORT = process.env.PORT || 3000;
 
@@ -31,6 +32,7 @@ const rooms = new Map();
 const cups  = new Map();                 // 대회. 이것도 메모리에만 둔다 —
                                          // 서버가 다시 뜨면 대회는 사라진다
 const MAX_CUPS = 20;
+const quizzes = new Map();               // 한글 퀴즈. 이것도 메모리에만 둔다
 const EMPTY_TTL = 10 * 60 * 1000;        // 아무도 없는 대국은 10분 뒤 치운다
 const MAX_ROOMS = 200;
 
@@ -213,6 +215,62 @@ function cupList(){
 }
 
 /* ─── 관리자가 시키는 일 ───────────────────────────────────────────── */
+/* ─── 한글 퀴즈 ───────────────────────────────────────────────────────
+   대회와 같은 창구에 서지만 대국은 없다. 팀으로 나눠 찢긴 글자를 맞힌다.
+   심판은 quiz.js 다 — 여기서는 알리는 일만 한다.
+
+   낱장은 **지금 보여 줄 한 장만** 내려간다. 셋을 한꺼번에 주면 소스를 열어
+   겹치면 그만이다. 답도 맞히기 전까지는 아예 나가지 않는다. */
+function pushQuiz(quiz){
+  const now = Date.now();
+  for (const ws of wss.clients){
+    if (ws.readyState !== 1 || ws.quiz !== quiz.code || !ws.person) continue;
+    const v = quiz.view(ws.person.pid, now);
+    if (v) send(ws, "quizme", v);
+  }
+}
+/* 학생이 고르는 목록 — 접수 중인 것이 위로 */
+function quizList(){
+  const out = [...quizzes.values()].map(q => ({
+    code: q.code, title: q.title, state: q.state, people: q.people.size,
+    nth: q.nth + 1, total: q.order.length}));
+  out.sort((a, b) => (a.state === b.state ? 0 : a.state === "open" ? -1 : 1));
+  return out;
+}
+
+function onQuizJoin(ws, msg){
+  if (!ws.person) return send(ws, "error", {why: "nohello"});
+  const quiz = quizzes.get(String(msg.code || "").toUpperCase());
+  if (!quiz) return send(ws, "error", {why: "noquiz"});
+  /* 이미 들어온 사람은 비번 없이 돌아온다 — 새로고침했을 뿐이다 */
+  const back = quiz.people.has(ws.person.pid);
+  if (!back){
+    if (quiz.pin && msg.pin !== quiz.pin) return send(ws, "error", {why: "badpin"});
+    const r = quiz.join(ws.person);
+    if (r.err) return send(ws, "error", {why: r.err});
+  }
+  ws.quiz = quiz.code;
+  send(ws, "quizme", quiz.view(ws.person.pid, Date.now()));
+  if (!back) pushQuiz(quiz);                 // 몇 명 들어왔는지가 바뀌었다
+}
+function onQuizLeave(ws){
+  const quiz = ws.quiz && quizzes.get(ws.quiz);
+  ws.quiz = null;
+  send(ws, "quizme", null);
+  if (!quiz || !ws.person) return;
+  /* 팀을 짠 뒤에 빠지면 그 팀에 구멍이 난다. 명단은 그대로 둔다 */
+  if (quiz.state === "open"){ quiz.quit(ws.person.pid); pushQuiz(quiz); }
+}
+/* 답 하나. 맞으면 다 같이 공개를 보고, 틀리면 낸 사람에게만 붉게 알린다 */
+function onQuizSay(ws, msg){
+  const quiz = ws.quiz && quizzes.get(ws.quiz);
+  if (!quiz || !ws.person) return send(ws, "error", {why: "noquiz"});
+  const r = quiz.say(ws.person.pid, msg.text, Date.now());
+  if (r.err) return send(ws, "error", {why: r.err});
+  if (!r.right) send(ws, "quizmiss", {lost: r.lost || 0, again: !!r.again});
+  pushQuiz(quiz);                            // 점수가 바뀌었으니 다 다시 그린다
+}
+
 function onAdmin(what, m, done, ip){
   /* 들어오는 문은 하나뿐이다. 나머지는 표를 들고 와야 한다 */
   if (what === "login"){
@@ -224,13 +282,16 @@ function onAdmin(what, m, done, ip){
   }
   if (!admin.holds(m.token)) return done(401, {ok: false, why: "stale"});
 
-  const cup = () => cups.get(String(m.code || "").toUpperCase());
+  const cup  = () => cups.get(String(m.code || "").toUpperCase());
+  const quiz = () => quizzes.get(String(m.code || "").toUpperCase());
 
   switch (what){
     case "state": {
       const list = [...cups.values()].map(c => c.full());
       list.sort((a, b) => b.made - a.made);
-      return done(200, {ok: true, cups: list, rooms: rooms.size,
+      const qs = [...quizzes.values()].map(q => q.full());
+      qs.sort((a, b) => b.made - a.made);
+      return done(200, {ok: true, cups: list, quizzes: qs, rooms: rooms.size,
                         players: wss.clients.size});
     }
     case "open": {
@@ -278,6 +339,53 @@ function onAdmin(what, m, done, ip){
                            "-" + i + "-" + Math.random().toString(36).slice(2, 8)));
       return done(200, {ok: true, cup: c.full()});
     }
+    /* ─── 한글 퀴즈 ─── */
+    case "quizopen": {
+      if (quizzes.size >= MAX_CUPS) return done(409, {ok: false, why: "busy"});
+      if (!okPin(m.pin)) return done(400, {ok: false, why: "badpin"});
+      const code = newCode(c => cups.has(c) || rooms.has(c) || quizzes.has(c));
+      const q = new Quiz(code, {pin: m.pin, title: m.title});
+      quizzes.set(code, q);
+      return done(200, {ok: true, quiz: q.full()});
+    }
+    case "quizstart": {
+      const q = quiz();
+      if (!q) return done(404, {ok: false, why: "noquiz"});
+      const r = q.start(Date.now());
+      if (r.err) return done(409, {ok: false, why: r.err});
+      pushQuiz(q);
+      return done(200, {ok: true, quiz: q.full(), teams: r.teams, sizes: r.sizes});
+    }
+    /* 아무도 못 맞히는 문제를 넘긴다. 공개는 똑같이 한다 */
+    case "quizskip": {
+      const q = quiz();
+      if (!q) return done(404, {ok: false, why: "noquiz"});
+      const r = q.give(Date.now());
+      if (r.err) return done(409, {ok: false, why: r.err});
+      pushQuiz(q);
+      return done(200, {ok: true, quiz: q.full()});
+    }
+    case "quizclose": {
+      const q = quiz();
+      if (!q) return done(404, {ok: false, why: "noquiz"});
+      for (const ws of wss.clients)
+        if (ws.quiz === q.code){ ws.quiz = null; send(ws, "quizgone", {}); }
+      quizzes.delete(q.code);
+      return done(200, {ok: true});
+    }
+    /* 리허설용 — 수업 전에 팀이 어떻게 갈리는지 보려고 쓴다 */
+    case "quizmock": {
+      const q = quiz();
+      if (!q) return done(404, {ok: false, why: "noquiz"});
+      if (q.state !== "open") return done(409, {ok: false, why: "started"});
+      let n = m.n | 0;
+      if (n < 1) n = 1;
+      if (q.people.size + n > QUIZ_MAX) n = QUIZ_MAX - q.people.size;
+      for (let i = 0; i < n; i++)
+        q.join(players.get("mock-" + q.code + "-" + Date.now().toString(36) +
+                           "-" + i + "-" + Math.random().toString(36).slice(2, 8)));
+      return done(200, {ok: true, quiz: q.full()});
+    }
     default:
       return done(404, {ok: false, why: "unknown"});
   }
@@ -293,7 +401,8 @@ const server = httpSide.create({
       people += (r.seats[0] ? 1 : 0) + (r.seats[1] ? 1 : 0);
       if (r.ready && !r.over) playing++;
     }
-    return {rooms: rooms.size, players: people, playing, cups: cups.size};
+    return {rooms: rooms.size, players: people, playing, cups: cups.size,
+            quizzes: quizzes.size};
   },
   admin: (what, m, done, ip) => onAdmin(what, m, done, ip),
 });
@@ -301,7 +410,7 @@ const wss = new WebSocketServer({server, path: "/ws"});
 
 wss.on("connection", ws => {
   ws.alive = true; ws.room = null; ws.side = null; ws.person = null;
-  ws.cup = null; ws.fan = null;
+  ws.cup = null; ws.fan = null; ws.quiz = null;
   ws.on("pong", () => { ws.alive = true; });
 
   ws.on("message", raw => {
@@ -318,6 +427,10 @@ wss.on("connection", ws => {
       case "cupjoin": return onCupJoin(ws, msg);
       case "cupleave":return onCupLeave(ws);
       case "cupboard":return onCupBoard(ws);
+      case "quizzes": return send(ws, "quizzes", {quizzes: quizList()});
+      case "quizjoin":return onQuizJoin(ws, msg);
+      case "quizleave":return onQuizLeave(ws);
+      case "quizsay": return onQuizSay(ws, msg);
       case "watch":   return onWatch(ws, msg);
       case "unwatch": return watchStop(ws);
       case "rename":  return onRename(ws, msg);
@@ -506,6 +619,13 @@ setInterval(() => {
   }
   if (gone) pushList();
 }, 60000).unref();
+
+/* 퀴즈는 저절로 굴러간다 — 낱장이 4초마다 넘어가고, 공개가 끝나면 다음 문제다.
+   심판이 바뀐 것이 있다고 할 때만 내려보낸다. */
+setInterval(() => {
+  const now = Date.now();
+  for (const q of quizzes.values()) if (q.tick(now)) pushQuiz(q);
+}, 250).unref();
 
 db.init().catch(() => {});               // 첫 손님이 오기 전에 미리 깨워둔다
 

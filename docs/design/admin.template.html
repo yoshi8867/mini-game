@@ -1,6 +1,6 @@
 <!doctype html><html lang="ko"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>미니쇼기 대회 · 관리</title>
+<title>미니쇼기 · 관리</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@400;700&family=Gowun+Batang:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -92,12 +92,25 @@ button:disabled{opacity:.4;cursor:not-allowed}
   border-radius:999px;background:var(--wall-2);color:var(--chalk-dim);flex:none}
 .watchers{font-size:11px;color:var(--wait);margin-top:3px}
 .hint{color:var(--chalk-dim);font-size:13px}
+/* 순위판 — 한글 퀴즈 */
+.ranks{margin-top:var(--s3);display:flex;flex-direction:column;gap:4px}
+.rankrow{display:flex;align-items:baseline;gap:var(--s2);padding:7px 10px;
+  background:var(--wall);border:1px solid var(--wall-line);border-radius:6px}
+.rankrow:first-child{border-color:#4b3f22}
+.place{font:700 12px/1 'JetBrains Mono',monospace;color:var(--chalk-dim);
+  flex:none;width:34px}
+.rankrow:first-child .place{color:var(--mark)}
+.tname{font-weight:700;flex:none;display:flex;align-items:center;gap:5px}
+.mates{flex:1;min-width:0;font-size:12px;color:var(--chalk-dim);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pts{font:700 14px/1 'JetBrains Mono',monospace;color:var(--mark);flex:none}
+.hint b{color:var(--mark)}
 .right{margin-left:auto}
 </style>
 
 <div class="wrap">
-  <h1>미니쇼기 대회</h1>
-  <p class="sub">관리자 화면입니다. 대회를 열고, 대진을 짜고, 닫습니다.</p>
+  <h1>미니쇼기 · 관리</h1>
+  <p class="sub">대회(쇼기 대국)와 한글 퀴즈를 여기서 열고 닫습니다.</p>
 
   <!-- 열쇠 -->
   <form class="card" id="gate">
@@ -131,6 +144,25 @@ button:disabled{opacity:.4;cursor:not-allowed}
 
   <div id="cups"></div>
   <p class="hint" id="empty" hidden>열린 대회가 없습니다. 위에서 하나 여세요.</p>
+
+  <!-- 한글 퀴즈 열기 -->
+  <form class="card" id="qmaker" hidden>
+    <h2>새 한글 퀴즈 열기</h2>
+    <div class="row">
+      <div style="flex:2">
+        <label for="qtitle">퀴즈 이름</label>
+        <input id="qtitle" value="한글 퀴즈" maxlength="40">
+      </div>
+      <div style="max-width:140px">
+        <label for="qpin">참가 비밀번호 (숫자 4자리)</label>
+        <input id="qpin" class="pin" inputmode="numeric" maxlength="4" value="">
+      </div>
+      <button class="go" type="submit">열기</button>
+    </div>
+    <p class="msg" id="qmakeMsg">학생들은 <b>quiz.html</b> 로 들어옵니다.</p>
+  </form>
+
+  <div id="quizzes"></div>
 
   <p class="sub" id="foot" hidden></p>
 </div>
@@ -170,8 +202,9 @@ function signOut(why){
   token = null;
   try { sessionStorage.removeItem("shogi-admin"); } catch (e) {}
   clearInterval(timer); timer = null;
-  el("gate").hidden = false; el("maker").hidden = true;
-  el("cups").innerHTML = ""; el("empty").hidden = true; el("foot").hidden = true;
+  el("gate").hidden = false; el("maker").hidden = true; el("qmaker").hidden = true;
+  el("cups").innerHTML = ""; el("quizzes").innerHTML = "";
+  el("empty").hidden = true; el("foot").hidden = true;
   say("gateMsg", why || "", why ? "bad" : "");
 }
 
@@ -197,7 +230,7 @@ el("gate").addEventListener("submit", async e => {
 });
 
 function enter(){
-  el("gate").hidden = true; el("maker").hidden = false;
+  el("gate").hidden = true; el("maker").hidden = false; el("qmaker").hidden = false;
   say("gateMsg", "");
   refresh();
   clearInterval(timer);
@@ -217,9 +250,11 @@ el("maker").addEventListener("submit", async e => {
   refresh();
 });
 
-const ERR = {badpin:"비밀번호는 숫자 네 자리입니다", busy:"대회가 너무 많습니다",
-             nocup:"없는 대회입니다", few:"두 명은 있어야 시작합니다",
-             started:"이미 시작한 대회입니다", stale:"다시 들어와 주세요"};
+const ERR = {badpin:"비밀번호는 숫자 네 자리입니다", busy:"너무 많습니다",
+             nocup:"없는 대회입니다", noquiz:"없는 퀴즈입니다",
+             few:"사람이 모자랍니다 — 대회는 둘, 퀴즈는 여섯부터",
+             started:"이미 시작했습니다", closed:"이미 시작했습니다",
+             nothing:"지금은 넘길 문제가 없습니다", stale:"다시 들어와 주세요"};
 
 /* ─── 현황 ─── */
 async function refresh(){
@@ -231,7 +266,7 @@ async function refresh(){
 const STATE = {open:"접수 중", running:"진행 중", done:"끝남"};
 function paint(j){
   const box = el("cups");
-  el("empty").hidden = j.cups.length > 0;
+  el("empty").hidden = j.cups.length > 0 || (j.quizzes || []).length > 0;
   el("foot").hidden = false;
   el("foot").textContent =
     "서버에 접속 중인 사람 " + j.players + "명 · 열린 대국 " + j.rooms + "개";
@@ -265,6 +300,7 @@ function paint(j){
 
   box.querySelectorAll("button[data-do]").forEach(b =>
     b.addEventListener("click", () => act(b.dataset.do, b.dataset.code)));
+  quizPaint(j);
 }
 function btn(what, code, cls, text){
   return '<button class="' + cls + '" data-do="' + what + '" data-code="' + code + '">' +
@@ -308,6 +344,114 @@ function bout(m, round){
 }
 
 /* ─── 버튼 ─── */
+/* ─── 한글 퀴즈 ───────────────────────────────────────────────────────
+   대회와 같은 창구를 쓰지만 대진표가 없다. 팀별 누적 점수가 전부다.
+   점수는 초다 — 보여 줄 때만 mm:ss 로 적는다. */
+const clock = s => {
+  const neg = s < 0, n = Math.abs(s | 0);
+  return (neg ? "-" : "") + Math.floor(n / 60) + ":" + ("0" + (n % 60)).slice(-2);
+};
+
+el("qmaker").addEventListener("submit", async e => {
+  e.preventDefault();
+  const pin = el("qpin").value.replace(/[^0-9]/g, "");
+  if (pin.length !== 4) return say("qmakeMsg", "참가 비밀번호는 숫자 네 자리입니다.", "bad");
+  say("qmakeMsg", "여는 중입니다…");
+  const j = await call("quizopen", {pin, title: el("qtitle").value.trim()});
+  if (!j.ok) return say("qmakeMsg", ERR[j.why] || j.why, "bad");
+  say("qmakeMsg", "퀴즈 " + j.quiz.code + " 를 열었습니다. 학생들은 quiz.html 로 들어옵니다.", "good");
+  el("qpin").value = "";
+  refresh();
+});
+
+function quizPaint(j){
+  const box = el("quizzes");
+  const list = j.quizzes || [];
+  box.innerHTML = list.map(q => {
+    const acts = [];
+    if (q.state === "open"){
+      acts.push(qbtn("quizstart", q.code, "go", "팀 짜고 시작"));
+      acts.push(qbtn("quizmock", q.code, "", "연습 참가자 넣기"));
+    }
+    if (q.state === "running")
+      acts.push(qbtn("quizskip", q.code, "", "이 문제 넘기기"));
+    acts.push(qbtn("quizclose", q.code, "bad right",
+                   q.state === "running" ? "퀴즈 중단" : "퀴즈 닫기"));
+
+    /* 지금 낸 낱말은 관리자만 본다. 교실에서 읽어 주려면 알아야 한다 */
+    const live = q.state === "running" ?
+      '<span>문제 <b>' + q.nth + " / " + q.total + '</b></span>' +
+      (q.word ? '<span>지금 <b>' + esc(q.word) + '</b></span>' +
+                '<span>경과 <b>' + clock(q.spent) + '</b> / ' + clock(q.cap) + '</span>'
+              : '<span>정답 공개 중</span>') : "";
+
+    return '<div class="card">' +
+      '<div class="cup-head">' +
+        '<h2>' + esc(q.title) + '</h2>' +
+        '<span class="code">' + esc(q.code) + '</span>' +
+        '<span class="tag ' + q.state + '">' + STATE[q.state] + '</span>' +
+      '</div>' +
+      '<div class="facts">' +
+        '<span>참가 <b>' + q.people + '</b>명</span>' +
+        '<span>참가 비번 <b>' + esc(q.pin || "없음") + '</b></span>' +
+        live +
+      '</div>' +
+      (q.state === "open" ? qwaiting(q) : qboard(q)) +
+      '<div class="acts">' + acts.join("") + '</div>' +
+    '</div>';
+  }).join("");
+
+  box.querySelectorAll("button[data-do]").forEach(b =>
+    b.addEventListener("click", () => qact(b.dataset.do, b.dataset.code)));
+}
+function qbtn(what, code, cls, text){
+  return '<button class="' + cls + '" data-do="' + what + '" data-code="' + code + '">' +
+         text + '</button>';
+}
+function qwaiting(q){
+  if (!q.entrants.length)
+    return '<p class="hint" style="margin-top:12px">아직 아무도 안 들어왔습니다. ' +
+           '학생들에게 <b>quiz.html</b> 과 비밀번호 <b>' + esc(q.pin) + '</b> 를 알려 주세요.</p>';
+  const n = q.entrants.length;
+  const teams = Math.floor(n / 3);
+  const note = teams < 2 ? "여섯은 있어야 두 팀이 됩니다."
+             : teams + "팀" + (n % 3 ? " (넷인 팀 " + (n % 3) + "개)" : "") + " 이 됩니다.";
+  return '<p class="hint" style="margin-top:12px">' + note + '</p>' +
+    '<div class="who">' +
+    q.entrants.map(p => '<span>' + esc(p.name) + '</span>').join("") + '</div>';
+}
+/* 순위판 — 교실에서 보는 것과 같은 줄 */
+function qboard(q){
+  if (!q.board.length) return "";
+  return '<div class="ranks">' + q.board.map(t =>
+    '<div class="rankrow">' +
+      '<span class="place">' + t.rank + '위</span>' +
+      '<span class="tname">' + esc(t.name) +
+        (t.full ? '<span class="pill">4인</span>' : "") + '</span>' +
+      '<span class="mates">' + t.mates.map(esc).join(" · ") + '</span>' +
+      '<span class="pts">' + clock(t.score) + '</span>' +
+    '</div>').join("") + '</div>';
+}
+
+async function qact(what, code){
+  if (what === "quizclose" &&
+      !confirm("퀴즈 " + code + " 를 닫습니다. 점수도 사라집니다. 닫을까요?")) return;
+  if (what === "quizstart" &&
+      !confirm("여기서 참가가 마감되고 팀이 확정됩니다. 시작할까요?")) return;
+  const body = {code};
+  if (what === "quizmock"){
+    const n = prompt("연습 참가자를 몇 명 넣을까요?", "20");
+    if (n === null) return;
+    body.n = Math.max(1, Math.min(48, parseInt(n, 10) || 0));
+    if (!body.n) return;
+  }
+  const j = await call(what, body);
+  if (!j.ok) return alert(ERR[j.why] || j.why);
+  if (what === "quizstart")
+    alert(j.teams + "팀 — " + j.sizes.join("명 · ") + "명");
+  refresh();
+}
+
 async function act(what, code){
   if (what === "close" &&
       !confirm("대회 " + code + " 를 닫습니다. 진행 중인 대국도 사라집니다. 닫을까요?"))
