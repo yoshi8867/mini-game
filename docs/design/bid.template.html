@@ -100,11 +100,23 @@ button:disabled{opacity:.4;cursor:default}
 .price .left.hot{color:var(--lose)}
 .bidrow{display:flex;gap:8px;margin-top:var(--s3);flex-wrap:wrap}
 .bidrow button{flex:1;min-width:76px;padding:15px 10px;font-size:16px}
-.outs{display:flex;gap:6px;flex-wrap:wrap;margin-top:var(--s2)}
-.outs .o{font:700 11.5px/1 'Gothic A1',sans-serif;padding:6px 10px;border-radius:999px;
-  background:#fff;border:1px solid var(--wall-line);color:var(--chalk-dim)}
-.outs .o.gone{color:var(--win);border-color:#b7d8c2}
-.outs .o.here{color:var(--lose);border-color:#eec4c4;background:#fdf3f3}
+/* 비밀 입찰 — 남의 값은 안 보이고 누가 냈는지만 보인다 */
+.rule{margin:var(--s2) 0 0;padding:11px 13px;border-radius:8px;background:#fdf3f3;
+  border:1px solid #eec4c4;font-size:13px;line-height:1.6;color:#7a3030}
+.rule b{color:var(--lose)}
+.mybid{font:700 15px/1 'Gothic A1',sans-serif;color:var(--lose);margin-top:var(--s2)}
+.mybid b{font:700 26px/1 'JetBrains Mono',monospace}
+/* 개봉 — 낮은 값부터 줄 세운다 */
+.reveal{margin-top:var(--s3);display:flex;flex-direction:column;gap:6px}
+.rv{display:flex;align-items:center;gap:10px;padding:9px 13px;border-radius:8px;
+  background:#fff;border:1px solid var(--wall-line)}
+.rv.took{border-color:var(--lose);background:#fdf3f3}
+.rv .n{font:700 19px/1 'JetBrains Mono',monospace;color:var(--chalk);min-width:2.4em}
+.rv.took .n{color:var(--lose)}
+.rv .nm{font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
+.rv .what{font:700 11.5px/1 'Gothic A1',sans-serif;color:var(--chalk-dim);flex:none}
+.rv.took .what{color:var(--lose)}
 
 /* 낙찰 공개 */
 .sold{text-align:center;padding:var(--s4) var(--s3)}
@@ -281,9 +293,10 @@ const ERR = {badpin:"비밀번호가 맞지 않습니다", nobid:"없는 비딩�
              closed:"이미 시작한 비딩입니다", full:"자리가 다 찼습니다",
              wait:"지금은 값을 받지 않습니다", low:"더 높게 불러야 합니다",
              broke:"가진 토큰보다 많습니다", watcher:"관전은 값을 부를 수 없습니다",
-             already:"이미 빠졌습니다", last:"마지막 한 팀은 빠질 수 없습니다",
+             already:"이미 냈습니다. 한 번 내면 못 바꿉니다",
+             min:"1 이상을 내야 합니다",
              yours:"이미 우리 팀이 최고가입니다",
-             notup:"받기 싫은 룰렛입니다", notdown:"올려 부르는 룰렛입니다",
+             notup:"비밀 입찰로 내야 합니다", notdown:"올려 부르는 룰렛입니다",
              nohello:"다시 들어와 주세요"};
 const STATE = {open:"접수 중", plan:"작전타임", running:"경매 중",
                spin:"돌리는 중", done:"끝남"};
@@ -293,6 +306,7 @@ let joined = null;                    /* 들어간 비딩 코드 */
 let V = null;                         /* 마지막으로 받은 내 모습 */
 let gotAt = 0;                        /* 그것을 받은 때 — 남은 시간을 여기서 센다 */
 let spun = -1;                        /* 어느 차례까지 바퀴를 돌렸나 */
+let planShown = -1, was = null;       /* 작전타임마다 현황표를 한 번 띄운다 */
 let places = {};                      /* 팀 id → 화면상의 y. 순위를 미끄러뜨리는 데 쓴다 */
 
 /* ── 소켓 ─────────────────────────────────────────────────────────── */
@@ -382,6 +396,17 @@ function take(v){
     return;
   }
   paintTop(); paintStage(); paintRanks();
+  /* 작전타임에는 현황표를 저절로 띄운다 — 조끼리 뭘 노릴지 보고 정하라는 것이다.
+     한 작전타임에 한 번만 띄우니, 닫아 두면 그 사이에는 다시 안 뜬다.
+     경매가 시작되면 닫는다. 품목이 모달에 가리면 안 된다. */
+  if (v.state === "plan"){
+    const blk = v.plan ? v.plan.block : 0;
+    if (planShown !== blk){ planShown = blk; sheetShow(true); }
+  } else {
+    if (was === "plan") sheetShow(false);
+    planShown = -1;
+  }
+  was = v.state;
   if (!el("sheet").hidden) paintSheet();
 }
 
@@ -492,29 +517,32 @@ function lotView(box){
       body += '<p class="hint">관전 중입니다. 값은 조 대표가 부릅니다.</p>';
     }
   } else {
-    const out = new Set(L.outs);
-    const marks = (V.board || []).map(t =>
-      '<span class="o ' + (out.has(t.id) ? "gone" : "here") + '">' + esc(t.name) +
-      (out.has(t.id) ? " 빠짐" : "") + '</span>').join("");
+    /* 비밀 입찰 — 남이 얼마를 냈는지는 끝나야 안다 */
+    const sent = L.sent, of = L.of;
+    const did = L.mine !== undefined && L.mine !== null;
     body =
-      '<div class="price"><span>탈출가</span>' +
-      '<span class="big" id="nowPrice">' + (L.price + 1) + '</span>' +
-      '<span class="by">남은 팀 ' + L.standing + '</span>' +
+      '<div class="price"><span>비밀 입찰</span>' +
+      '<span class="big">' + sent + ' / ' + of + '</span>' +
+      '<span class="by">팀이 냈습니다</span>' +
       '<span class="left" id="lotLeft">' + clock(L.left / 1000) + '</span></div>' +
-      '<div class="outs">' + marks + '</div>';
+      '<p class="rule">값을 적어 냅니다. <b>남이 얼마를 냈는지는 열기 전까지 모릅니다.</b><br>' +
+      '· <b>가장 낮게</b> 적은 팀이 이 룰렛을 받습니다<br>' +
+      '· 같은 값이 여럿이면 <b>늦게 낸 팀</b>이 받습니다<br>' +
+      '· 받는 팀은 토큰을 <b>한 개도 쓰지 않고</b>, 나머지는 적어 낸 만큼 <b>잃습니다</b><br>' +
+      '· 안 내면 <b>1 을 적은 것</b>으로 봅니다 — 가장 낮고 가장 늦으니 그 팀이 받습니다</p>';
     if (mine){
-      const gone = out.has(V.me.team);
-      const need = L.price + 1;
-      body += '<div class="bidrow">' +
-        '<button class="danger" data-flee="' + need + '"' +
-        (gone || need > tokens || L.standing <= 1 ? " disabled" : "") + '>' +
-        (gone ? "이미 빠졌습니다" : need + ' 토큰 내고 빠지기') + '</button>' +
-        '<button data-flee="ask"' + (gone ? " disabled" : "") + '>직접</button></div>' +
-        '<p class="hint">낸 토큰은 <b>그대로 사라집니다</b>. 마지막까지 남은 한 팀이 ' +
-        '토큰을 쓰지 않고 이 룰렛을 받습니다. 10초 동안 아무도 안 빠지면 마감되고, ' +
-        '그때 남은 팀이 여럿이면 <b>토큰이 가장 넉넉한 팀</b>이 받습니다.</p>';
+      if (did){
+        body += '<p class="mybid">우리 팀이 낸 값 <b>' + L.mine + '</b> 토큰' +
+                ' · 한 번 내면 못 바꿉니다</p>';
+      } else {
+        const step = [1, 2, 3, 5].map(n =>
+          '<button class="danger" data-seal="' + n + '"' +
+          (n > tokens ? " disabled" : "") + '>' + n + '</button>').join("");
+        body += '<div class="bidrow">' + step +
+                '<button data-seal="ask">직접</button></div>';
+      }
     } else {
-      body += '<p class="hint">관전 중입니다.</p>';
+      body += '<p class="hint">관전 중입니다. 값은 조 대표가 적어 냅니다.</p>';
     }
   }
   box.innerHTML = head + body;
@@ -523,10 +551,12 @@ function lotView(box){
     const n = v === "ask" ? ask("얼마에 부를까요?", L.price + 1) : +v;
     if (n) send("bidup", {n});
   }));
-  box.querySelectorAll("[data-flee]").forEach(b => b.addEventListener("click", () => {
-    const v = b.dataset.flee;
-    const n = v === "ask" ? ask("몇 개를 내고 빠질까요?", L.price + 1) : +v;
-    if (n) send("bidflee", {n});
+  box.querySelectorAll("[data-seal]").forEach(b => b.addEventListener("click", () => {
+    const v = b.dataset.seal;
+    const n = v === "ask" ? ask("몇 토큰을 적어 낼까요?", 1) : +v;
+    if (!n) return;
+    if (!confirm(n + " 토큰을 적어 냅니다. 한 번 내면 못 바꿉니다. 낼까요?")) return;
+    send("bidseal", {n});
   }));
 }
 function ask(q, low){
@@ -539,20 +569,34 @@ function soldView(box, L){
   const d = L.done;
   box.className = "card";
   if (d.why === "none"){
-    box.innerHTML = '<div class="sold"><div class="big">아무도 안 불렀습니다</div>' +
-      '<div class="small">이 룰렛은 아무도 가져가지 않습니다.</div></div>';
+    box.innerHTML = '<div class="sold"><div class="big">유찰되었습니다</div>' +
+      '<div class="small">아무도 값을 부르지 않아 이 룰렛은 아무도 가져가지 않습니다.' +
+      '</div></div>';
     return;
   }
-  const bad = L.bad;
+  if (L.bad){
+    /* 비밀 입찰을 연다. 낮은 값부터 줄 세우고 받은 팀을 붉게 세운다 */
+    box.innerHTML =
+      '<div class="sold bad"><div class="big">' + esc(d.name) + '이 받았습니다</div>' +
+      '<div class="small">가장 낮게 적었습니다. 토큰은 쓰지 않았고, ' +
+      '다른 팀이 적어 낸 ' + d.burned + '개는 사라졌습니다.</div>' +
+      wheelSVG(L.wheel.cells, 0) + '</div>' +
+      '<p class="hint" style="text-align:center;margin:var(--s3) 0 0">' +
+      '다음 품목까지 <b id="openLeft">' + clock(d.left / 1000) + '</b></p>' +
+      '<div class="reveal">' + (d.bids || []).map(x =>
+        '<div class="rv' + (x.took ? " took" : "") + '">' +
+        '<span class="n">' + x.n + '</span>' +
+        '<span class="nm">' + esc(x.name) + '</span>' +
+        '<span class="what">' + (x.took ? "이 룰렛을 받음" :
+                                 (x.sent ? "" : "안 냄 · ") + x.n + " 토큰 잃음") +
+        '</span></div>').join("") + '</div>';
+    return;
+  }
   box.innerHTML =
-    '<div class="sold' + (bad ? " bad" : "") + '">' +
-    '<div class="big">' + esc(d.name) + (bad ? " 가 받았습니다" : " 낙찰") + '</div>' +
-    '<div class="small">' +
-    (bad ? (d.why === "time" ? "아무도 빠지지 않아 토큰이 가장 넉넉한 팀이 받습니다. "
-                             : "마지막까지 남았습니다. ") +
-           "토큰은 쓰지 않았고, 다른 팀이 낸 " + d.burned + "개는 사라졌습니다."
-         : d.price + " 토큰") +
-    '</div>' + wheelSVG(L.wheel.cells, 0) + '</div>';
+    '<div class="sold">' +
+    '<div class="big">' + esc(d.name) + ' 낙찰</div>' +
+    '<div class="small">' + d.price + ' 토큰</div>' +
+    wheelSVG(L.wheel.cells, 0) + '</div>';
 }
 
 /* 돌리기 — 모든 팀의 같은 차례 룰렛을 한꺼번에.
@@ -654,7 +698,8 @@ function paintSheet(){
       wheelSVG(w.cells, 0) +
       '<div class="t"><div class="id">' + w.id + '번</div>' +
       '<div class="e">' + w.ev.toFixed(2) + '</div>' +
-      '<div class="st">' + STNAME[w.at] +
+      '<div class="st">' +
+      (w.at === "done" && !w.name ? "유찰" : STNAME[w.at]) +
       (w.name ? '<br><b>' + esc(w.name) + '</b>' +
                 (w.price ? " " + w.price + "토큰" : "") : "") +
       '</div></div></div>').join("");
@@ -665,8 +710,15 @@ function nowLine(){
   const L = V && V.state === "running" && V.lot;
   if (!L){
     n.className = "nowline";
-    n.textContent = V && V.state === "plan" ? "작전타임입니다. 다음 묶음은 여섯 품목입니다."
-                  : V && V.state === "spin" ? "룰렛을 돌리는 중입니다."
+    if (V && V.state === "plan" && V.plan){
+      n.innerHTML = '작전타임 <b id="sheetLeft">' + clock(V.plan.left / 1000) + '</b> · ' +
+        '다음은 ' + V.plan.block + '번째 묶음, 경매 여섯 개입니다. ' +
+        '아직 안 나온 룰렛을 보고 무엇을 노릴지 정하세요.';
+      n.hidden = false;
+      return;
+    }
+    n.innerHTML = "";
+    n.textContent = V && V.state === "spin" ? "룰렛을 돌리는 중입니다."
                   : V && V.state === "done" ? "끝났습니다." : "";
     n.hidden = !n.textContent;
     return;
@@ -675,13 +727,13 @@ function nowLine(){
   n.className = "nowline" + (L.bad ? " bad" : "");
   if (L.done){
     n.innerHTML = '지금 <b>' + L.wheel.id + '번</b> · ' +
-      (L.done.name ? '<b>' + esc(L.done.name) + '</b> ' +
-         (L.bad ? "가 받았습니다" : L.done.price + " 토큰에 낙찰")
-       : "아무도 안 불렀습니다");
+      (L.done.name ? '<b>' + esc(L.done.name) + '</b>' +
+         (L.bad ? "이 받았습니다" : L.done.price + " 토큰에 낙찰")
+       : "<b>유찰</b>되었습니다");
     return;
   }
   n.innerHTML = '지금 <b>' + L.wheel.id + '번</b> (기댓값 ' + L.wheel.ev.toFixed(2) + ') · ' +
-    (L.bad ? '탈출가 <b>' + (L.price + 1) + '</b> 토큰 · 남은 팀 <b>' + L.standing + '</b>'
+    (L.bad ? '비밀 입찰 <b>' + L.sent + ' / ' + L.of + '</b> 팀 제출'
            : '현재가 <b>' + L.price + '</b> 토큰' +
              (L.whose ? ' · <b>' + esc(L.whose) + '</b>' : " · 아직 없음")) +
     ' · 남은 시간 <b id="sheetLeft">' + clock(L.left / 1000) + '</b>';
@@ -701,8 +753,11 @@ setInterval(() => {
   if (!V) return;
   const gone = Date.now() - gotAt;
   if (V.state === "plan" && V.plan){
+    const t = clock((V.plan.left - gone) / 1000);
     const n = el("planCount");
-    if (n) n.textContent = clock((V.plan.left - gone) / 1000);
+    if (n) n.textContent = t;
+    const m = el("sheetLeft");
+    if (m) m.textContent = t;
   }
   if (V.state === "running" && V.lot && !V.lot.done){
     const s = (V.lot.left - gone) / 1000;
@@ -713,6 +768,11 @@ setInterval(() => {
     }
     const m = el("sheetLeft");
     if (m) m.textContent = clock(s);
+  }
+  /* 비밀 입찰을 열어 둔 15초도 센다 */
+  if (V.state === "running" && V.lot && V.lot.done){
+    const n = el("openLeft");
+    if (n) n.textContent = clock((V.lot.done.left - gone) / 1000);
   }
 }, 250);
 

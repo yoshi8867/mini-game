@@ -19,11 +19,16 @@
      아무리 뜨거워도 **3분**을 넘기지 않는다.
    · **자기 호가에 자기가 또 올리지 못한다.** 실제 경매의 규칙이고,
      버튼을 두 번 눌러 제 값을 제가 올리는 사고도 이것으로 막힌다.
-   · **받기 싫은 룰렛은 탈출 경매다.** 토큰을 내고 빠진다. 빠지는 값도
-     마지막 값보다 1 이상 높아야 하므로 늦게 빠질수록 비싸다. 마지막 한
-     팀은 빠질 수 없고, 그 팀이 **토큰을 한 개도 안 쓰고** 룰렛을 받는다.
-     빠진 팀이 낸 토큰은 **그대로 사라진다** — 누구에게도 가지 않는다.
-   · 토큰이 모자라면 빠질 수 없다. 빈털터리가 받는다.
+   · **받기 싫은 룰렛은 비밀 입찰이다.** 남이 얼마를 냈는지 모르는 채로
+     1 이상을 적어 낸다. **가장 낮게 적은 팀이 그 룰렛을 받는다.** 같은
+     값이 여럿이면 **늦게 낸 팀**이 받는다 — 머뭇거린 쪽이 떠안는다.
+     받는 팀은 **토큰을 한 개도 쓰지 않고**, 나머지 팀은 적어 낸 만큼
+     **그대로 잃는다**. 누구에게도 가지 않고 사라진다.
+     높게 적으면 확실히 피하지만 비싸고, 낮게 적으면 싸지만 떠안는다.
+   · **안 낸 팀은 1 을 적은 것으로 본다.** 가장 낮은 값이고 가장 늦은 셈이니,
+     손을 놓고 있으면 그 룰렛은 그 팀에게 간다.
+   · 비밀 입찰에는 되살아나는 10초가 없다. 남의 값을 모르니 되받아칠 것도
+     없다. 정해진 시간을 주고, 모든 팀이 내면 그 자리에서 연다.
    · **남은 토큰은 점수가 아니다.** 아껴 봐야 종이다. 끝까지 뜨겁게.
    · 스물넷 중 열여덟만 나온다. 무엇이 안 나올지는 아무도 모른다. 그래서
      「저건 나중에 사면 되지」가 통하지 않는다.
@@ -45,9 +50,12 @@ const BLOCK  = 6;                  // 작전타임 한 번에 경매 몇 개
 const PLAN   = 180000;             // 작전타임 (3분)
 const SECS   = 20;                 // 최소 노출 — 아무 일 없어도 이만큼은 보여 준다
 const MINSECS = 10, MAXSECS = 120;
-const QUIET  = 10000;              // 이만큼 조용하면 마감된다
+const QUIET  = 10000;              // 이만큼 조용하면 마감된다 (올려 부르는 경매)
+const SEAL   = 30000;              // 비밀 입찰에 주는 시간. 다 내면 그 자리에서 연다
 const CAPMS  = 180000;             // 한 품목의 끝. 연장이 끝없이 늘지 않게
 const SHOW   = 3000;               // 낙찰을 보여 주는 참
+const OPEN   = 15000;              // 비밀 입찰을 열어 둔 채 두는 참 —
+                                   // 누가 얼마를 적었는지 읽을 시간은 줘야 한다
 const SPIN   = 5000;               // 룰렛 한 바퀴
 
 const shuffle = a => {             // Fisher-Yates
@@ -154,8 +162,9 @@ class Bid {
     this.state = "running";
     this.nth++;
     const w = byId[this.order[this.nth]];
-    this.lot = {wheel: w, bad: w.bad, at: now, ends: now + this.secs * 1000,
-                price: 0, who: null, outs: new Set(), burned: 0, done: null};
+    const span = w.bad ? Math.max(SEAL, this.secs * 1000) : this.secs * 1000;
+    this.lot = {wheel: w, bad: w.bad, at: now, ends: now + span,
+                price: 0, who: null, seals: new Map(), done: null};
   }
   /* 한 품목이 끝났다. 묶음이 찼으면 쉬고, 다 돌았으면 돌리기로 */
   advance(now){
@@ -185,26 +194,23 @@ class Bid {
     return {ok: true, price: n, team: team.id};
   }
 
-  /* ─── 받기 싫은 룰렛 — 토큰 내고 빠지기 ──────────────────────────── */
-  flee(pid, amount, now){
+  /* ─── 받기 싫은 룰렛 — 비밀 입찰 ─────────────────────────────────── */
+  /* 한 번 내면 못 바꾼다. 값은 마감 전까지 아무에게도 나가지 않는다 */
+  seal(pid, amount, now){
     const lot = this.lot;
     if (this.state !== "running" || !lot || lot.done) return {err: "wait"};
     if (!lot.bad) return {err: "notdown"};
     const team = this.teamOf(pid);
     if (!team) return {err: "watcher"};
-    if (lot.outs.has(team.id)) return {err: "already"};
-    if (this.teams.length - lot.outs.size <= 1) return {err: "last"};
+    if (lot.seals.has(team.id)) return {err: "already"};
     const n = amount | 0;
-    if (n < lot.price + 1) return {err: "low"};
+    if (n < 1) return {err: "min"};
     if (n > team.tokens) return {err: "broke"};
 
-    team.tokens -= n; team.burned += n;       // 낸 토큰은 그대로 사라진다
-    lot.burned += n;
-    lot.outs.add(team.id);
-    lot.price = n;
-    if (this.teams.length - lot.outs.size === 1) this.settle(now);
-    else this.stretch(lot, now);
-    return {ok: true, price: n, team: team.id};
+    lot.seals.set(team.id, {n, at: now});
+    /* 다 냈으면 더 기다릴 까닭이 없다 */
+    if (lot.seals.size >= this.teams.length) this.settle(now);
+    return {ok: true, team: team.id};
   }
 
   /* 값이 들어올 때마다 10초가 되살아난다. 다만 한 품목 3분을 넘기지 않는다 */
@@ -218,7 +224,7 @@ class Bid {
     const lot = this.lot;
     if (!lot || lot.done) return;
     if (!lot.bad){
-      if (lot.who === null){                  // 아무도 안 불렀다
+      if (lot.who === null){                  // 유찰 — 아무도 안 불렀다
         this.sold[lot.wheel.id] = null; this.paid[lot.wheel.id] = 0;
         lot.done = {at: now, team: null, price: 0, why: "none"};
         return;
@@ -230,20 +236,37 @@ class Bid {
       lot.done = {at: now, team: t.id, price: lot.price, why: "sold"};
       return;
     }
-    /* 빠지지 못한 팀이 받는다. 둘 이상 남았으면 토큰이 가장 많은 팀이다 */
-    const left = this.teams.filter(t => !lot.outs.has(t.id));
-    const forced = left.length > 1;
-    let take = left[0];
-    if (forced){
-      const top = Math.max(...left.map(t => t.tokens));
-      const rich = left.filter(t => t.tokens === top);
-      take = rich[(Math.random() * rich.length) | 0];
-    }
-    take.won.push(lot.wheel.id);
-    this.sold[lot.wheel.id] = take.id; this.paid[lot.wheel.id] = 0;
-    lot.done = {at: now, team: take.id, price: 0, why: forced ? "time" : "stuck",
-                burned: lot.burned};
+    /* 비밀 입찰을 연다. 가장 낮게 적은 팀이 받고, 같으면 늦게 낸 팀이 받는다.
+       안 낸 팀은 **1 을 적은 것으로 본다.** 가장 낮은 값이면서 아무 때도 안
+       냈으니 가장 늦은 셈이라, 손을 놓고 있으면 그 룰렛이 그 팀에게 간다. */
+    const rows = this.teams.map(t => {
+      const sealed = lot.seals.get(t.id);
+      return {t, n: sealed ? sealed.n : 1, at: sealed ? sealed.at : Infinity,
+              sent: !!sealed};
+    });
+    const min = Math.min(...rows.map(r => r.n));
+    let pool = rows.filter(r => r.n === min);
+    const late = Math.max(...pool.map(r => r.at));
+    pool = pool.filter(r => r.at === late);
+    const take = pool[(Math.random() * pool.length) | 0];
+
+    let burned = 0;
+    rows.forEach(r => {
+      if (r.t.id === take.t.id) return;           // 받는 팀은 한 개도 안 쓴다
+      const pay = Math.min(r.n, r.t.tokens);      // 없는 토큰까지 빼지는 않는다
+      if (!pay) return;
+      r.t.tokens -= pay; r.t.burned += pay; burned += pay;
+    });
+    take.t.won.push(lot.wheel.id);
+    this.sold[lot.wheel.id] = take.t.id; this.paid[lot.wheel.id] = 0;
+    lot.done = {at: now, team: take.t.id, price: 0, why: "sealed", burned,
+                bids: rows.map(r => ({team: r.t.id, name: r.t.name, n: r.n,
+                                      sent: r.sent, took: r.t.id === take.t.id}))
+                          .sort((a, b) => a.n - b.n || a.team - b.team)};
   }
+
+  /* 결과를 보여 주는 참. 비밀 입찰은 읽을 것이 많아 길다 */
+  showMs(lot){ return lot && lot.bad ? OPEN : SHOW; }
 
   /* ─── 돌리기 ─────────────────────────────────────────────────────── */
   rounds(){ return this.teams.reduce((m, t) => Math.max(m, t.won.length), 0); }
@@ -277,7 +300,7 @@ class Bid {
       const lot = this.lot;
       if (!lot) return false;
       if (lot.done){
-        if (now - lot.done.at < SHOW) return false;
+        if (now - lot.done.at < this.showMs(lot)) return false;
         this.advance(now);
         return true;
       }
@@ -341,15 +364,16 @@ class Bid {
       price: lot.price, who: lot.who,
       whose: lot.who === null ? null : this.teams[lot.who].name,
       left: Math.max(0, lot.ends - now),
-      outs: [...lot.outs],
-      standing: this.teams.length - lot.outs.size,
-      burned: lot.burned,
+      /* 비밀 입찰은 몇 팀이 냈는지만 나간다. 값은 마감 뒤에야 열린다 */
+      sent: lot.seals.size, of: this.teams.length,
       done: lot.done && {
         team: lot.done.team,
         name: lot.done.team === null ? null : this.teams[lot.done.team].name,
         price: lot.done.price, why: lot.done.why,
         burned: lot.done.burned || 0,
-        left: Math.max(0, SHOW - (now - lot.done.at)),
+        bids: lot.done.bids || null,
+        show: this.showMs(lot),
+        left: Math.max(0, this.showMs(lot) - (now - lot.done.at)),
       },
     };
   }
@@ -370,7 +394,12 @@ class Bid {
                   ms: this.plan,
                   block: Math.floor((this.nth + 1) / BLOCK) + 1,
                   blocks: Math.ceil(this.order.length / BLOCK)};
-    if (this.state === "running") out.lot = this.lotView(now);
+    if (this.state === "running"){
+      out.lot = this.lotView(now);
+      /* 내가 낸 값은 나만 본다 */
+      if (out.lot && out.lot.bad && me.team !== null && this.lot.seals.has(me.team))
+        out.lot.mine = this.lot.seals.get(me.team).n;
+    }
     if (this.state === "spin")
       out.spin = {round: this.round + 1, rounds: this.rounds(), ms: SPIN,
                   left: Math.max(0, SPIN - (now - this.spinAt)),
@@ -399,4 +428,4 @@ class Bid {
 }
 
 module.exports = {Bid, MAX_ENTRANTS, TOKENS, LOTS, BLOCK, PLAN, SECS,
-                  MINSECS, MAXSECS, QUIET, CAPMS, SHOW, SPIN};
+                  MINSECS, MAXSECS, QUIET, SEAL, CAPMS, SHOW, OPEN, SPIN};

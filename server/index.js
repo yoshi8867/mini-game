@@ -24,6 +24,7 @@ const admin = require("./admin.js");
 const {Tourney, roundName, MAX_ENTRANTS} = require("./tourney.js");
 const {Quiz, MAX_ENTRANTS: QUIZ_MAX} = require("./quiz.js");
 const {Bid, MAX_ENTRANTS: BID_MAX} = require("./bid.js");
+const bidbots = require("./bidbots.js");
 
 const PORT = process.env.PORT || 3000;
 
@@ -312,15 +313,16 @@ function onBidLeave(ws){
   /* 팀을 차지한 뒤에 빠지면 그 자리가 빈다. 시작 전에만 뺀다 */
   if (bid.state === "open"){ bid.quit(ws.person.pid); pushBid(bid); }
 }
-/* 값 하나. 좋은 룰렛이면 올려 부르고, 받기 싫은 룰렛이면 내고 빠진다 */
+/* 값 하나. 좋은 룰렛이면 올려 부르고, 받기 싫은 룰렛이면 비밀로 적어 낸다.
+   비밀 입찰은 남의 값을 건드리지 않으므로, 몇 팀이 냈는지만 바뀐다. */
 function onBidSay(ws, msg){
   const bid = ws.bid && bids.get(ws.bid);
   if (!bid || !ws.person) return send(ws, "error", {why: "nobid"});
   const now = Date.now();
-  const r = msg.t === "bidflee" ? bid.flee(ws.person.pid, msg.n, now)
+  const r = msg.t === "bidseal" ? bid.seal(ws.person.pid, msg.n, now)
                                 : bid.bid(ws.person.pid, msg.n, now);
   if (r.err) return send(ws, "error", {why: r.err});
-  pushBid(bid);                              // 값이 바뀌었으니 다 다시 그린다
+  pushBid(bid);
 }
 
 function onAdmin(what, m, done, ip){
@@ -536,7 +538,7 @@ wss.on("connection", ws => {
       case "bidjoin": return onBidJoin(ws, msg);
       case "bidleave":return onBidLeave(ws);
       case "bidup":
-      case "bidflee": return onBidSay(ws, msg);
+      case "bidseal": return onBidSay(ws, msg);
       case "watch":   return onWatch(ws, msg);
       case "unwatch": return watchStop(ws);
       case "rename":  return onRename(ws, msg);
@@ -731,8 +733,13 @@ setInterval(() => {
 setInterval(() => {
   const now = Date.now();
   for (const q of quizzes.values()) if (q.tick(now)) pushQuiz(q);
-  /* 비딩도 저절로 굴러간다 — 시간이 다하면 낙찰, 묶음이 차면 작전타임 */
-  for (const b of bids.values()) if (b.tick(now)) pushBid(b);
+  /* 비딩도 저절로 굴러간다 — 시간이 다하면 낙찰, 묶음이 차면 작전타임.
+     연습 대표가 끼어 있으면 서버가 대신 값을 부른다. */
+  for (const b of bids.values()){
+    let shout = b.tick(now);
+    if (bidbots.tick(b, now)) shout = true;
+    if (shout) pushBid(b);
+  }
 }, 250).unref();
 
 db.init().catch(() => {});               // 첫 손님이 오기 전에 미리 깨워둔다

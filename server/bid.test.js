@@ -1,7 +1,10 @@
 /* 돌림판 비딩 검사. 시계는 넣어 준다 — 기다리지 않고 끝까지 돌려 본다 */
 "use strict";
 const assert = require("assert");
-const {Bid, TOKENS, LOTS, BLOCK, SECS, QUIET, SHOW, SPIN} = require("./bid.js");
+const {Bid, TOKENS, LOTS, BLOCK, SECS, QUIET, SEAL, SHOW, OPEN, SPIN} = require("./bid.js");
+
+/* 결과를 보여 주는 참은 품목에 따라 다르다. 검사에서는 넉넉한 쪽으로 넘긴다 */
+const PAST = Math.max(SHOW, OPEN);
 const {WHEELS, byId} = require("./wheels.js");
 
 const who = n => ({pid: "pid-" + n, name: "참가자" + n});
@@ -70,7 +73,7 @@ function open(n, opt){
   t += b.plan;
   for (let i = 0; i < BLOCK; i++){
     b.lot.done = {at: t, team: null, price: 0, why: "none"};
-    b.tick(t += SHOW);
+    b.tick(t += PAST);
   }
   assert.strictEqual(b.state, "plan", BLOCK + "개 뒤에 작전타임이 안 온다");
   assert.strictEqual(b.go(t).err, undefined, "작전타임을 못 끊는다");
@@ -86,9 +89,10 @@ function open(n, opt){
   b.start(t);
   /* 좋은 것이 걸릴 때까지 넘긴다. 건너뛴 음수 룰렛은 누군가에게 쌓이므로
      나중 비교는 「늘었는가」로 해야 한다 — 「딱 하나인가」로 보면 흔들린다 */
-  while (b.lot.bad){ b.settle(t); b.tick(t += SHOW); }
+  while (b.lot.bad){ b.settle(t); b.tick(t += PAST); }
   const lot = b.lot;
   const had = b.teams.map(x => x.won.length);
+  const purse = b.teams.map(x => x.tokens);   // 건너뛴 음수 룰렛이 토큰을 깎았을 수 있다
 
   assert.strictEqual(b.bid("pid-0", 0, t).err, "low", "0 이 통과됐다");
   assert.ok(b.bid("pid-0", 1, t).ok, "첫 호가가 막혔다");
@@ -116,11 +120,11 @@ function open(n, opt){
   b.tick(lot.ends);
   assert.ok(lot.done, "시간이 지났는데 안 끝났다");
   assert.strictEqual(lot.done.team, 0, "마지막으로 부른 팀이 안 가져갔다");
-  assert.strictEqual(b.teams[0].tokens, TOKENS - 10, "토큰이 안 빠졌다");
+  assert.strictEqual(b.teams[0].tokens, purse[0] - 10, "토큰이 안 빠졌다");
   assert.strictEqual(b.teams[0].won.length, had[0] + 1, "룰렛이 안 들어갔다");
   assert.strictEqual(b.teams[0].won[b.teams[0].won.length - 1], lot.wheel.id,
                      "들어간 룰렛이 다르다");
-  assert.strictEqual(b.teams[1].tokens, TOKENS, "안 가져간 팀의 토큰이 빠졌다");
+  assert.strictEqual(b.teams[1].tokens, purse[1], "안 가져간 팀의 토큰이 빠졌다");
   console.log("up      1 이상 올려 부르기 · 자기 값엔 못 올림 · 10초 침묵이면 마감 · 낙찰에 차감");
 }
 
@@ -129,6 +133,8 @@ function open(n, opt){
   const b = open(2, {secs: 20});
   let t = 1000;
   b.start(t);
+  while (b.lot.bad){ b.settle(t); b.tick(t += PAST); }   // 비밀 입찰은 30초 고정이다
+  t = b.lot.at;
   assert.strictEqual(b.lot.ends - b.lot.at, 20000, "최소 노출이 안 맞는다");
   assert.strictEqual(b.tick(t + 19000), false, "최소 노출 전에 끝났다");
   assert.ok(b.tick(t + 20000), "조용한데 안 끝난다");
@@ -140,7 +146,7 @@ function open(n, opt){
   const b = open(2);
   let t = 1000;
   b.start(t);
-  while (b.lot.bad){ b.settle(t); b.tick(t += SHOW); }
+  while (b.lot.bad){ b.settle(t); b.tick(t += PAST); }
   const id = b.lot.wheel.id;
   b.tick(b.lot.ends);
   assert.strictEqual(b.lot.done.why, "none", "안 불렀는데 낙찰됐다");
@@ -149,71 +155,97 @@ function open(n, opt){
   console.log("none    아무도 안 부르면 유찰 · 현황에는 끝난 것으로");
 }
 
-/* ─── 받기 싫은 룰렛 ────────────────────────────────────────────────── */
+/* ─── 받기 싫은 룰렛 — 비밀 입찰 ────────────────────────────────────── */
 {
-  const b = open(3);
+  const b = open(4);
   let t = 1000;
   b.start(t);
-  while (!b.lot.bad){ b.settle(t); b.tick(t += SHOW); }
+  while (!b.lot.bad){ b.settle(t); b.tick(t += PAST); }
   const lot = b.lot;
 
   assert.strictEqual(b.bid("pid-0", 3, t).err, "notup", "받기 싫은 것에 호가가 됐다");
-  assert.ok(b.flee("pid-0", 1, t).ok, "첫 탈출이 막혔다");
-  assert.strictEqual(b.teams[0].tokens, TOKENS - 1, "탈출에 토큰이 안 빠졌다");
-  assert.strictEqual(b.flee("pid-0", 5, t).err, "already", "두 번 탈출했다");
-  assert.strictEqual(b.flee("pid-1", 1, t).err, "low", "같은 값으로 탈출됐다");
+  assert.strictEqual(b.seal("pid-0", 0, t).err, "min", "0 이 통과됐다");
+  assert.strictEqual(b.seal("pid-0", TOKENS + 1, t).err, "broke", "가진 것보다 많이 냈다");
+  assert.strictEqual(b.seal("pid-9", 3, t).err, "watcher", "관전이 값을 냈다");
 
-  assert.ok(b.flee("pid-1", 2, t).ok, "둘째 탈출이 막혔다");
-  /* 둘이 빠지면 남은 하나가 그 자리에서 받는다 */
-  assert.ok(lot.done, "마지막 한 팀만 남았는데 안 끝났다");
-  assert.strictEqual(lot.done.team, 2, "남은 팀이 안 받았다");
-  assert.strictEqual(lot.done.why, "stuck", "끝난 까닭이 다르다");
+  assert.ok(b.seal("pid-0", 5, t).ok, "첫 입찰이 막혔다");
+  assert.strictEqual(b.seal("pid-0", 2, t).err, "already", "두 번 냈다");
+  /* 낸 값은 마감 전까지 아무에게도 안 나간다 */
+  const peek = b.view("pid-1", t);
+  assert.strictEqual(peek.lot.sent, 1, "몇 팀이 냈는지가 안 맞는다");
+  assert.strictEqual(peek.lot.mine, undefined, "남의 값이 보인다");
+  assert.strictEqual(JSON.stringify(peek.lot).indexOf("seals"), -1, "속이 샜다");
+  assert.strictEqual(b.view("pid-0", t).lot.mine, 5, "내가 낸 값이 안 보인다");
+
+  assert.ok(b.seal("pid-1", 3, t + 10).ok, "둘째 입찰이 막혔다");
+  assert.ok(b.seal("pid-2", 3, t + 20).ok, "셋째 입찰이 막혔다");
+  assert.ok(!lot.done, "아직 한 팀이 안 냈는데 열렸다");
+  assert.ok(b.seal("pid-3", 9, t + 30).ok, "넷째 입찰이 막혔다");
+  /* 다 내면 그 자리에서 연다 */
+  assert.ok(lot.done, "다 냈는데 안 열렸다");
+  assert.strictEqual(lot.done.why, "sealed", "열린 까닭이 다르다");
+
+  /* 가장 낮은 3 이 둘인데, 늦게 낸 2번 팀이 받는다 */
+  assert.strictEqual(lot.done.team, 2, "같은 값에 늦게 낸 팀이 안 받았다");
   assert.strictEqual(b.teams[2].tokens, TOKENS, "받은 팀의 토큰이 빠졌다");
   assert.deepStrictEqual(b.teams[2].won, [lot.wheel.id], "룰렛이 안 들어갔다");
-  /* 낸 토큰은 아무에게도 가지 않는다 */
-  assert.strictEqual(b.teams[0].tokens + b.teams[1].tokens + b.teams[2].tokens,
-                     TOKENS * 3 - 3, "사라졌어야 할 토큰이 남았다");
-  assert.strictEqual(lot.done.burned, 3, "사라진 토큰 수가 안 맞는다");
-  console.log("down    토큰 내고 탈출 · 늦을수록 비싸다 · 꼴지가 공짜로 받는다 · 낸 것은 소각");
+  /* 나머지는 적어 낸 만큼 잃는다 */
+  assert.strictEqual(b.teams[0].tokens, TOKENS - 5, "5 를 적은 팀이 안 잃었다");
+  assert.strictEqual(b.teams[1].tokens, TOKENS - 3, "3 을 적은 팀이 안 잃었다");
+  assert.strictEqual(b.teams[3].tokens, TOKENS - 9, "9 를 적은 팀이 안 잃었다");
+  assert.strictEqual(lot.done.burned, 17, "사라진 토큰 수가 안 맞는다");
+  /* 열고 나면 모두의 값이 보인다 */
+  assert.strictEqual(lot.done.bids.length, 4, "공개된 입찰이 모자란다");
+  assert.ok(lot.done.bids[0].n <= lot.done.bids[3].n, "낮은 값부터가 아니다");
+  assert.ok(lot.done.bids.find(x => x.took).team === 2, "받은 팀 표시가 틀렸다");
+  console.log("seal    비밀 입찰 · 낮은 값이 받는다 · 같으면 늦게 낸 쪽 · 받는 팀은 안 쓴다");
 }
 
-/* 마지막 한 팀은 빠질 수 없다 */
-{
-  const b = open(2);
-  let t = 1000;
-  b.start(t);
-  while (!b.lot.bad){ b.settle(t); b.tick(t += SHOW); }
-  b.flee("pid-0", 1, t);
-  assert.ok(b.lot.done, "둘 중 하나가 빠졌는데 안 끝났다");
-  assert.strictEqual(b.lot.done.team, 1, "남은 팀이 안 받았다");
-  console.log("last    둘이면 하나가 빠지는 순간 끝난다");
-}
-
-/* 토큰이 모자라면 빠질 수 없다 — 빈털터리가 받는다 */
+/* 안 낸 팀은 1 을 적은 것으로 본다 — 손 놓고 있으면 그 팀이 받는다 */
 {
   const b = open(3);
   let t = 1000;
   b.start(t);
-  while (!b.lot.bad){ b.settle(t); b.tick(t += SHOW); }
+  while (!b.lot.bad){ b.settle(t); b.tick(t += PAST); }
+  b.seal("pid-0", 4, t);
+  b.seal("pid-1", 1, t + 10);              // 1 을 냈지만 2번은 안 냈다
+  assert.ok(!b.lot.done, "한 팀이 안 냈는데 열렸다");
+  b.tick(b.lot.ends);                       // 시간이 다하면 연다
+  assert.strictEqual(b.lot.done.team, 2, "안 낸 팀이 안 받았다");
+  assert.strictEqual(b.teams[2].tokens, TOKENS, "받은 팀의 토큰이 빠졌다");
+  assert.strictEqual(b.teams[1].tokens, TOKENS - 1, "1 을 적은 팀이 안 잃었다");
+  assert.strictEqual(b.lot.done.bids.find(x => x.team === 2).n, 1,
+                     "안 낸 팀이 1 로 안 잡혔다");
+  console.log("empty   안 내면 1 을 적은 것으로 본다 · 가장 늦으므로 그 팀이 받는다");
+}
+
+/* 토큰이 없는 팀은 1 로 잡히되 없는 것까지 빼지는 않는다 */
+{
+  const b = open(3);
+  let t = 1000;
+  b.start(t);
+  while (!b.lot.bad){ b.settle(t); b.tick(t += PAST); }
   b.teams[0].tokens = 0;
-  assert.strictEqual(b.flee("pid-0", 1, t).err, "broke", "빈털터리가 빠졌다");
-  b.flee("pid-1", 1, t);
-  b.flee("pid-2", 2, t);
-  assert.strictEqual(b.lot.done.team, 0, "빈털터리가 안 받았다");
-  console.log("broke   토큰이 모자라면 못 빠진다");
+  assert.strictEqual(b.seal("pid-0", 1, t).err, "broke", "빈털터리가 값을 냈다");
+  b.seal("pid-1", 1, t + 10);
+  b.seal("pid-2", 1, t + 20);
+  b.tick(b.lot.ends);
+  assert.strictEqual(b.lot.done.team, 0, "안 낸 빈털터리가 안 받았다");
+  assert.strictEqual(b.teams[0].tokens, 0, "없는 토큰이 빠져 음수가 됐다");
+  console.log("broke   토큰이 없으면 못 낸다 · 그래서 그 팀이 받는다");
 }
 
-/* 시간이 다 됐는데 둘 이상 남으면 토큰이 가장 많은 팀이 받는다 */
+/* 비밀 입찰에는 되살아나는 10초가 없다 */
 {
-  const b = open(3);
+  const b = open(3, {secs: 20});
   let t = 1000;
   b.start(t);
-  while (!b.lot.bad){ b.settle(t); b.tick(t += SHOW); }
-  b.teams[0].tokens = 5; b.teams[1].tokens = 20; b.teams[2].tokens = 9;
-  b.tick(b.lot.ends);
-  assert.strictEqual(b.lot.done.why, "time", "시간으로 끝난 것이 아니다");
-  assert.strictEqual(b.lot.done.team, 1, "토큰이 가장 많은 팀이 안 받았다");
-  console.log("time    아무도 안 빠지면 가장 넉넉한 팀이 받는다");
+  while (!b.lot.bad){ b.settle(t); b.tick(t += PAST); }
+  const ends = b.lot.ends;
+  assert.strictEqual(ends - b.lot.at, SEAL, "비밀 입찰 시간이 안 맞는다");
+  b.seal("pid-0", 2, ends - 1000);
+  assert.strictEqual(b.lot.ends, ends, "비밀 입찰인데 시간이 늘었다");
+  console.log("noext   비밀 입찰은 연장이 없다 · " + (SEAL / 1000) + "초 고정");
 }
 
 /* ─── 경매 현황 ─────────────────────────────────────────────────────── */
@@ -244,15 +276,14 @@ function open(n, opt){
   while (b.state !== "spin" && guard++ < 500){
     if (b.state === "plan"){ b.go(t); continue; }
     const lot = b.lot;
-    if (lot.bad){                                  // 앞의 둘이 빠진다
-      b.flee("pid-0", lot.price + 1, t);
-      if (!lot.done) b.flee("pid-1", lot.price + 1, t);
-      if (!lot.done) b.flee("pid-2", lot.price + 1, t);
+    if (lot.bad){                                  // 저마다 다른 값을 적어 낸다
+      b.seal("pid-0", 3, t); b.seal("pid-1", 2, t + 1);
+      b.seal("pid-2", 4, t + 2); b.seal("pid-3", 1, t + 3);
     } else {
       b.bid("pid-" + (b.nth % 4), 1, t);
     }
     if (!lot.done) b.tick(t = lot.ends);
-    b.tick(t += SHOW);
+    b.tick(t += PAST);
   }
   assert.strictEqual(b.state, "spin", "열여덟을 다 치우고 돌리기로 안 갔다");
   assert.strictEqual(b.nth + 1, LOTS, "품목 수가 " + LOTS + " 이 아니다");
