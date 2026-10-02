@@ -1,7 +1,7 @@
 /* 돌림판 비딩 검사. 시계는 넣어 준다 — 기다리지 않고 끝까지 돌려 본다 */
 "use strict";
 const assert = require("assert");
-const {Bid, TOKENS, LOTS, BLOCK, SECS, EXTEND, SHOW, SPIN} = require("./bid.js");
+const {Bid, TOKENS, LOTS, BLOCK, SECS, QUIET, SHOW, SPIN} = require("./bid.js");
 const {WHEELS, byId} = require("./wheels.js");
 
 const who = n => ({pid: "pid-" + n, name: "참가자" + n});
@@ -84,30 +84,55 @@ function open(n, opt){
   const b = open(3);
   let t = 1000;
   b.start(t);
-  /* 좋은 것이 걸릴 때까지 넘긴다 */
+  /* 좋은 것이 걸릴 때까지 넘긴다. 건너뛴 음수 룰렛은 누군가에게 쌓이므로
+     나중 비교는 「늘었는가」로 해야 한다 — 「딱 하나인가」로 보면 흔들린다 */
   while (b.lot.bad){ b.settle(t); b.tick(t += SHOW); }
   const lot = b.lot;
+  const had = b.teams.map(x => x.won.length);
 
   assert.strictEqual(b.bid("pid-0", 0, t).err, "low", "0 이 통과됐다");
   assert.ok(b.bid("pid-0", 1, t).ok, "첫 호가가 막혔다");
+  /* 자기 호가에 자기가 또 올리지 못한다 — 두 번 눌러 생기는 사고까지 막는다 */
+  assert.strictEqual(b.bid("pid-0", 2, t).err, "yours", "자기 값을 자기가 올렸다");
+  assert.strictEqual(lot.price, 1, "막혔는데 값이 올랐다");
   assert.strictEqual(b.bid("pid-1", 1, t).err, "low", "같은 값이 통과됐다");
   assert.ok(b.bid("pid-1", 5, t).ok, "올려 부른 것이 막혔다");
+  /* 남이 가로채면 다시 부를 수 있다 */
+  assert.ok(b.bid("pid-0", 6, t).ok, "가로채였는데 다시 못 부른다");
+  assert.ok(b.bid("pid-1", 7, t).ok, "되받아치기가 막혔다");
   assert.strictEqual(b.bid("pid-0", TOKENS + 1, t).err, "broke", "가진 것보다 많이 불렀다");
   assert.strictEqual(b.bid("pid-9", 9, t).err, "watcher", "관전이 값을 불렀다");
 
-  /* 막판 호가는 시간을 되돌린다 */
+  /* 값이 들어올 때마다 10초가 되살아난다 */
   const near = lot.ends - 2000;
-  b.bid("pid-2", 7, near);
-  assert.strictEqual(lot.ends, near + EXTEND, "막판 호가에 연장이 안 됐다");
+  b.bid("pid-2", 9, near);
+  assert.strictEqual(lot.ends, near + QUIET, "호가에 10초가 안 되살아났다");
+  /* 아직 넉넉하면 그대로 둔다 — 줄어들지는 않는다 */
+  const far = lot.ends;
+  b.bid("pid-0", 10, far - 60000);
+  assert.strictEqual(lot.ends, far, "넉넉한데 마감이 당겨졌다");
 
   /* 마감 — 마지막으로 부른 팀이 가져가고 토큰이 빠진다 */
   b.tick(lot.ends);
   assert.ok(lot.done, "시간이 지났는데 안 끝났다");
-  assert.strictEqual(lot.done.team, 2, "마지막으로 부른 팀이 안 가져갔다");
-  assert.strictEqual(b.teams[2].tokens, TOKENS - 7, "토큰이 안 빠졌다");
-  assert.deepStrictEqual(b.teams[2].won, [lot.wheel.id], "룰렛이 안 들어갔다");
-  assert.strictEqual(b.teams[0].tokens, TOKENS, "안 가져간 팀의 토큰이 빠졌다");
-  console.log("up      1 이상 올려 부르기 · 가진 만큼만 · 막판 10초 연장 · 낙찰에 차감");
+  assert.strictEqual(lot.done.team, 0, "마지막으로 부른 팀이 안 가져갔다");
+  assert.strictEqual(b.teams[0].tokens, TOKENS - 10, "토큰이 안 빠졌다");
+  assert.strictEqual(b.teams[0].won.length, had[0] + 1, "룰렛이 안 들어갔다");
+  assert.strictEqual(b.teams[0].won[b.teams[0].won.length - 1], lot.wheel.id,
+                     "들어간 룰렛이 다르다");
+  assert.strictEqual(b.teams[1].tokens, TOKENS, "안 가져간 팀의 토큰이 빠졌다");
+  console.log("up      1 이상 올려 부르기 · 자기 값엔 못 올림 · 10초 침묵이면 마감 · 낙찰에 차감");
+}
+
+/* 아무도 안 부르면 최소 노출만 쓰고 유찰이다 — 60초를 통째로 버리지 않는다 */
+{
+  const b = open(2, {secs: 20});
+  let t = 1000;
+  b.start(t);
+  assert.strictEqual(b.lot.ends - b.lot.at, 20000, "최소 노출이 안 맞는다");
+  assert.strictEqual(b.tick(t + 19000), false, "최소 노출 전에 끝났다");
+  assert.ok(b.tick(t + 20000), "조용한데 안 끝난다");
+  console.log("floor   조용하면 최소 노출(20초)만 쓰고 끝난다");
 }
 
 /* 아무도 안 부르면 유찰이고, 아무도 못 가져간다 */

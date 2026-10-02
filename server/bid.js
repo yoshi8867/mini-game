@@ -12,10 +12,13 @@
 
    · **선(先)이 없다.** 모두가 같은 순간에 부른다. 서버에 먼저 닿은 것이
      먼저다. 값은 늘 마지막 값보다 **1 이상** 높아야 한다.
-   · **좋은 룰렛은 올려 부른다.** 주어진 시간 안에 아무도 더 안 올리면
-     낙찰이고, 토큰은 그때 빠진다. 막판에 값이 들어오면 10초를 되돌려
-     준다 — 마지막 1초를 노리는 것이 이기는 수가 되면 경매가 아니라
-     반사신경 겨루기가 된다. 다만 한 품목은 3분을 넘기지 않는다.
+   · **마감은 한 가지 규칙이다 — 10초 동안 조용하면 끝.** 값이 들어올
+     때마다 10초가 되살아난다. 마지막 1초를 노리는 것이 이기는 수가 되면
+     경매가 아니라 반사신경 겨루기가 된다.
+     다만 품목이 뜨자마자 끝나지는 않게 **최소 노출**(기본 20초)을 두고,
+     아무리 뜨거워도 **3분**을 넘기지 않는다.
+   · **자기 호가에 자기가 또 올리지 못한다.** 실제 경매의 규칙이고,
+     버튼을 두 번 눌러 제 값을 제가 올리는 사고도 이것으로 막힌다.
    · **받기 싫은 룰렛은 탈출 경매다.** 토큰을 내고 빠진다. 빠지는 값도
      마지막 값보다 1 이상 높아야 하므로 늦게 빠질수록 비싸다. 마지막 한
      팀은 빠질 수 없고, 그 팀이 **토큰을 한 개도 안 쓰고** 룰렛을 받는다.
@@ -40,9 +43,9 @@ const TOKENS = 30;                 // 팀마다 처음 쥐는 토큰
 const LOTS   = 18;                 // 스물넷 중 경매에 나오는 수
 const BLOCK  = 6;                  // 작전타임 한 번에 경매 몇 개
 const PLAN   = 180000;             // 작전타임 (3분)
-const SECS   = 60;                 // 한 품목에 주는 시간
+const SECS   = 20;                 // 최소 노출 — 아무 일 없어도 이만큼은 보여 준다
 const MINSECS = 10, MAXSECS = 120;
-const EXTEND = 10000;              // 막판 호가에 되돌려 주는 시간
+const QUIET  = 10000;              // 이만큼 조용하면 마감된다
 const CAPMS  = 180000;             // 한 품목의 끝. 연장이 끝없이 늘지 않게
 const SHOW   = 3000;               // 낙찰을 보여 주는 참
 const SPIN   = 5000;               // 룰렛 한 바퀴
@@ -171,6 +174,9 @@ class Bid {
     if (lot.bad) return {err: "notup"};
     const team = this.teamOf(pid);
     if (!team) return {err: "watcher"};
+    /* 자기 호가에 자기가 올리지 못한다. 손해일 뿐이고, 두 번 눌러 생기는
+       사고이기도 하다. 실제 경매에서도 받아 주지 않는다 */
+    if (lot.who === team.id) return {err: "yours"};
     const n = amount | 0;
     if (n < lot.price + 1) return {err: "low"};
     if (n > team.tokens) return {err: "broke"};
@@ -201,10 +207,10 @@ class Bid {
     return {ok: true, price: n, team: team.id};
   }
 
-  /* 막판 호가에는 10초를 되돌려 준다. 다만 한 품목 3분을 넘기지 않는다 */
+  /* 값이 들어올 때마다 10초가 되살아난다. 다만 한 품목 3분을 넘기지 않는다 */
   stretch(lot, now){
-    if (lot.ends - now >= EXTEND) return;
-    lot.ends = Math.min(now + EXTEND, lot.at + CAPMS);
+    if (lot.ends - now >= QUIET) return;
+    lot.ends = Math.min(now + QUIET, lot.at + CAPMS);
   }
 
   /* ─── 마감 ───────────────────────────────────────────────────────── */
@@ -393,4 +399,4 @@ class Bid {
 }
 
 module.exports = {Bid, MAX_ENTRANTS, TOKENS, LOTS, BLOCK, PLAN, SECS,
-                  MINSECS, MAXSECS, EXTEND, CAPMS, SHOW, SPIN};
+                  MINSECS, MAXSECS, QUIET, CAPMS, SHOW, SPIN};

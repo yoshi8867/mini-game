@@ -161,19 +161,22 @@ button:disabled{opacity:.4;cursor:default}
 .nowline{flex:none;margin:0;padding:11px var(--s3);background:#fdf5e2;
   border-bottom:1px solid var(--wall-line);font-size:13.5px;color:var(--chalk-dim)}
 .nowline b{color:var(--mark)} .nowline.bad b{color:var(--lose)}
-.sheet-body{overflow:auto;padding:var(--s3);display:grid;gap:9px;
-  grid-template-columns:repeat(auto-fill,minmax(168px,1fr))}
-.item{border:1px solid var(--wall-line);border-radius:8px;padding:10px 11px;
-  background:#fff}
-.item.done{opacity:.55;background:var(--wall-2)}
+.sheet-body{overflow:auto;padding:var(--s3);display:grid;gap:10px;
+  grid-template-columns:repeat(auto-fill,minmax(196px,1fr))}
+.item{border:1px solid var(--wall-line);border-radius:10px;padding:10px 12px;
+  background:#fff;display:flex;align-items:center;gap:11px}
+.item.done{background:var(--wall-2)}
+.item.done .wheel{opacity:.45;filter:grayscale(.6)}
+.item.done .t{opacity:.6}
 .item.now{border-color:var(--mark);background:#fdf5e2;box-shadow:0 0 0 2px #f0c75e55}
-.item .hd{display:flex;align-items:baseline;gap:6px}
+/* 현황에서는 돌지 않으니 바늘은 지운다. 모양만 보면 된다 */
+.item .wheel{flex:none;width:84px;height:84px}
+.item .wheel .pin{display:none}
+.item .t{min-width:0;flex:1}
 .item .id{font:700 11px/1 'JetBrains Mono',monospace;color:var(--chalk-dim)}
-.item .e{font:700 17px/1 'JetBrains Mono',monospace;color:var(--mark);margin-left:auto}
+.item .e{font:700 21px/1.1 'JetBrains Mono',monospace;color:var(--mark);margin:3px 0 0}
 .item.minus .e{color:var(--lose)}
-.item .cs{font:700 12px/1 'JetBrains Mono',monospace;color:var(--chalk-dim);
-  margin-top:6px}
-.item .st{font:700 11px/1 'Gothic A1',sans-serif;margin-top:7px;color:var(--chalk-dim)}
+.item .st{font:700 11px/1.35 'Gothic A1',sans-serif;margin-top:6px;color:var(--chalk-dim)}
 .item .st b{color:var(--mark)}
 .fab{position:fixed;right:14px;bottom:14px;z-index:30;background:var(--chalk);
   color:#fff;border-color:var(--chalk);box-shadow:0 6px 18px rgba(0,0,0,.25)}
@@ -279,6 +282,7 @@ const ERR = {badpin:"비밀번호가 맞지 않습니다", nobid:"없는 비딩�
              wait:"지금은 값을 받지 않습니다", low:"더 높게 불러야 합니다",
              broke:"가진 토큰보다 많습니다", watcher:"관전은 값을 부를 수 없습니다",
              already:"이미 빠졌습니다", last:"마지막 한 팀은 빠질 수 없습니다",
+             yours:"이미 우리 팀이 최고가입니다",
              notup:"받기 싫은 룰렛입니다", notdown:"올려 부르는 룰렛입니다",
              nohello:"다시 들어와 주세요"};
 const STATE = {open:"접수 중", plan:"작전타임", running:"경매 중",
@@ -469,15 +473,21 @@ function lotView(box){
       '<span class="by">' + (L.whose ? esc(L.whose) : "아직 없음") + '</span>' +
       '<span class="left" id="lotLeft">' + clock(L.left / 1000) + '</span></div>';
     if (mine){
+      /* 최고가를 쥔 팀은 자기 값에 자기가 못 올린다 — 실제 경매와 같다 */
+      const top = L.who === V.me.team;
       const step = [1, 3, 5].map(d => {
         const n = L.price + d;
         return '<button class="go" data-up="' + n + '"' +
-               (n > tokens ? " disabled" : "") + '>' + n + ' 토큰</button>';
+               (top || n > tokens ? " disabled" : "") + '>' + n + ' 토큰</button>';
       }).join("");
       body += '<div class="bidrow">' + step +
-              '<button data-up="ask">직접</button></div>' +
-              '<p class="hint">마지막 값보다 <b>1 이상</b> 높게 불러야 합니다. ' +
-              '낙찰되면 그때 토큰이 빠집니다.</p>';
+              '<button data-up="ask"' + (top ? " disabled" : "") + '>직접</button></div>' +
+              '<p class="hint">' + (top
+                ? '<b>우리 팀이 최고가입니다.</b> 자기 값에 자기가 더 올릴 수는 없습니다. ' +
+                  '누가 가로채면 그때 다시 부르세요.'
+                : '마지막 값보다 <b>1 이상</b> 높게 불러야 합니다. ' +
+                  '낙찰되면 그때 토큰이 빠집니다.') +
+              ' 값이 들어오면 <b>10초</b>가 되살아나고, 10초 동안 조용하면 마감입니다.</p>';
     } else {
       body += '<p class="hint">관전 중입니다. 값은 조 대표가 부릅니다.</p>';
     }
@@ -501,7 +511,8 @@ function lotView(box){
         (gone ? "이미 빠졌습니다" : need + ' 토큰 내고 빠지기') + '</button>' +
         '<button data-flee="ask"' + (gone ? " disabled" : "") + '>직접</button></div>' +
         '<p class="hint">낸 토큰은 <b>그대로 사라집니다</b>. 마지막까지 남은 한 팀이 ' +
-        '토큰을 쓰지 않고 이 룰렛을 받습니다.</p>';
+        '토큰을 쓰지 않고 이 룰렛을 받습니다. 10초 동안 아무도 안 빠지면 마감되고, ' +
+        '그때 남은 팀이 여럿이면 <b>토큰이 가장 넉넉한 팀</b>이 받습니다.</p>';
     } else {
       body += '<p class="hint">관전 중입니다.</p>';
     }
@@ -640,13 +651,13 @@ function paintSheet(){
     .sort((a, b) => b.ev - a.ev || a.id - b.id)
     .map(w =>
       '<div class="item ' + w.at + (w.bad ? " minus" : "") + '">' +
-      '<div class="hd"><span class="id">' + w.id + '번</span>' +
-      '<span class="e">' + w.ev.toFixed(2) + '</span></div>' +
-      '<div class="cs">' + w.cells.join(" · ") + '</div>' +
+      wheelSVG(w.cells, 0) +
+      '<div class="t"><div class="id">' + w.id + '번</div>' +
+      '<div class="e">' + w.ev.toFixed(2) + '</div>' +
       '<div class="st">' + STNAME[w.at] +
-      (w.name ? ' · <b>' + esc(w.name) + '</b>' +
+      (w.name ? '<br><b>' + esc(w.name) + '</b>' +
                 (w.price ? " " + w.price + "토큰" : "") : "") +
-      '</div></div>').join("");
+      '</div></div></div>').join("");
 }
 /* 모달이 본 화면을 덮으니, 지금 걸린 품목의 값을 여기에도 적는다 */
 function nowLine(){

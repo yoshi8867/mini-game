@@ -176,9 +176,9 @@ button:disabled{opacity:.4;cursor:not-allowed}
         <label for="bpin">참가 비밀번호 (숫자 4자리)</label>
         <input id="bpin" class="pin" inputmode="numeric" maxlength="4" value="">
       </div>
-      <div style="max-width:110px">
-        <label for="bsecs">품목당 초</label>
-        <input id="bsecs" inputmode="numeric" maxlength="3" value="60">
+      <div style="max-width:120px">
+        <label for="bsecs">최소 노출 초</label>
+        <input id="bsecs" inputmode="numeric" maxlength="3" value="20">
       </div>
       <div style="max-width:110px">
         <label for="bplan">작전타임 분</label>
@@ -187,7 +187,8 @@ button:disabled{opacity:.4;cursor:not-allowed}
       <button class="go" type="submit">열기</button>
     </div>
     <p class="msg" id="bmakeMsg">조 대표는 <b>bid.html</b> 로 들어옵니다.
-      작전타임 뒤 경매 여섯, 그것을 세 번 돌면 열여덟 품목이 끝납니다.</p>
+      작전타임 뒤 경매 여섯, 그것을 세 번 돌면 열여덟 품목이 끝납니다.
+      품목은 <b>10초 동안 조용하면</b> 마감되고, 최소 노출 시간만큼은 반드시 보여 줍니다.</p>
   </form>
 
   <div id="bidsBox"></div>
@@ -283,6 +284,7 @@ el("maker").addEventListener("submit", async e => {
 const ERR = {badpin:"비밀번호는 숫자 네 자리입니다", busy:"너무 많습니다",
              nocup:"없는 대회입니다", noquiz:"없는 퀴즈입니다",
              nobid:"없는 비딩입니다", notplan:"지금은 작전타임이 아닙니다",
+             yours:"이미 그 팀이 최고가입니다",
              few:"사람이 모자랍니다 — 대회·비딩은 둘, 퀴즈는 여섯부터",
              started:"이미 시작했습니다", closed:"이미 시작했습니다",
              nothing:"지금은 넘길 문제가 없습니다", stale:"다시 들어와 주세요"};
@@ -492,7 +494,7 @@ el("bmaker").addEventListener("submit", async e => {
   e.preventDefault();
   const pin = el("bpin").value.replace(/[^0-9]/g, "");
   if (pin.length !== 4) return say("bmakeMsg", "참가 비밀번호는 숫자 네 자리입니다.", "bad");
-  const secs = Math.max(10, Math.min(120, parseInt(el("bsecs").value, 10) || 60));
+  const secs = Math.max(10, Math.min(120, parseInt(el("bsecs").value, 10) || 20));
   const mins = Math.max(0, Math.min(10, parseInt(el("bplan").value, 10) || 0));
   say("bmakeMsg", "여는 중입니다…");
   const j = await call("bidopen", {pin, title: el("btitle").value.trim(),
@@ -544,7 +546,7 @@ function bidPaint(j){
       '<div class="facts">' +
         '<span>대표 <b>' + b.teams + '</b>팀 · 들어온 사람 <b>' + b.people + '</b>명</span>' +
         '<span>참가 비번 <b>' + esc(b.pin || "없음") + '</b></span>' +
-        '<span>품목당 <b>' + b.secs + '</b>초</span>' +
+        '<span>최소 노출 <b>' + b.secs + '</b>초 · 침묵 10초면 마감</span>' +
         live +
       '</div>' +
       (b.state === "open" ? bwaiting(b) : bboard(b)) +
