@@ -1,0 +1,710 @@
+<!doctype html><html lang="ko"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<title>돌림판 비딩</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@400;700;800&family=Gowun+Batang:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* 퀴즈와 같은 흰 바탕이다. 교실 빔프로젝터에서 가장 잘 읽힌다 */
+:root{
+  color-scheme:light;
+  --wall:#ffffff; --wall-2:#f6f6f7; --wall-line:#dcdce1;
+  --chalk:#16171a; --chalk-dim:#63646b; --mark:#8a5a00; --gold:#f0c75e;
+  --win:#1f7a3d; --lose:#c62828; --wait:#2d5f9a;
+  --s1:4px; --s2:10px; --s3:16px; --s4:24px; --s5:36px;
+}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+html,body{margin:0;background:var(--wall);color:var(--chalk);
+  font:400 15px/1.6 'Gothic A1',system-ui,sans-serif;
+  -webkit-text-size-adjust:100%}
+body{padding:var(--s3) var(--s3) var(--s5)}
+.wrap{max-width:760px;margin:0 auto}
+h1{font-family:'Gowun Batang',serif;font-size:24px;margin:0 0 var(--s1)}
+.sub{color:var(--chalk-dim);font-size:13.5px;margin:0 0 var(--s3)}
+.card{background:var(--wall-2);border:1px solid var(--wall-line);border-radius:10px;
+  padding:var(--s3);margin-bottom:var(--s3)}
+label{display:block;font-size:12.5px;color:var(--chalk-dim);margin-bottom:5px}
+input{width:100%;background:var(--wall);color:var(--chalk);
+  border:1px solid var(--wall-line);border-radius:6px;padding:12px;
+  font:400 16px/1 'Gothic A1',system-ui,sans-serif}
+input:focus{outline:none;border-color:var(--mark)}
+input.pin{font-family:'JetBrains Mono',monospace;letter-spacing:.3em;text-align:center}
+.row{display:flex;gap:var(--s2);align-items:flex-end;flex-wrap:wrap}
+.row>div{flex:1;min-width:120px}
+button{font:700 14px/1 'Gothic A1',system-ui,sans-serif;cursor:pointer;
+  border-radius:999px;padding:13px 20px;border:1px solid var(--wall-line);
+  background:none;color:var(--chalk-dim);white-space:nowrap}
+button.go{background:var(--gold);color:#16171a;border-color:#d9ad38}
+button.danger{background:var(--lose);color:#fff;border-color:#a81f1f}
+button:disabled{opacity:.4;cursor:default}
+.msg{margin:var(--s2) 0 0;font-size:13.5px;min-height:1.3em;color:var(--chalk-dim)}
+.msg.bad{color:var(--lose)} .msg.good{color:var(--win)}
+.hint{color:var(--chalk-dim);font-size:13px;margin:var(--s2) 0 0}
+.who{font-weight:700;color:var(--mark)}
+
+/* 고를 비딩 목록 */
+.pickrow{display:flex;align-items:center;gap:var(--s2);width:100%;
+  padding:13px var(--s3);margin-bottom:8px;border-radius:8px;text-align:left}
+.pickrow.on{border-color:var(--mark);background:#fdf5e2}
+.pickrow .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;color:var(--chalk);font-weight:700}
+.pickrow .n{font-size:12px;color:var(--chalk-dim);flex:none}
+.tag{font:700 11px/1 'Gothic A1',system-ui,sans-serif;padding:5px 9px;
+  border-radius:999px;background:var(--wall);border:1px solid var(--wall-line);
+  color:var(--chalk-dim);flex:none}
+.tag.open{color:var(--wait);border-color:#bcd0e6}
+.tag.running{color:var(--mark);border-color:#e3c88a}
+.tag.done{color:var(--win);border-color:#b7d8c2}
+
+/* 판 머리 — 몇 번째 품목인지, 내 팀과 토큰 */
+.top{display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap;
+  margin-bottom:var(--s2)}
+.top .nth{font:700 13px/1 'JetBrains Mono',monospace;color:var(--chalk-dim)}
+.top .team{font-weight:800;color:var(--mark)}
+.top .purse{margin-left:auto;font:700 19px/1 'JetBrains Mono',monospace;
+  color:var(--mark)}
+.top .purse small{font:700 11px/1 'Gothic A1',sans-serif;color:var(--chalk-dim)}
+
+/* 룰렛 */
+.lot{display:flex;gap:var(--s4);align-items:center;flex-wrap:wrap;
+  justify-content:center}
+.wheel{flex:none;width:176px;height:176px;position:relative}
+.wheel svg{display:block;width:100%;height:100%}
+.wheel .spin{transform-origin:50% 50%}
+.wheel .seg{transition:fill .2s}
+.wheel .seg.hit{stroke:#16171a;stroke-width:2.5}
+.wheel .lab.hit{font-size:16px}
+.wheel .pin{position:absolute;left:50%;top:-3px;transform:translateX(-50%);
+  width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;
+  border-top:15px solid var(--chalk)}
+.lot .facts{flex:1;min-width:210px}
+.lot .evline{font:700 13px/1 'Gothic A1',sans-serif;color:var(--chalk-dim)}
+.lot .ev{font:700 38px/1.1 'JetBrains Mono',monospace;color:var(--mark);
+  margin:2px 0 var(--s2)}
+.lot.bad .ev{color:var(--lose)}
+.cells{display:flex;gap:6px;flex-wrap:wrap}
+.cells span{font:700 15px/1 'JetBrains Mono',monospace;padding:7px 11px;
+  border-radius:6px;background:#fff;border:1px solid var(--wall-line)}
+.cells span.minus{color:var(--lose);border-color:#eec4c4;background:#fdf3f3}
+.cells span.plus{color:var(--win);border-color:#bfdcc9;background:#f3faf5}
+
+/* 값과 시계 */
+.price{display:flex;align-items:baseline;gap:var(--s2);margin-top:var(--s3);
+  flex-wrap:wrap}
+.price .big{font:700 34px/1 'JetBrains Mono',monospace;color:var(--chalk)}
+.price .by{font-weight:700;color:var(--mark)}
+.price .left{margin-left:auto;font:700 26px/1 'JetBrains Mono',monospace;
+  color:var(--chalk-dim)}
+.price .left.hot{color:var(--lose)}
+.bidrow{display:flex;gap:8px;margin-top:var(--s3);flex-wrap:wrap}
+.bidrow button{flex:1;min-width:76px;padding:15px 10px;font-size:16px}
+.outs{display:flex;gap:6px;flex-wrap:wrap;margin-top:var(--s2)}
+.outs .o{font:700 11.5px/1 'Gothic A1',sans-serif;padding:6px 10px;border-radius:999px;
+  background:#fff;border:1px solid var(--wall-line);color:var(--chalk-dim)}
+.outs .o.gone{color:var(--win);border-color:#b7d8c2}
+.outs .o.here{color:var(--lose);border-color:#eec4c4;background:#fdf3f3}
+
+/* 낙찰 공개 */
+.sold{text-align:center;padding:var(--s4) var(--s3)}
+.sold .big{font:700 30px/1.2 'Gowun Batang',serif;color:var(--mark)}
+.sold.bad .big{color:var(--lose)}
+.sold .small{color:var(--chalk-dim);font-size:13.5px;margin-top:var(--s1)}
+
+/* 작전타임 */
+.plan{text-align:center;padding:var(--s5) var(--s3)}
+.plan .label{font:700 14px/1 'Gothic A1',sans-serif;color:var(--chalk-dim);
+  letter-spacing:.14em}
+.plan .count{font:700 72px/1 'JetBrains Mono',monospace;color:var(--mark);
+  margin:var(--s2) 0}
+.plan .say{color:var(--chalk-dim);font-size:14px}
+
+/* 순위판 — 자리가 바뀌면 미끄러진다 */
+.ranks{margin-top:var(--s3);position:relative}
+.rank{display:flex;align-items:center;gap:var(--s2);padding:11px var(--s3);
+  border:1px solid var(--wall-line);border-radius:8px;background:#fff;
+  margin-bottom:7px;will-change:transform}
+.rank.me{border-color:var(--mark);background:#fdf5e2}
+.rank .no{font:700 15px/1 'JetBrains Mono',monospace;color:var(--chalk-dim);
+  width:2.2em;flex:none}
+.rank .nm{font-weight:700;flex:1;min-width:0;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.rank .tk{font:700 12px/1 'Gothic A1',sans-serif;color:var(--chalk-dim);flex:none}
+.rank .pt{font:700 19px/1 'JetBrains Mono',monospace;flex:none;min-width:3.2em;
+  text-align:right}
+.rank .pt.minus{color:var(--lose)}
+.rank .up{color:var(--win)} .rank .down{color:var(--lose)}
+.rank .delta{font:700 13px/1 'JetBrains Mono',monospace;flex:none;min-width:3.4em;
+  text-align:right}
+
+/* 돌리기 */
+.spinwrap{display:flex;gap:var(--s3);flex-wrap:wrap;justify-content:center;
+  margin-bottom:var(--s3)}
+.one{width:150px;text-align:center}
+.one .nm{font-weight:700;font-size:13px;margin-bottom:5px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.one .wheel{width:132px;height:132px;margin:0 auto}
+.one .got{font:700 22px/1.2 'JetBrains Mono',monospace;margin-top:6px;
+  min-height:1.2em;color:var(--chalk-dim)}
+.one .got.show{color:var(--win)} .one .got.show.minus{color:var(--lose)}
+
+/* 경매 현황 */
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:40}
+.sheet{position:fixed;z-index:41;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:min(760px,calc(100vw - 20px));max-height:88vh;display:flex;
+  flex-direction:column;background:var(--wall);border:1px solid var(--wall-line);
+  border-radius:12px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.sheet-head{flex:none;display:flex;align-items:center;justify-content:space-between;
+  gap:var(--s2);padding:13px var(--s3);border-bottom:1px solid var(--wall-line)}
+.sheet-head h3{font-family:'Gowun Batang',serif;font-size:18px;margin:0}
+.nowline{flex:none;margin:0;padding:11px var(--s3);background:#fdf5e2;
+  border-bottom:1px solid var(--wall-line);font-size:13.5px;color:var(--chalk-dim)}
+.nowline b{color:var(--mark)} .nowline.bad b{color:var(--lose)}
+.sheet-body{overflow:auto;padding:var(--s3);display:grid;gap:9px;
+  grid-template-columns:repeat(auto-fill,minmax(168px,1fr))}
+.item{border:1px solid var(--wall-line);border-radius:8px;padding:10px 11px;
+  background:#fff}
+.item.done{opacity:.55;background:var(--wall-2)}
+.item.now{border-color:var(--mark);background:#fdf5e2;box-shadow:0 0 0 2px #f0c75e55}
+.item .hd{display:flex;align-items:baseline;gap:6px}
+.item .id{font:700 11px/1 'JetBrains Mono',monospace;color:var(--chalk-dim)}
+.item .e{font:700 17px/1 'JetBrains Mono',monospace;color:var(--mark);margin-left:auto}
+.item.minus .e{color:var(--lose)}
+.item .cs{font:700 12px/1 'JetBrains Mono',monospace;color:var(--chalk-dim);
+  margin-top:6px}
+.item .st{font:700 11px/1 'Gothic A1',sans-serif;margin-top:7px;color:var(--chalk-dim)}
+.item .st b{color:var(--mark)}
+.fab{position:fixed;right:14px;bottom:14px;z-index:30;background:var(--chalk);
+  color:#fff;border-color:var(--chalk);box-shadow:0 6px 18px rgba(0,0,0,.25)}
+</style>
+
+<div class="wrap">
+  <h1 id="title">돌림판 비딩</h1>
+  <p class="sub" id="sub">기댓값이 다른 룰렛을 경매로 사 모읍니다.</p>
+
+  <!-- ① 고르기 -->
+  <section id="pick">
+    <div class="card">
+      <p style="margin:0 0 var(--s2)">내 이름 <span class="who" id="myname">…</span></p>
+      <div id="list"></div>
+      <div id="pinBox" hidden style="margin-top:var(--s3)">
+        <label for="pin">비밀번호 네 자리</label>
+        <input id="pin" class="pin" inputmode="numeric" maxlength="4" autocomplete="off">
+      </div>
+      <div class="row" style="margin-top:var(--s3)">
+        <button class="go" id="joinRep" disabled>대표로 참가</button>
+        <button id="joinFan" disabled>관전만 하기</button>
+      </div>
+      <p class="msg" id="pickMsg"></p>
+      <p class="hint">조에서 <b>한 사람만</b> 대표로 들어옵니다. 나머지는 관전으로 들어와
+        같은 화면을 봅니다.</p>
+    </div>
+  </section>
+
+  <!-- ② 기다리기 -->
+  <section id="lobby" hidden>
+    <div class="card">
+      <p style="margin:0">내 이름 <span class="who" id="lobbyName"></span></p>
+      <p style="margin:var(--s1) 0 0" id="lobbySeat"></p>
+      <p class="hint">지금 <b id="lobbyN">0</b>명 · <b id="lobbyT">0</b>팀이 기다리고 있습니다.</p>
+      <button id="out" style="margin-top:var(--s2)">나가기</button>
+    </div>
+  </section>
+
+  <!-- ③ 판 -->
+  <section id="play" hidden>
+    <div class="top">
+      <span class="nth" id="nth"></span>
+      <span class="team" id="myteam"></span>
+      <span class="purse" id="purse"></span>
+    </div>
+
+    <div class="card" id="stage"></div>
+    <p class="msg" id="playMsg"></p>
+    <div class="ranks" id="ranks"></div>
+  </section>
+</div>
+
+<button class="fab" id="sheetBtn" hidden>경매 현황</button>
+<div class="scrim" id="scrim" hidden></div>
+<div class="sheet" id="sheet" hidden role="dialog" aria-label="경매 현황">
+  <div class="sheet-head">
+    <h3>경매 현황 — 룰렛 스물넷</h3>
+    <button id="sheetClose">닫기</button>
+  </div>
+  <p class="nowline" id="sheetNow"></p>
+  <div class="sheet-body" id="sheetBody"></div>
+</div>
+
+<script>
+/* ═══ 돌림판 비딩 — 학생 화면 ═════════════════════════════════════════
+   서버가 심판이다. 여기서 하는 일은 셋뿐 — 룰렛을 그리고, 값을 보내고,
+   서버가 돌려준 순위를 옮긴다.
+
+   값이 맞는지(마지막보다 1 이상인지, 가진 토큰 안인지)는 **여기서 봐주지만
+   믿지는 않는다.** 서버가 다시 본다. 버튼을 흐리게 하는 것은 손가락을
+   아끼자는 것이지 규칙이 아니다.
+   ═══════════════════════════════════════════════════════════════════ */
+(() => {
+"use strict";
+const el = id => document.getElementById(id);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c =>
+  ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const clock = s => {
+  const n = Math.max(0, s | 0);
+  return Math.floor(n / 60) + ":" + ("0" + (n % 60)).slice(-2);
+};
+const sgn = v => (v > 0 ? "+" : "") + v;
+
+/* 사람을 알아보는 것은 이 값 하나다. 대국·퀴즈 화면과 같은 것을 쓴다 */
+function myPid(){
+  let v = null;
+  try { v = localStorage.getItem("shogi-pid"); } catch (e) {}
+  if (!v || v.length < 8){
+    v = "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
+    try { localStorage.setItem("shogi-pid", v); } catch (e) {}
+  }
+  return v;
+}
+const PID = myPid();
+const Q = new URLSearchParams(location.search);
+const SERVER = Q.get("server") || (
+  /^(localhost|127\.|192\.168\.|10\.)/.test(location.hostname)
+    ? "ws://" + (location.hostname || "127.0.0.1") + ":3000/ws"
+    : "wss://mini-shogi.onrender.com/ws");
+
+const ERR = {badpin:"비밀번호가 맞지 않습니다", nobid:"없는 비딩입니다",
+             closed:"이미 시작한 비딩입니다", full:"자리가 다 찼습니다",
+             wait:"지금은 값을 받지 않습니다", low:"더 높게 불러야 합니다",
+             broke:"가진 토큰보다 많습니다", watcher:"관전은 값을 부를 수 없습니다",
+             already:"이미 빠졌습니다", last:"마지막 한 팀은 빠질 수 없습니다",
+             notup:"받기 싫은 룰렛입니다", notdown:"올려 부르는 룰렛입니다",
+             nohello:"다시 들어와 주세요"};
+const STATE = {open:"접수 중", plan:"작전타임", running:"경매 중",
+               spin:"돌리는 중", done:"끝남"};
+
+let sock = null, me = null, rows = [], chose = null, asRep = true;
+let joined = null;                    /* 들어간 비딩 코드 */
+let V = null;                         /* 마지막으로 받은 내 모습 */
+let gotAt = 0;                        /* 그것을 받은 때 — 남은 시간을 여기서 센다 */
+let spun = -1;                        /* 어느 차례까지 바퀴를 돌렸나 */
+let places = {};                      /* 팀 id → 화면상의 y. 순위를 미끄러뜨리는 데 쓴다 */
+
+/* ── 소켓 ─────────────────────────────────────────────────────────── */
+const send = (t, o) => {
+  if (sock && sock.readyState === 1) sock.send(JSON.stringify(Object.assign({t}, o || {})));
+};
+function connect(){
+  sock = new WebSocket(SERVER);
+  sock.onopen = () => {
+    send("hello", {pid: PID});
+    send("bids", {});
+    if (joined) send("bidjoin", {code: joined});     /* 돌아온 사람은 비번이 없다 */
+  };
+  sock.onmessage = e => {
+    let m; try { m = JSON.parse(e.data); } catch (x) { return; }
+    if (m.t === "me"){ me = m; el("myname").textContent = m.name;
+                       el("lobbyName").textContent = m.name; }
+    else if (m.t === "bids"){ rows = m.bids; paintList(); }
+    else if (m.t === "bidme"){ take(m.code ? m : null); }
+    else if (m.t === "bidgone"){ joined = null; take(null);
+                                 say("pickMsg", "비딩이 닫혔습니다.", "bad"); }
+    else if (m.t === "error"){ oops(m.why); }
+  };
+  sock.onclose = () => { sock = null; setTimeout(connect, 2000); };
+  sock.onerror = () => {};
+}
+setInterval(() => { if (!joined) send("bids", {}); }, 4000);
+
+function say(node, text, kind){
+  const n = el(node);
+  n.textContent = text || "";
+  n.className = "msg" + (kind ? " " + kind : "");
+}
+function oops(why){ say(joined ? "playMsg" : "pickMsg", ERR[why] || why, "bad"); }
+
+/* ── 고르기 ───────────────────────────────────────────────────────── */
+function paintList(){
+  const box = el("list");
+  if (!rows.length){
+    box.innerHTML = '<p class="hint" style="margin:0">열린 비딩이 없습니다. ' +
+                    '선생님이 열면 여기에 뜹니다.</p>';
+    chose = null; fitButtons(); return;
+  }
+  box.innerHTML = rows.map(r =>
+    '<button class="pickrow' + (chose === r.code ? " on" : "") + '" data-code="' +
+    esc(r.code) + '"><span class="tag ' + r.state + '">' + STATE[r.state] +
+    '</span><span class="t">' + esc(r.title) + '</span><span class="n">' +
+    r.teams + '팀 · ' + r.people + '명</span></button>').join("");
+  box.querySelectorAll(".pickrow").forEach(b => b.addEventListener("click", () => {
+    chose = b.dataset.code; paintList(); say("pickMsg", "");
+  }));
+  fitButtons();
+}
+function fitButtons(){
+  const r = rows.find(x => x.code === chose);
+  el("joinRep").disabled = !r || r.state !== "open";
+  el("joinFan").disabled = !r;
+  el("pinBox").hidden = !r;
+}
+function enter(rep){
+  if (!chose) return;
+  asRep = rep;
+  send("bidjoin", {code: chose, pin: el("pin").value.trim(), rep});
+}
+el("joinRep").addEventListener("click", () => enter(true));
+el("joinFan").addEventListener("click", () => enter(false));
+el("out").addEventListener("click", () => { send("bidleave", {}); joined = null; take(null); });
+
+/* ── 들어온 모습을 받는다 ─────────────────────────────────────────── */
+function take(v){
+  V = v; gotAt = Date.now();
+  joined = v ? v.code : null;
+  el("pick").hidden  = !!v;
+  el("lobby").hidden = !(v && v.state === "open");
+  el("play").hidden  = !(v && v.state !== "open");
+  el("sheetBtn").hidden = !v;
+  if (!v){ el("sheet").hidden = true; el("scrim").hidden = true; spun = -1; places = {}; return; }
+  el("title").textContent = v.title;
+  el("sub").textContent = STATE[v.state] + " · " + v.code;
+  if (v.state === "open"){
+    el("lobbyN").textContent = v.people;
+    el("lobbyT").textContent = v.teams;
+    el("lobbySeat").innerHTML = v.me
+      ? '우리 조는 <span class="who">' + esc(v.me.name) + '</span> 입니다. 토큰 ' +
+        v.me.tokens + '개로 시작합니다.'
+      : '관전으로 들어왔습니다. 값은 조 대표가 부릅니다.';
+    return;
+  }
+  paintTop(); paintStage(); paintRanks();
+  if (!el("sheet").hidden) paintSheet();
+}
+
+function paintTop(){
+  el("nth").textContent = V.state === "running" || V.state === "plan"
+    ? "품목 " + Math.min(V.nth || 1, V.total) + " / " + V.total : "";
+  el("myteam").textContent = V.me ? V.me.name : "관전";
+  el("purse").innerHTML = V.me
+    ? V.me.tokens + ' <small>토큰</small>' : "";
+}
+
+/* ── 룰렛 그림 ────────────────────────────────────────────────────── */
+/* 셋으로 나눈 원. 위쪽 바늘이 가리키는 조각이 나온 값이다 */
+function wheelSVG(cells, turn, mark){
+  const R = 48, C = 50;
+  const arc = (a0, a1) => {
+    const p = a => [C + R * Math.cos((a - 90) * Math.PI / 180),
+                    C + R * Math.sin((a - 90) * Math.PI / 180)];
+    const [x0, y0] = p(a0), [x1, y1] = p(a1);
+    return `M${C},${C} L${x0.toFixed(2)},${y0.toFixed(2)} ` +
+           `A${R},${R} 0 0 1 ${x1.toFixed(2)},${y1.toFixed(2)} Z`;
+  };
+  const tint = v => v > 0 ? "#f3faf5" : v < 0 ? "#fdf3f3" : "#f6f6f7";
+  const ink  = v => v > 0 ? "#1f7a3d" : v < 0 ? "#c62828" : "#63646b";
+  let g = "";
+  cells.forEach((v, k) => {
+    const a0 = k * 120, a1 = a0 + 120, mid = (a0 + a1) / 2;
+    const tx = C + 28 * Math.cos((mid - 90) * Math.PI / 180);
+    const ty = C + 28 * Math.sin((mid - 90) * Math.PI / 180);
+    const hit = k === mark ? " hit" : "";
+    g += '<path class="seg s' + k + hit + '" d="' + arc(a0, a1) + '" fill="' + tint(v) +
+         '" stroke="#dcdce1" stroke-width="1"/>';
+    g += '<text class="lab l' + k + hit + '" x="' + tx.toFixed(1) + '" y="' +
+         (ty + 4).toFixed(1) + '" text-anchor="middle" ' +
+         'font-family="JetBrains Mono,monospace" ' +
+         'font-size="13" font-weight="700" fill="' + ink(v) + '">' + v + '</text>';
+  });
+  return '<div class="wheel"><svg viewBox="0 0 100 100">' +
+         '<g class="spin" style="transform:rotate(' + (turn || 0) + 'deg)">' + g +
+         '</g><circle cx="50" cy="50" r="48" fill="none" stroke="#16171a" ' +
+         'stroke-width="1.5"/></svg><i class="pin"></i></div>';
+}
+/* k 번 조각을 바늘 아래로 가져오는 각도. 돌린 티가 나게 다섯 바퀴 더 돈다 */
+const landing = k => 360 * 5 - (k * 120 + 60);
+
+/* ── 판 ───────────────────────────────────────────────────────────── */
+function paintStage(){
+  const box = el("stage");
+  if (V.state !== "spin") delete box.dataset.round;
+  if (V.state === "plan")    return planView(box);
+  if (V.state === "running") return lotView(box);
+  if (V.state === "spin")    return spinView(box);
+  return doneView(box);
+}
+
+function planView(box){
+  const p = V.plan || {left: 0, ms: 1, block: 1, blocks: 3};
+  box.className = "card";
+  box.innerHTML =
+    '<div class="plan"><div class="label">작전타임</div>' +
+    '<div class="count" id="planCount">' + clock(p.left / 1000) + '</div>' +
+    '<div class="say">다음은 ' + p.block + '번째 묶음입니다 · 경매 여섯 개<br>' +
+    '조끼리 상의하세요. <b>경매 현황</b>에서 아직 안 나온 룰렛을 볼 수 있습니다.</div></div>';
+}
+
+function lotView(box){
+  const L = V.lot;
+  if (!L) return;
+  box.className = "card";
+  if (L.done) return soldView(box, L);
+
+  const mine = !!V.me, bad = L.bad;
+  const tokens = mine ? V.me.tokens : 0;
+  const cells = '<div class="cells">' + L.wheel.cells.map(v =>
+      '<span class="' + (v > 0 ? "plus" : v < 0 ? "minus" : "") + '">' + v + '</span>'
+    ).join("") + '</div>';
+
+  let head =
+    '<div class="lot' + (bad ? " bad" : "") + '">' + wheelSVG(L.wheel.cells, 0) +
+    '<div class="facts"><div class="evline">' +
+    (bad ? "받기 싫은 룰렛 · 기댓값" : "기댓값") + '</div>' +
+    '<div class="ev">' + L.wheel.ev.toFixed(2) + '</div>' + cells + '</div></div>';
+
+  let body;
+  if (!bad){
+    body =
+      '<div class="price"><span>현재가</span>' +
+      '<span class="big" id="nowPrice">' + L.price + '</span>' +
+      '<span class="by">' + (L.whose ? esc(L.whose) : "아직 없음") + '</span>' +
+      '<span class="left" id="lotLeft">' + clock(L.left / 1000) + '</span></div>';
+    if (mine){
+      const step = [1, 3, 5].map(d => {
+        const n = L.price + d;
+        return '<button class="go" data-up="' + n + '"' +
+               (n > tokens ? " disabled" : "") + '>' + n + ' 토큰</button>';
+      }).join("");
+      body += '<div class="bidrow">' + step +
+              '<button data-up="ask">직접</button></div>' +
+              '<p class="hint">마지막 값보다 <b>1 이상</b> 높게 불러야 합니다. ' +
+              '낙찰되면 그때 토큰이 빠집니다.</p>';
+    } else {
+      body += '<p class="hint">관전 중입니다. 값은 조 대표가 부릅니다.</p>';
+    }
+  } else {
+    const out = new Set(L.outs);
+    const marks = (V.board || []).map(t =>
+      '<span class="o ' + (out.has(t.id) ? "gone" : "here") + '">' + esc(t.name) +
+      (out.has(t.id) ? " 빠짐" : "") + '</span>').join("");
+    body =
+      '<div class="price"><span>탈출가</span>' +
+      '<span class="big" id="nowPrice">' + (L.price + 1) + '</span>' +
+      '<span class="by">남은 팀 ' + L.standing + '</span>' +
+      '<span class="left" id="lotLeft">' + clock(L.left / 1000) + '</span></div>' +
+      '<div class="outs">' + marks + '</div>';
+    if (mine){
+      const gone = out.has(V.me.team);
+      const need = L.price + 1;
+      body += '<div class="bidrow">' +
+        '<button class="danger" data-flee="' + need + '"' +
+        (gone || need > tokens || L.standing <= 1 ? " disabled" : "") + '>' +
+        (gone ? "이미 빠졌습니다" : need + ' 토큰 내고 빠지기') + '</button>' +
+        '<button data-flee="ask"' + (gone ? " disabled" : "") + '>직접</button></div>' +
+        '<p class="hint">낸 토큰은 <b>그대로 사라집니다</b>. 마지막까지 남은 한 팀이 ' +
+        '토큰을 쓰지 않고 이 룰렛을 받습니다.</p>';
+    } else {
+      body += '<p class="hint">관전 중입니다.</p>';
+    }
+  }
+  box.innerHTML = head + body;
+  box.querySelectorAll("[data-up]").forEach(b => b.addEventListener("click", () => {
+    const v = b.dataset.up;
+    const n = v === "ask" ? ask("얼마에 부를까요?", L.price + 1) : +v;
+    if (n) send("bidup", {n});
+  }));
+  box.querySelectorAll("[data-flee]").forEach(b => b.addEventListener("click", () => {
+    const v = b.dataset.flee;
+    const n = v === "ask" ? ask("몇 개를 내고 빠질까요?", L.price + 1) : +v;
+    if (n) send("bidflee", {n});
+  }));
+}
+function ask(q, low){
+  const s = prompt(q + " (" + low + " 이상)", String(low));
+  const n = parseInt(s, 10);
+  return Number.isFinite(n) && n >= low ? n : 0;
+}
+
+function soldView(box, L){
+  const d = L.done;
+  box.className = "card";
+  if (d.why === "none"){
+    box.innerHTML = '<div class="sold"><div class="big">아무도 안 불렀습니다</div>' +
+      '<div class="small">이 룰렛은 아무도 가져가지 않습니다.</div></div>';
+    return;
+  }
+  const bad = L.bad;
+  box.innerHTML =
+    '<div class="sold' + (bad ? " bad" : "") + '">' +
+    '<div class="big">' + esc(d.name) + (bad ? " 가 받았습니다" : " 낙찰") + '</div>' +
+    '<div class="small">' +
+    (bad ? (d.why === "time" ? "아무도 빠지지 않아 토큰이 가장 넉넉한 팀이 받습니다. "
+                             : "마지막까지 남았습니다. ") +
+           "토큰은 쓰지 않았고, 다른 팀이 낸 " + d.burned + "개는 사라졌습니다."
+         : d.price + " 토큰") +
+    '</div>' + wheelSVG(L.wheel.cells, 0) + '</div>';
+}
+
+/* 돌리기 — 모든 팀의 같은 차례 룰렛을 한꺼번에.
+   한 차례를 그린 뒤에는 다시 그리지 않는다. 도는 중에 다른 알림이 와서
+   다시 그리면 바퀴가 처음으로 되돌아간다. */
+function spinView(box){
+  const S = V.spin;
+  if (box.dataset.round === String(S.round)) return;
+  box.dataset.round = String(S.round);
+  box.className = "card";
+  const done = S.left <= 0;
+  const ms = Math.max(300, S.left);      /* 늦게 들어온 사람은 남은 만큼만 돈다 */
+  box.innerHTML =
+    '<p class="hint" style="margin:0 0 var(--s3);text-align:center">' +
+    S.round + '번째 룰렛 · 모두 함께 돌립니다 (' + S.round + ' / ' + S.rounds + ')</p>' +
+    '<div class="spinwrap">' + S.rolls.map(r => {
+      const t = (V.board || []).find(x => x.id === r.team);
+      return '<div class="one" data-team="' + r.team + '">' +
+        '<div class="nm">' + esc(t ? t.name : "") + '</div>' +
+        wheelSVG(r.cells, done ? landing(r.at) % 360 : 0, done ? r.at : -1) +
+        '<div class="got' + (done ? " show" + (r.got < 0 ? " minus" : "") : "") + '">' +
+        (done ? sgn(r.got) : "…") + '</div></div>';
+    }).join("") + '</div>';
+  if (done) return;
+  spun = S.round;
+  /* 바퀴를 돌린다. 다섯 바퀴를 돌아 제 칸에서 멎는다 */
+  requestAnimationFrame(() => {
+    box.querySelectorAll(".one").forEach(one => {
+      const r = S.rolls.find(x => x.team === +one.dataset.team);
+      const g = one.querySelector(".spin");
+      if (!r || !g) return;
+      g.style.transition = "transform " + ms + "ms cubic-bezier(.17,.67,.23,1)";
+      g.style.transform = "rotate(" + landing(r.at) + "deg)";
+    });
+    setTimeout(() => {
+      box.querySelectorAll(".one").forEach(one => {
+        const r = S.rolls.find(x => x.team === +one.dataset.team);
+        const n = one.querySelector(".got");
+        if (!r || !n) return;
+        n.textContent = sgn(r.got);
+        n.className = "got show" + (r.got < 0 ? " minus" : "");
+        const seg = one.querySelector(".s" + r.at), lab = one.querySelector(".l" + r.at);
+        if (seg) seg.classList.add("hit");
+        if (lab) lab.classList.add("hit");
+      });
+    }, ms);
+  });
+}
+
+function doneView(box){
+  box.className = "card";
+  const top = (V.board || [])[0];
+  box.innerHTML = '<div class="sold"><div class="big">' +
+    (top ? esc(top.name) + " 우승" : "끝났습니다") + '</div>' +
+    '<div class="small">룰렛을 다 돌렸습니다. 아래가 최종 순위입니다.</div></div>';
+}
+
+/* ── 순위판 — 자리가 바뀌면 미끄러진다 ───────────────────────────── */
+function paintRanks(){
+  const box = el("ranks");
+  const list = V.board || [];
+  if (!list.length){ box.innerHTML = ""; return; }
+  const before = {};
+  box.querySelectorAll(".rank").forEach(n => {
+    before[n.dataset.team] = n.getBoundingClientRect().top;
+  });
+  box.innerHTML = list.map(t =>
+    '<div class="rank' + (V.me && V.me.team === t.id ? " me" : "") +
+    '" data-team="' + t.id + '">' +
+    '<span class="no">' + t.rank + '위</span>' +
+    '<span class="nm">' + esc(t.name) + '</span>' +
+    '<span class="tk">토큰 ' + t.tokens + ' · 룰렛 ' + t.won.length + '</span>' +
+    '<span class="pt' + (t.score < 0 ? " minus" : "") + '">' + t.score + '</span>' +
+    '</div>').join("");
+  /* 옮겨 간 만큼 되돌려 놓았다가 제자리로 보낸다 */
+  box.querySelectorAll(".rank").forEach(n => {
+    const was = before[n.dataset.team];
+    if (was === undefined) return;
+    const dy = was - n.getBoundingClientRect().top;
+    if (!dy) return;
+    n.style.transition = "none";
+    n.style.transform = "translateY(" + dy + "px)";
+    requestAnimationFrame(() => {
+      n.style.transition = "transform 620ms cubic-bezier(.2,.8,.2,1)";
+      n.style.transform = "translateY(0)";
+    });
+  });
+}
+
+/* ── 경매 현황 ────────────────────────────────────────────────────── */
+const STNAME = {done:"끝남", now:"지금 경매 중", left:"아직"};
+function paintSheet(){
+  const list = (V && V.sheet) || [];
+  nowLine();
+  el("sheetBody").innerHTML = list.slice()
+    .sort((a, b) => b.ev - a.ev || a.id - b.id)
+    .map(w =>
+      '<div class="item ' + w.at + (w.bad ? " minus" : "") + '">' +
+      '<div class="hd"><span class="id">' + w.id + '번</span>' +
+      '<span class="e">' + w.ev.toFixed(2) + '</span></div>' +
+      '<div class="cs">' + w.cells.join(" · ") + '</div>' +
+      '<div class="st">' + STNAME[w.at] +
+      (w.name ? ' · <b>' + esc(w.name) + '</b>' +
+                (w.price ? " " + w.price + "토큰" : "") : "") +
+      '</div></div>').join("");
+}
+/* 모달이 본 화면을 덮으니, 지금 걸린 품목의 값을 여기에도 적는다 */
+function nowLine(){
+  const n = el("sheetNow");
+  const L = V && V.state === "running" && V.lot;
+  if (!L){
+    n.className = "nowline";
+    n.textContent = V && V.state === "plan" ? "작전타임입니다. 다음 묶음은 여섯 품목입니다."
+                  : V && V.state === "spin" ? "룰렛을 돌리는 중입니다."
+                  : V && V.state === "done" ? "끝났습니다." : "";
+    n.hidden = !n.textContent;
+    return;
+  }
+  n.hidden = false;
+  n.className = "nowline" + (L.bad ? " bad" : "");
+  if (L.done){
+    n.innerHTML = '지금 <b>' + L.wheel.id + '번</b> · ' +
+      (L.done.name ? '<b>' + esc(L.done.name) + '</b> ' +
+         (L.bad ? "가 받았습니다" : L.done.price + " 토큰에 낙찰")
+       : "아무도 안 불렀습니다");
+    return;
+  }
+  n.innerHTML = '지금 <b>' + L.wheel.id + '번</b> (기댓값 ' + L.wheel.ev.toFixed(2) + ') · ' +
+    (L.bad ? '탈출가 <b>' + (L.price + 1) + '</b> 토큰 · 남은 팀 <b>' + L.standing + '</b>'
+           : '현재가 <b>' + L.price + '</b> 토큰' +
+             (L.whose ? ' · <b>' + esc(L.whose) + '</b>' : " · 아직 없음")) +
+    ' · 남은 시간 <b id="sheetLeft">' + clock(L.left / 1000) + '</b>';
+}
+
+function sheetShow(v){
+  el("sheet").hidden = !v; el("scrim").hidden = !v;
+  if (v) paintSheet();
+}
+el("sheetBtn").addEventListener("click", () => sheetShow(true));
+el("sheetClose").addEventListener("click", () => sheetShow(false));
+el("scrim").addEventListener("click", () => sheetShow(false));
+addEventListener("keydown", e => { if (e.key === "Escape") sheetShow(false); });
+
+/* ── 시계는 여기서 센다. 서버는 바뀐 것이 있을 때만 말한다 ──────── */
+setInterval(() => {
+  if (!V) return;
+  const gone = Date.now() - gotAt;
+  if (V.state === "plan" && V.plan){
+    const n = el("planCount");
+    if (n) n.textContent = clock((V.plan.left - gone) / 1000);
+  }
+  if (V.state === "running" && V.lot && !V.lot.done){
+    const s = (V.lot.left - gone) / 1000;
+    const n = el("lotLeft");
+    if (n){
+      n.textContent = clock(s);
+      n.className = "left" + (s <= 10 ? " hot" : "");
+    }
+    const m = el("sheetLeft");
+    if (m) m.textContent = clock(s);
+  }
+}, 250);
+
+connect();
+})();
+</script>

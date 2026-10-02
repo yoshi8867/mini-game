@@ -5,7 +5,7 @@
 쓴 const 하나에 스크립트가 통째로 멎었고, 판도 규칙 창도 안 뜬 채로 배포됐다.
 문법은 멀쩡했으니 node --check 로는 잡히지 않는다. 띄워 봐야 안다.
 
-    python tools/page-check.py                 # index.html · admin.html · quiz.html
+    python tools/page-check.py                 # index.html · admin.html · quiz.html · bid.html
     python tools/page-check.py index.html      # 고른 것만
 """
 import os, re, subprocess, sys, tempfile
@@ -58,7 +58,7 @@ def main():
         print("크롬이나 엣지를 못 찾았다. 검사를 건너뛴다.")
         return 0
 
-    names = sys.argv[1:] or ["index.html", "admin.html", "quiz.html"]
+    names = sys.argv[1:] or ["index.html", "admin.html", "quiz.html", "bid.html"]
     bad_total = 0
     for name in names:
         path = os.path.join(ROOT, name)

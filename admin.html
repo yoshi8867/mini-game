@@ -110,7 +110,7 @@ button:disabled{opacity:.4;cursor:not-allowed}
 
 <div class="wrap">
   <h1>미니쇼기 · 관리</h1>
-  <p class="sub">대회(쇼기 대국)와 한글 퀴즈를 여기서 열고 닫습니다.</p>
+  <p class="sub">대회(쇼기 대국) · 한글 퀴즈 · 돌림판 비딩을 여기서 열고 닫습니다.</p>
 
   <!-- 열쇠 -->
   <form class="card" id="gate">
@@ -164,6 +164,34 @@ button:disabled{opacity:.4;cursor:not-allowed}
 
   <div id="quizzes"></div>
 
+  <!-- 돌림판 비딩 열기 -->
+  <form class="card" id="bmaker" hidden>
+    <h2>새 돌림판 비딩 열기</h2>
+    <div class="row">
+      <div style="flex:2">
+        <label for="btitle">비딩 이름</label>
+        <input id="btitle" value="돌림판 비딩" maxlength="40">
+      </div>
+      <div style="max-width:140px">
+        <label for="bpin">참가 비밀번호 (숫자 4자리)</label>
+        <input id="bpin" class="pin" inputmode="numeric" maxlength="4" value="">
+      </div>
+      <div style="max-width:110px">
+        <label for="bsecs">품목당 초</label>
+        <input id="bsecs" inputmode="numeric" maxlength="3" value="60">
+      </div>
+      <div style="max-width:110px">
+        <label for="bplan">작전타임 분</label>
+        <input id="bplan" inputmode="numeric" maxlength="2" value="3">
+      </div>
+      <button class="go" type="submit">열기</button>
+    </div>
+    <p class="msg" id="bmakeMsg">조 대표는 <b>bid.html</b> 로 들어옵니다.
+      작전타임 뒤 경매 여섯, 그것을 세 번 돌면 열여덟 품목이 끝납니다.</p>
+  </form>
+
+  <div id="bidsBox"></div>
+
   <p class="sub" id="foot" hidden></p>
 </div>
 
@@ -203,7 +231,8 @@ function signOut(why){
   try { sessionStorage.removeItem("shogi-admin"); } catch (e) {}
   clearInterval(timer); timer = null;
   el("gate").hidden = false; el("maker").hidden = true; el("qmaker").hidden = true;
-  el("cups").innerHTML = ""; el("quizzes").innerHTML = "";
+  el("bmaker").hidden = true;
+  el("cups").innerHTML = ""; el("quizzes").innerHTML = ""; el("bidsBox").innerHTML = "";
   el("empty").hidden = true; el("foot").hidden = true;
   say("gateMsg", why || "", why ? "bad" : "");
 }
@@ -231,6 +260,7 @@ el("gate").addEventListener("submit", async e => {
 
 function enter(){
   el("gate").hidden = true; el("maker").hidden = false; el("qmaker").hidden = false;
+  el("bmaker").hidden = false;
   say("gateMsg", "");
   refresh();
   clearInterval(timer);
@@ -252,7 +282,8 @@ el("maker").addEventListener("submit", async e => {
 
 const ERR = {badpin:"비밀번호는 숫자 네 자리입니다", busy:"너무 많습니다",
              nocup:"없는 대회입니다", noquiz:"없는 퀴즈입니다",
-             few:"사람이 모자랍니다 — 대회는 둘, 퀴즈는 여섯부터",
+             nobid:"없는 비딩입니다", notplan:"지금은 작전타임이 아닙니다",
+             few:"사람이 모자랍니다 — 대회·비딩은 둘, 퀴즈는 여섯부터",
              started:"이미 시작했습니다", closed:"이미 시작했습니다",
              nothing:"지금은 넘길 문제가 없습니다", stale:"다시 들어와 주세요"};
 
@@ -266,7 +297,8 @@ async function refresh(){
 const STATE = {open:"접수 중", running:"진행 중", done:"끝남"};
 function paint(j){
   const box = el("cups");
-  el("empty").hidden = j.cups.length > 0 || (j.quizzes || []).length > 0;
+  el("empty").hidden = j.cups.length > 0 || (j.quizzes || []).length > 0 ||
+                       (j.bids || []).length > 0;
   el("foot").hidden = false;
   el("foot").textContent =
     "서버에 접속 중인 사람 " + j.players + "명 · 열린 대국 " + j.rooms + "개";
@@ -301,6 +333,7 @@ function paint(j){
   box.querySelectorAll("button[data-do]").forEach(b =>
     b.addEventListener("click", () => act(b.dataset.do, b.dataset.code)));
   quizPaint(j);
+  bidPaint(j);
 }
 function btn(what, code, cls, text){
   return '<button class="' + cls + '" data-do="' + what + '" data-code="' + code + '">' +
@@ -451,6 +484,120 @@ async function qact(what, code){
   if (!j.ok) return alert(ERR[j.why] || j.why);
   if (what === "quizstart")
     alert(j.teams + "팀 — " + j.sizes.join("명 · ") + "명");
+  refresh();
+}
+
+/* ─── 돌림판 비딩 ─── */
+el("bmaker").addEventListener("submit", async e => {
+  e.preventDefault();
+  const pin = el("bpin").value.replace(/[^0-9]/g, "");
+  if (pin.length !== 4) return say("bmakeMsg", "참가 비밀번호는 숫자 네 자리입니다.", "bad");
+  const secs = Math.max(10, Math.min(120, parseInt(el("bsecs").value, 10) || 60));
+  const mins = Math.max(0, Math.min(10, parseInt(el("bplan").value, 10) || 0));
+  say("bmakeMsg", "여는 중입니다…");
+  const j = await call("bidopen", {pin, title: el("btitle").value.trim(),
+                                   secs, plan: mins * 60000});
+  if (!j.ok) return say("bmakeMsg", ERR[j.why] || j.why, "bad");
+  say("bmakeMsg", "비딩 " + j.bid.code + " 를 열었습니다. 조 대표는 bid.html 로 들어옵니다.", "good");
+  el("bpin").value = "";
+  refresh();
+});
+
+const BSTATE = {open:"접수 중", plan:"작전타임", running:"경매 중",
+                spin:"돌리는 중", done:"끝남"};
+function bidPaint(j){
+  const box = el("bidsBox");
+  const list = j.bids || [];
+  box.innerHTML = list.map(b => {
+    const acts = [];
+    if (b.state === "open"){
+      acts.push(bbtn("bidstart", b.code, "go", "경매 시작"));
+      acts.push(bbtn("bidmock", b.code, "", "연습 대표 넣기"));
+    }
+    if (b.state === "plan") acts.push(bbtn("bidgo", b.code, "go", "작전타임 끊고 바로 경매"));
+    acts.push(bbtn("bidclose", b.code, "bad right",
+                   b.state === "open" ? "비딩 닫기" : "비딩 중단"));
+
+    /* 지금 걸린 품목은 교실에서 읽어 줘야 하니 관리자 화면에 그대로 둔다 */
+    let live = "";
+    if (b.state === "plan")
+      live = '<span>작전타임 <b>' + clock(Math.round((b.planLeft || 0) / 1000)) + '</b></span>';
+    if (b.state === "running" && b.lot)
+      live = '<span>품목 <b>' + b.lot.nth + " / " + b.lot.total + '</b></span>' +
+             '<span>묶음 <b>' + b.lot.block + " / " + b.lot.blocks + '</b></span>' +
+             '<span>' + (b.lot.bad ? "받기 싫은 것 " : "") + '기댓값 <b>' +
+             b.lot.wheel.ev.toFixed(2) + '</b> (' + b.lot.wheel.cells.join(", ") + ')</span>' +
+             (b.lot.done
+               ? '<span>낙찰 <b>' + esc(b.lot.done.name || "유찰") + '</b></span>'
+               : '<span>' + (b.lot.bad ? "탈출가" : "현재가") + ' <b>' + b.lot.price +
+                 '</b>' + (b.lot.whose ? " " + esc(b.lot.whose) : "") + '</span>' +
+                 '<span>남은 <b>' + clock(Math.round(b.lot.left / 1000)) + '</b></span>');
+
+    return '<div class="card">' +
+      '<div class="cup-head">' +
+        '<h2>' + esc(b.title) + '</h2>' +
+        '<span class="code">' + esc(b.code) + '</span>' +
+        '<span class="tag ' + (b.state === "open" ? "open" :
+                               b.state === "done" ? "done" : "running") + '">' +
+        BSTATE[b.state] + '</span>' +
+      '</div>' +
+      '<div class="facts">' +
+        '<span>대표 <b>' + b.teams + '</b>팀 · 들어온 사람 <b>' + b.people + '</b>명</span>' +
+        '<span>참가 비번 <b>' + esc(b.pin || "없음") + '</b></span>' +
+        '<span>품목당 <b>' + b.secs + '</b>초</span>' +
+        live +
+      '</div>' +
+      (b.state === "open" ? bwaiting(b) : bboard(b)) +
+      '<div class="acts">' + acts.join("") + '</div>' +
+    '</div>';
+  }).join("");
+
+  box.querySelectorAll("button[data-do]").forEach(x =>
+    x.addEventListener("click", () => bact(x.dataset.do, x.dataset.code)));
+}
+function bbtn(what, code, cls, text){
+  return '<button class="' + cls + '" data-do="' + what + '" data-code="' + code + '">' +
+         text + '</button>';
+}
+function bwaiting(b){
+  const reps = b.entrants.filter(p => p.team !== null);
+  if (!reps.length)
+    return '<p class="hint" style="margin-top:12px">아직 대표가 안 들어왔습니다. ' +
+           '조마다 한 사람만 <b>bid.html</b> 에서 「대표로 참가」를 누르게 하세요. ' +
+           '비밀번호는 <b>' + esc(b.pin) + '</b> 입니다.</p>';
+  return '<p class="hint" style="margin-top:12px">대표 ' + reps.length + '팀 · 관전 ' +
+    (b.entrants.length - reps.length) + '명. 두 팀부터 시작할 수 있습니다.</p>' +
+    '<div class="who">' +
+    b.entrants.map(p => '<span>' + esc(p.name) +
+      (p.team === null ? " (관전)" : "") + '</span>').join("") + '</div>';
+}
+function bboard(b){
+  if (!b.board.length) return "";
+  return '<div class="ranks">' + b.board.map(t =>
+    '<div class="rankrow">' +
+      '<span class="place">' + t.rank + '위</span>' +
+      '<span class="tname">' + esc(t.name) + '</span>' +
+      '<span class="mates">토큰 ' + t.tokens + ' · 룰렛 ' + t.won.length +
+        (t.won.length ? " (" + t.won.map(w => w.ev.toFixed(0)).join(", ") + ")" : "") +
+        '</span>' +
+      '<span class="pts">' + t.score + '</span>' +
+    '</div>').join("") + '</div>';
+}
+async function bact(what, code){
+  if (what === "bidclose" &&
+      !confirm("비딩 " + code + " 를 닫습니다. 점수도 사라집니다. 닫을까요?")) return;
+  if (what === "bidstart" &&
+      !confirm("여기서 참가가 마감되고 팀이 확정됩니다. 시작할까요?")) return;
+  const body = {code};
+  if (what === "bidmock"){
+    const n = prompt("연습 대표를 몇 팀 넣을까요?", "6");
+    if (n === null) return;
+    body.n = Math.max(1, Math.min(12, parseInt(n, 10) || 0));
+    if (!body.n) return;
+  }
+  const j = await call(what, body);
+  if (!j.ok) return alert(ERR[j.why] || j.why);
+  if (what === "bidstart") alert(j.teams + "팀 · " + j.lots + "품목");
   refresh();
 }
 

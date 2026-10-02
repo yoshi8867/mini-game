@@ -23,6 +23,7 @@ const players = require("./players.js");
 const admin = require("./admin.js");
 const {Tourney, roundName, MAX_ENTRANTS} = require("./tourney.js");
 const {Quiz, MAX_ENTRANTS: QUIZ_MAX} = require("./quiz.js");
+const {Bid, MAX_ENTRANTS: BID_MAX} = require("./bid.js");
 
 const PORT = process.env.PORT || 3000;
 
@@ -33,6 +34,7 @@ const cups  = new Map();                 // 대회. 이것도 메모리에만 �
                                          // 서버가 다시 뜨면 대회는 사라진다
 const MAX_CUPS = 20;
 const quizzes = new Map();               // 한글 퀴즈. 이것도 메모리에만 둔다
+const bids    = new Map();               // 돌림판 비딩. 마찬가지다
 const EMPTY_TTL = 10 * 60 * 1000;        // 아무도 없는 대국은 10분 뒤 치운다
 const MAX_ROOMS = 200;
 
@@ -271,6 +273,56 @@ function onQuizSay(ws, msg){
   pushQuiz(quiz);                            // 점수가 바뀌었으니 다 다시 그린다
 }
 
+/* ─── 돌림판 비딩 ─────────────────────────────────────────────────────
+   퀴즈와 같은 창구다. 다른 것은 조마다 **대표 한 명만** 값을 부른다는 것.
+   나머지는 관전이다. 심판은 bid.js 이고, 여기서는 알리는 일만 한다. */
+function pushBid(bid){
+  const now = Date.now();
+  for (const ws of wss.clients){
+    if (ws.readyState !== 1 || ws.bid !== bid.code || !ws.person) continue;
+    const v = bid.view(ws.person.pid, now);
+    if (v) send(ws, "bidme", v);
+  }
+}
+function bidList(){
+  const out = [...bids.values()].map(b => ({
+    code: b.code, title: b.title, state: b.state, people: b.people.size,
+    teams: b.teams.length, nth: b.nth + 1, total: b.order.length}));
+  out.sort((a, b) => (a.state === b.state ? 0 : a.state === "open" ? -1 : 1));
+  return out;
+}
+function onBidJoin(ws, msg){
+  if (!ws.person) return send(ws, "error", {why: "nohello"});
+  const bid = bids.get(String(msg.code || "").toUpperCase());
+  if (!bid) return send(ws, "error", {why: "nobid"});
+  const back = bid.people.has(ws.person.pid);
+  if (!back && bid.pin && msg.pin !== bid.pin)
+    return send(ws, "error", {why: "badpin"});
+  const r = bid.join(ws.person, !!msg.rep);
+  if (r.err) return send(ws, "error", {why: r.err});
+  ws.bid = bid.code;
+  send(ws, "bidme", bid.view(ws.person.pid, Date.now()));
+  if (!back || msg.rep) pushBid(bid);
+}
+function onBidLeave(ws){
+  const bid = ws.bid && bids.get(ws.bid);
+  ws.bid = null;
+  send(ws, "bidme", null);
+  if (!bid || !ws.person) return;
+  /* 팀을 차지한 뒤에 빠지면 그 자리가 빈다. 시작 전에만 뺀다 */
+  if (bid.state === "open"){ bid.quit(ws.person.pid); pushBid(bid); }
+}
+/* 값 하나. 좋은 룰렛이면 올려 부르고, 받기 싫은 룰렛이면 내고 빠진다 */
+function onBidSay(ws, msg){
+  const bid = ws.bid && bids.get(ws.bid);
+  if (!bid || !ws.person) return send(ws, "error", {why: "nobid"});
+  const now = Date.now();
+  const r = msg.t === "bidflee" ? bid.flee(ws.person.pid, msg.n, now)
+                                : bid.bid(ws.person.pid, msg.n, now);
+  if (r.err) return send(ws, "error", {why: r.err});
+  pushBid(bid);                              // 값이 바뀌었으니 다 다시 그린다
+}
+
 function onAdmin(what, m, done, ip){
   /* 들어오는 문은 하나뿐이다. 나머지는 표를 들고 와야 한다 */
   if (what === "login"){
@@ -284,14 +336,16 @@ function onAdmin(what, m, done, ip){
 
   const cup  = () => cups.get(String(m.code || "").toUpperCase());
   const quiz = () => quizzes.get(String(m.code || "").toUpperCase());
+  const bid  = () => bids.get(String(m.code || "").toUpperCase());
 
   switch (what){
     case "state": {
       const list = [...cups.values()].map(c => c.full());
       list.sort((a, b) => b.made - a.made);
       const qs = [...quizzes.values()].map(q => q.full());
+      const bs = [...bids.values()].map(b => b.full());
       qs.sort((a, b) => b.made - a.made);
-      return done(200, {ok: true, cups: list, quizzes: qs, rooms: rooms.size,
+      return done(200, {ok: true, cups: list, quizzes: qs, bids: bs, rooms: rooms.size,
                         players: wss.clients.size});
     }
     case "open": {
@@ -386,6 +440,53 @@ function onAdmin(what, m, done, ip){
                            "-" + i + "-" + Math.random().toString(36).slice(2, 8)));
       return done(200, {ok: true, quiz: q.full()});
     }
+    /* ─── 돌림판 비딩 ─── */
+    case "bidopen": {
+      if (bids.size >= MAX_CUPS) return done(409, {ok: false, why: "busy"});
+      if (!okPin(m.pin)) return done(400, {ok: false, why: "badpin"});
+      const code = newCode(c => cups.has(c) || rooms.has(c) || quizzes.has(c) || bids.has(c));
+      const b = new Bid(code, {pin: m.pin, title: m.title, secs: m.secs, plan: m.plan});
+      bids.set(code, b);
+      return done(200, {ok: true, bid: b.full()});
+    }
+    case "bidstart": {
+      const b = bid();
+      if (!b) return done(404, {ok: false, why: "nobid"});
+      const r = b.start(Date.now());
+      if (r.err) return done(409, {ok: false, why: r.err});
+      pushBid(b);
+      return done(200, {ok: true, bid: b.full(), teams: r.teams, lots: r.lots});
+    }
+    /* 작전타임을 끊고 바로 경매로 간다 */
+    case "bidgo": {
+      const b = bid();
+      if (!b) return done(404, {ok: false, why: "nobid"});
+      const r = b.go(Date.now());
+      if (r.err) return done(409, {ok: false, why: r.err});
+      pushBid(b);
+      return done(200, {ok: true, bid: b.full()});
+    }
+    case "bidclose": {
+      const b = bid();
+      if (!b) return done(404, {ok: false, why: "nobid"});
+      for (const ws of wss.clients)
+        if (ws.bid === b.code){ ws.bid = null; send(ws, "bidgone", {}); }
+      bids.delete(b.code);
+      return done(200, {ok: true});
+    }
+    /* 리허설용 — 수업 전에 경매가 어떻게 돌아가는지 보려고 쓴다 */
+    case "bidmock": {
+      const b = bid();
+      if (!b) return done(404, {ok: false, why: "nobid"});
+      if (b.state !== "open") return done(409, {ok: false, why: "started"});
+      let n = m.n | 0;
+      if (n < 1) n = 1;
+      if (b.people.size + n > BID_MAX) n = BID_MAX - b.people.size;
+      for (let i = 0; i < n; i++)
+        b.join(players.get("mock-" + b.code + "-" + Date.now().toString(36) +
+                           "-" + i + "-" + Math.random().toString(36).slice(2, 8)), true);
+      return done(200, {ok: true, bid: b.full()});
+    }
     default:
       return done(404, {ok: false, why: "unknown"});
   }
@@ -402,7 +503,7 @@ const server = httpSide.create({
       if (r.ready && !r.over) playing++;
     }
     return {rooms: rooms.size, players: people, playing, cups: cups.size,
-            quizzes: quizzes.size};
+            quizzes: quizzes.size, bids: bids.size};
   },
   admin: (what, m, done, ip) => onAdmin(what, m, done, ip),
 });
@@ -410,7 +511,7 @@ const wss = new WebSocketServer({server, path: "/ws"});
 
 wss.on("connection", ws => {
   ws.alive = true; ws.room = null; ws.side = null; ws.person = null;
-  ws.cup = null; ws.fan = null; ws.quiz = null;
+  ws.cup = null; ws.fan = null; ws.quiz = null; ws.bid = null;
   ws.on("pong", () => { ws.alive = true; });
 
   ws.on("message", raw => {
@@ -431,6 +532,11 @@ wss.on("connection", ws => {
       case "quizjoin":return onQuizJoin(ws, msg);
       case "quizleave":return onQuizLeave(ws);
       case "quizsay": return onQuizSay(ws, msg);
+      case "bids":    return send(ws, "bids", {bids: bidList()});
+      case "bidjoin": return onBidJoin(ws, msg);
+      case "bidleave":return onBidLeave(ws);
+      case "bidup":
+      case "bidflee": return onBidSay(ws, msg);
       case "watch":   return onWatch(ws, msg);
       case "unwatch": return watchStop(ws);
       case "rename":  return onRename(ws, msg);
@@ -625,6 +731,8 @@ setInterval(() => {
 setInterval(() => {
   const now = Date.now();
   for (const q of quizzes.values()) if (q.tick(now)) pushQuiz(q);
+  /* 비딩도 저절로 굴러간다 — 시간이 다하면 낙찰, 묶음이 차면 작전타임 */
+  for (const b of bids.values()) if (b.tick(now)) pushBid(b);
 }, 250).unref();
 
 db.init().catch(() => {});               // 첫 손님이 오기 전에 미리 깨워둔다
