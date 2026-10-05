@@ -285,6 +285,7 @@ const ERR = {badpin:"비밀번호는 숫자 네 자리입니다", busy:"너무 �
              nocup:"없는 대회입니다", noquiz:"없는 퀴즈입니다",
              nobid:"없는 비딩입니다", notplan:"지금은 작전타임이 아닙니다",
              yours:"이미 그 팀이 최고가입니다", min:"1 이상이어야 합니다",
+             notdone:"아직 돌릴 때가 아닙니다", nothing:"돌릴 룰렛이 없습니다",
              few:"사람이 모자랍니다 — 대회·비딩은 둘, 퀴즈는 여섯부터",
              started:"이미 시작했습니다", closed:"이미 시작했습니다",
              nothing:"지금은 넘길 문제가 없습니다", stale:"다시 들어와 주세요"};
@@ -517,6 +518,7 @@ function bidPaint(j){
       acts.push(bbtn("bidmock", b.code, "", "연습 대표 넣기"));
     }
     if (b.state === "plan") acts.push(bbtn("bidgo", b.code, "go", "작전타임 끊고 바로 경매"));
+    if (b.state === "done") acts.push(bbtn("bidagain", b.code, "go", "돌림판 다시 돌리기"));
     acts.push(bbtn("bidclose", b.code, "bad right",
                    b.state === "open" ? "비딩 닫기" : "비딩 중단"));
 
@@ -593,6 +595,10 @@ async function bact(what, code){
       !confirm("비딩 " + code + " 를 닫습니다. 점수도 사라집니다. 닫을까요?")) return;
   if (what === "bidstart" &&
       !confirm("여기서 참가가 마감되고 팀이 확정됩니다. 시작할까요?")) return;
+  /* 눈을 새로 뽑으므로 지금 순위는 사라진다. 물어보고 돌린다 */
+  if (what === "bidagain" &&
+      !confirm("돌림판을 처음부터 다시 돌립니다. 가져간 룰렛은 그대로지만 "
+               + "눈은 새로 나옵니다 — 지금 순위는 사라집니다. 돌릴까요?")) return;
   const body = {code};
   if (what === "bidmock"){
     const n = prompt("연습 대표를 몇 팀 넣을까요?", "6");
@@ -603,6 +609,7 @@ async function bact(what, code){
   const j = await call(what, body);
   if (!j.ok) return alert(ERR[j.why] || j.why);
   if (what === "bidstart") alert(j.teams + "팀 · " + j.lots + "품목");
+  if (what === "bidagain") alert("처음부터 다시 돌립니다 · " + j.rounds + "차례");
   refresh();
 }
 

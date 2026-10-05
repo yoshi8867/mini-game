@@ -7,7 +7,7 @@ const assert = require("assert");
 const {spawn} = require("child_process");
 const path = require("path");
 const WebSocket = require("ws");
-const {SHOW, MINSECS, TOKENS} = require("./bid.js");
+const {SHOW, OPEN, MINSECS, TOKENS} = require("./bid.js");
 
 const PORT = 3989;
 const PW = "bid-test-pw";
@@ -27,7 +27,7 @@ function client(){
     ws,
     open: () => new Promise(r => ws.on("open", r)),
     send: (t, o) => ws.send(JSON.stringify(Object.assign({t}, o || {}))),
-    next(t, ms = 8000, pred = null){
+    next(t, ms = 8000, pred = null, tag = ""){
       const i = box.findIndex(m => m.t === t && (!pred || pred(m)));
       if (i >= 0) return Promise.resolve(box.splice(i, 1)[0]);
       return new Promise((go, fail) => {
@@ -35,7 +35,7 @@ function client(){
         waiters.push(w);
         setTimeout(() => {
           const j = waiters.indexOf(w);
-          if (j >= 0){ waiters.splice(j, 1); fail(new Error(`${t} 를 못 받았다`)); }
+          if (j >= 0){ waiters.splice(j, 1); fail(new Error(`${t} 를 못 받았다 ${tag}`)); }
         }, ms);
       });
     },
@@ -100,7 +100,7 @@ async function admin(what, body){
 
   for (const c of reps) c.send("bidjoin", {code, pin: "4321", rep: true});
   for (const c of reps){
-    const v = await c.next("bidme", 8000, m => !!m.me);
+    const v = await c.next("bidme", 8000, m => !!m.me, "join");
     assert.strictEqual(v.state, "open", "대기 상태가 아니다");
     assert.ok(v.me && v.me.name, "팀을 못 받았다");
     assert.strictEqual(v.me.tokens, TOKENS, "처음 토큰이 안 맞는다");
@@ -117,13 +117,13 @@ async function admin(what, body){
   assert.ok(begun.ok, "시작이 안 됐다: " + begun.why);
   assert.strictEqual(begun.teams, 3, "팀 수가 안 맞는다");
 
-  const planning = await reps[0].next("bidme", 8000, m => m.state === "plan");
+  const planning = await reps[0].next("bidme", 8000, m => m.state === "plan", "plan");
   assert.ok(planning.plan.left > 0, "작전타임이 안 돈다");
 
   /* 관리자가 작전타임을 끊는다 */
   const cut = await admin("bidgo", {code});
   assert.ok(cut.ok, "작전타임을 못 끊었다: " + cut.why);
-  let v = await reps[0].next("bidme", 8000, m => m.state === "running" && m.lot);
+  let v = await reps[0].next("bidme", 8000, m => m.state === "running" && m.lot, "lot1");
   assert.strictEqual(v.lot.nth, 1, "첫 품목이 아니다");
   assert.ok(v.lot.wheel.cells.length === 3, "룰렛 칸이 셋이 아니다");
   assert.strictEqual(v.sheet.filter(w => w.at === "now").length, 1,
@@ -138,28 +138,36 @@ async function admin(what, body){
     reps[0].send("bidseal", {n: 0});
     assert.strictEqual((await reps[0].next("error")).why, "min", "0 이 통과됐다");
     reps[0].send("bidseal", {n: 5});
-    v = await reps[1].next("bidme", 8000, m => m.lot && m.lot.sent === 1);
+    v = await reps[1].next("bidme", 8000, m => m.lot && m.lot.sent === 1, "sent1");
     assert.strictEqual(v.lot.mine, undefined, "남의 값이 보인다");
     assert.strictEqual((await (async () => {
       reps[0].send("bidseal", {n: 2});
       return reps[0].next("error");
     })()).why, "already", "두 번 냈다");
-    const own = await reps[0].next("bidme", 8000, m => m.lot && m.lot.mine === 5);
+    const own = await reps[0].next("bidme", 8000, m => m.lot && m.lot.mine === 5, "mine5");
     assert.strictEqual(own.lot.mine, 5, "내가 낸 값이 안 보인다");
+    /* 같은 값이면 늦게 낸 쪽이 받는다 — 순서를 또렷이 벌려 둔다.
+       소켓 둘을 잇달아 쏘면 서버에 닿는 차례가 뒤집힐 수 있다 */
     reps[1].send("bidseal", {n: 2});
+    await reps[1].next("bidme", 8000, m => m.lot && m.lot.sent === 2, "sent2");
+    await wait(250);
     reps[2].send("bidseal", {n: 2});
     /* 다 내면 그 자리에서 열린다. 2 가 둘인데 늦게 낸 쪽이 받는다 */
-    v = await reps[0].next("bidme", 8000, m => m.lot && m.lot.done);
+    v = await reps[0].next("bidme", 8000, m => m.lot && m.lot.done, "done");
     assert.strictEqual(v.lot.done.why, "sealed", "비밀 입찰로 안 열렸다");
     assert.strictEqual(v.lot.done.team, 2, "같은 값에 늦게 낸 팀이 안 받았다");
     assert.strictEqual(v.lot.done.bids.length, 3, "공개된 입찰이 모자란다");
-    assert.strictEqual(v.board.find(t => t.id === 2).tokens, TOKENS,
-                       "받은 팀의 토큰이 빠졌다");
+    assert.strictEqual(v.board.find(t => t.id === 2).tokens, undefined,
+                       "남의 토큰이 보인다");
+    /* v 는 reps[0] 이 받은 것이다. 내 것은 내 화면에 실려 온다 */
+    assert.strictEqual(v.me.tokens, TOKENS - 5, "적어 낸 만큼 안 빠졌다");
     assert.strictEqual(v.board.find(t => t.id === 0).tokens, TOKENS - 5,
-                       "적어 낸 만큼 안 빠졌다");
+                       "내 토큰은 순위판에도 실려야 한다");
+    const own2 = await reps[2].next("bidme", 8000, m => m.me && m.lot && m.lot.done, "own2");
+    assert.strictEqual(own2.me.tokens, TOKENS, "받은 팀의 토큰이 빠졌다");
   } else {
     reps[0].send("bidup", {n: 1});
-    v = await reps[1].next("bidme", 8000, m => m.lot && m.lot.price === 1);
+    v = await reps[1].next("bidme", 8000, m => m.lot && m.lot.price === 1, "price1");
     reps[0].send("bidup", {n: 2});
     assert.strictEqual((await reps[0].next("error")).why, "yours", "자기 값을 자기가 올렸다");
     reps[1].send("bidup", {n: 1});
@@ -167,14 +175,16 @@ async function admin(what, body){
     reps[1].send("bidup", {n: 99});
     assert.strictEqual((await reps[1].next("error")).why, "broke", "없는 토큰을 불렀다");
     reps[1].send("bidup", {n: 4});
-    v = await reps[0].next("bidme", 8000, m => m.lot && m.lot.price === 4);
+    v = await reps[0].next("bidme", 8000, m => m.lot && m.lot.price === 4, "price4");
     assert.strictEqual(v.lot.who, 1, "마지막으로 부른 팀이 아니다");
     /* 10초 동안 조용하면 낙찰된다 */
-    v = await reps[0].next("bidme", (MINSECS + 15) * 1000, m => m.lot && m.lot.done);
+    v = await reps[0].next("bidme", (MINSECS + 15) * 1000, m => m.lot && m.lot.done, "sold");
     assert.strictEqual(v.lot.done.team, 1, "낙찰 팀이 다르다");
     assert.strictEqual(v.lot.done.price, 4, "낙찰가가 다르다");
-    assert.strictEqual(v.board.find(t => t.id === 1).tokens, TOKENS - 4,
-                       "토큰이 안 빠졌다");
+    assert.strictEqual(v.board.find(t => t.id === 1).tokens, undefined,
+                       "남의 토큰이 보인다");
+    const own = await reps[1].next("bidme", 8000, m => m.me && m.lot && m.lot.done, "own1");
+    assert.strictEqual(own.me.tokens, TOKENS - 4, "토큰이 안 빠졌다");
   }
   /* 구경꾼은 값을 못 부른다 */
   fan.drain();
@@ -183,8 +193,10 @@ async function admin(what, body){
             "구경꾼이 값을 불렀다");
 
   /* 낙찰이 끝나면 다음 품목으로 저절로 넘어간다 */
-  const nextLot = await reps[0].next("bidme", SHOW + 4000,
-                                     m => m.lot && m.lot.nth === 2 && !m.lot.done);
+  /* 비밀 입찰은 열어 둔 채 15초를 둔다. 좋은 룰렛의 3초로는 모자란다 */
+  const nextLot = await reps[0].next("bidme", (bad ? OPEN : SHOW) + 6000,
+                                     m => m.lot && m.lot.nth === 2 && !m.lot.done,
+                                     "nextLot");
   assert.ok(nextLot.lot.price === 0, "새 품목인데 값이 남았다");
   assert.strictEqual(nextLot.sheet.filter(w => w.at === "done").length, 1,
                      "현황에 끝난 것이 안 쌓인다");
@@ -199,6 +211,6 @@ async function admin(what, body){
 
   for (const c of reps) c.close();
   fan.close();
-  console.log("소켓 왕복 통과 — 열기 · 대표/구경 · 작전타임 · 호가 · 비밀 입찰 · 낙찰 · 다음 품목 · 닫기");
+  console.log("소켓 왕복 통과 — 열기 · 대표/구경 · 작전타임 · 호가 · 비밀 입찰 · 토큰 비공개 · 낙찰 · 닫기");
   bye(0);
 })();

@@ -67,10 +67,10 @@ button:disabled{opacity:.4;cursor:default}
   color:var(--mark)}
 .top .purse small{font:700 11px/1 'Gothic A1',sans-serif;color:var(--chalk-dim)}
 
-/* 룰렛 */
-.lot{display:flex;gap:var(--s4);align-items:center;flex-wrap:wrap;
-  justify-content:center}
-.wheel{flex:none;width:176px;height:176px;position:relative}
+/* 룰렛 — 걸린 품목은 화면 한가운데에 세운다. 모두가 같은 것을 본다 */
+.lot{display:flex;flex-direction:column;align-items:center;gap:var(--s2);
+  text-align:center}
+.wheel{flex:none;width:176px;height:176px;position:relative;margin:0 auto}
 .wheel svg{display:block;width:100%;height:100%}
 .wheel .spin{transform-origin:50% 50%}
 .wheel .seg{transition:fill .2s}
@@ -79,12 +79,12 @@ button:disabled{opacity:.4;cursor:default}
 .wheel .pin{position:absolute;left:50%;top:-3px;transform:translateX(-50%);
   width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;
   border-top:15px solid var(--chalk)}
-.lot .facts{flex:1;min-width:210px}
+.lot .facts{min-width:0;text-align:center}
 .lot .evline{font:700 13px/1 'Gothic A1',sans-serif;color:var(--chalk-dim)}
 .lot .ev{font:700 38px/1.1 'JetBrains Mono',monospace;color:var(--mark);
   margin:2px 0 var(--s2)}
 .lot.bad .ev{color:var(--lose)}
-.cells{display:flex;gap:6px;flex-wrap:wrap}
+.cells{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
 .cells span{font:700 15px/1 'JetBrains Mono',monospace;padding:7px 11px;
   border-radius:6px;background:#fff;border:1px solid var(--wall-line)}
 .cells span.minus{color:var(--lose);border-color:#eec4c4;background:#fdf3f3}
@@ -106,6 +106,10 @@ button:disabled{opacity:.4;cursor:default}
 .rule b{color:var(--lose)}
 .mybid{font:700 15px/1 'Gothic A1',sans-serif;color:var(--lose);margin-top:var(--s2)}
 .mybid b{font:700 26px/1 'JetBrains Mono',monospace}
+/* 토큰을 다 쓴 팀에게는 왜 못 내는지 말해 줘야 한다 */
+.empty{margin:var(--s2) 0 0;padding:12px 14px;border-radius:8px;background:var(--lose);
+  color:#fff;font-size:13.5px;line-height:1.6}
+.empty b{font-weight:800}
 /* 개봉 — 낮은 값부터 줄 세운다 */
 .reveal{margin-top:var(--s3);display:flex;flex-direction:column;gap:6px}
 .rv{display:flex;align-items:center;gap:10px;padding:9px 13px;border-radius:8px;
@@ -120,6 +124,7 @@ button:disabled{opacity:.4;cursor:default}
 
 /* 낙찰 공개 */
 .sold{text-align:center;padding:var(--s4) var(--s3)}
+.sold .wheel{margin:var(--s3) auto 0}
 .sold .big{font:700 30px/1.2 'Gowun Batang',serif;color:var(--mark)}
 .sold.bad .big{color:var(--lose)}
 .sold .small{color:var(--chalk-dim);font-size:13.5px;margin-top:var(--s1)}
@@ -150,17 +155,34 @@ button:disabled{opacity:.4;cursor:default}
 .rank .delta{font:700 13px/1 'JetBrains Mono',monospace;flex:none;min-width:3.4em;
   text-align:right}
 
-/* 돌리기 */
-.spinwrap{display:flex;gap:var(--s3);flex-wrap:wrap;justify-content:center;
-  margin-bottom:var(--s3)}
-.one{width:150px;text-align:center}
-.one .nm{font-weight:700;font-size:13px;margin-bottom:5px;overflow:hidden;
-  text-overflow:ellipsis;white-space:nowrap}
-.one .wheel{width:132px;height:132px;margin:0 auto}
-.one .got{font:700 22px/1.2 'JetBrains Mono',monospace;margin-top:6px;
-  min-height:1.2em;color:var(--chalk-dim)}
-.one .got.show{color:var(--win)} .one .got.show.minus{color:var(--lose)}
-
+/* 집계 표 — 행은 팀, 열은 그 팀이 가져간 룰렛.
+   행끼리만 줄로 가르고 열은 가르지 않는다. 눈이 가로로 흘러야 한다. */
+.tbl{margin:0}
+.srow{display:flex;align-items:center;gap:var(--s2);padding:10px 4px;
+  border-bottom:1px solid var(--wall-line);will-change:transform}
+.srow:last-child{border-bottom:0}
+.srow.me .who{color:var(--mark)}
+.srow .no{font:700 15px/1 'JetBrains Mono',monospace;color:var(--chalk-dim);
+  width:2.3em;flex:none;text-align:right}
+.srow .who{font-weight:700;width:5.6em;flex:none;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap;font-size:13.5px}
+.srow .cells2{display:flex;gap:5px;flex:1;min-width:0}
+.srow .pt{font:700 20px/1 'JetBrains Mono',monospace;width:3.2em;flex:none;
+  text-align:right}
+.srow .pt.minus{color:var(--lose)}
+.cel{flex:0 0 62px;text-align:center}
+.cel .wheel{width:54px;height:54px;margin:0 auto}
+.cel .wheel .pin{border-left-width:5px;border-right-width:5px;border-top-width:9px;top:-2px}
+.cel .got{font:700 13px/1.3 'JetBrains Mono',monospace;color:var(--chalk-dim);
+  min-height:1.3em;margin-top:2px}
+.cel.yet{opacity:.3}
+.cel.past{opacity:.5}
+.cel.now .got{color:var(--win);font-size:15px}
+.cel.now .got.minus{color:var(--lose)}
+.cel.blank{flex:0 0 62px}
+.turnline{text-align:center;color:var(--chalk-dim);font-size:13.5px;
+  margin:0 0 var(--s2)}
+.turnline b{color:var(--mark)}
 /* 경매 현황 */
 .scrim{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:40}
 .sheet{position:fixed;z-index:41;left:50%;top:50%;transform:translate(-50%,-50%);
@@ -173,9 +195,17 @@ button:disabled{opacity:.4;cursor:default}
 .nowline{flex:none;margin:0;padding:11px var(--s3);background:#fdf5e2;
   border-bottom:1px solid var(--wall-line);font-size:13.5px;color:var(--chalk-dim)}
 .nowline b{color:var(--mark)} .nowline.bad b{color:var(--lose)}
-/* 남은 룰렛만 보여 준다. 번호도 안 매긴다 — 어느 것이 나올지는 몰라야 한다 */
-.sheet-body{overflow:auto;padding:var(--s3);display:grid;gap:10px;
-  grid-template-columns:repeat(auto-fill,minmax(112px,1fr))}
+/* 두 칸으로 나눈다 — 우리 팀이 가져간 것과, 아직 안 나온 것.
+   번호는 안 매긴다. 어느 것이 언제 나올지는 몰라야 한다. */
+.sheet-body{overflow:auto;padding:var(--s3)}
+.blk{margin:0 0 var(--s4)}
+.blk:last-child{margin-bottom:0}
+.blk h4{font:700 13px/1.4 'Gothic A1',system-ui,sans-serif;color:var(--chalk-dim);
+  margin:0 0 9px;letter-spacing:.03em}
+.blk h4 b{color:var(--mark)}
+.blk.mineblk h4 b{color:var(--mark)}
+.wgrid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(112px,1fr))}
+.item.own{border-color:var(--mark);background:#fdf5e2}
 .item{border:1px solid var(--wall-line);border-radius:10px;padding:10px 8px 8px;
   background:#fff;display:flex;flex-direction:column;align-items:center;gap:5px}
 .item.now{border-color:var(--mark);background:#fdf5e2;box-shadow:0 0 0 2px #f0c75e55}
@@ -302,9 +332,7 @@ let sock = null, me = null, rows = [], chose = null, asRep = true;
 let joined = null;                    /* 들어간 비딩 코드 */
 let V = null;                         /* 마지막으로 받은 내 모습 */
 let gotAt = 0;                        /* 그것을 받은 때 — 남은 시간을 여기서 센다 */
-let spun = -1;                        /* 어느 차례까지 바퀴를 돌렸나 */
 let planShown = -1, was = null;       /* 작전타임마다 현황표를 한 번 띄운다 */
-let places = {};                      /* 팀 id → 화면상의 y. 순위를 미끄러뜨리는 데 쓴다 */
 
 /* ── 소켓 ─────────────────────────────────────────────────────────── */
 const send = (t, o) => {
@@ -380,7 +408,7 @@ function take(v){
   el("lobby").hidden = !(v && v.state === "open");
   el("play").hidden  = !(v && v.state !== "open");
   el("sheetBtn").hidden = !v;
-  if (!v){ el("sheet").hidden = true; el("scrim").hidden = true; spun = -1; places = {}; return; }
+  if (!v){ el("sheet").hidden = true; el("scrim").hidden = true; seats = {}; return; }
   el("title").textContent = v.title;
   el("sub").textContent = STATE[v.state] + " · " + v.code;
   if (v.state === "open"){
@@ -452,7 +480,7 @@ const landing = k => 360 * 5 - (k * 120 + 60);
 /* ── 판 ───────────────────────────────────────────────────────────── */
 function paintStage(){
   const box = el("stage");
-  if (V.state !== "spin") delete box.dataset.round;
+  if (V.state !== "spin" && V.state !== "done"){ delete box.dataset.turn; seats = {}; }
   if (V.state === "plan")    return planView(box);
   if (V.state === "running") return lotView(box);
   if (V.state === "spin")    return spinView(box);
@@ -531,12 +559,18 @@ function lotView(box){
       if (did){
         body += '<p class="mybid">우리 팀이 낸 값 <b>' + L.mine + '</b> 토큰' +
                 ' · 한 번 내면 못 바꿉니다</p>';
+      } else if (tokens < 1){
+        /* 1 도 못 내는 팀. 안 낸 것은 1 로 보고 가장 늦은 셈이니 이 팀이 받는다 */
+        body += '<p class="empty">토큰이 <b>하나도 없습니다.</b> 적어 낼 수가 없습니다.<br>' +
+                '안 내면 <b>1 을 적은 것</b>으로 보고, 같은 1 중에서는 실제로 낸 팀이 ' +
+                '먼저이므로 <b>이 룰렛은 우리 팀이 받게 됩니다.</b></p>';
       } else {
-        const step = [1, 2, 3, 5].map(n =>
-          '<button class="danger" data-seal="' + n + '"' +
-          (n > tokens ? " disabled" : "") + '>' + n + '</button>').join("");
+        const step = [1, 2, 3, 5].filter(n => n <= tokens).map(n =>
+          '<button class="danger" data-seal="' + n + '">' + n + '</button>').join("");
         body += '<div class="bidrow">' + step +
-                '<button data-seal="ask">직접</button></div>';
+                '<button data-seal="ask">직접</button></div>' +
+                (tokens < 5 ? '<p class="hint">남은 토큰이 <b>' + tokens + '</b>개입니다. ' +
+                              '다 쓰면 다음 음수 룰렛을 피할 수가 없습니다.</p>' : "");
       }
     } else {
       body += '<p class="hint">관전 중입니다. 값은 조 대표가 적어 냅니다.</p>';
@@ -550,16 +584,19 @@ function lotView(box){
   }));
   box.querySelectorAll("[data-seal]").forEach(b => b.addEventListener("click", () => {
     const v = b.dataset.seal;
-    const n = v === "ask" ? ask("몇 토큰을 적어 낼까요?", 1) : +v;
+    const n = v === "ask" ? ask("몇 토큰을 적어 낼까요?", 1, V.me.tokens) : +v;
     if (!n) return;
     if (!confirm(n + " 토큰을 적어 냅니다. 한 번 내면 못 바꿉니다. 낼까요?")) return;
     send("bidseal", {n});
   }));
 }
-function ask(q, low){
-  const s = prompt(q + " (" + low + " 이상)", String(low));
+function ask(q, low, high){
+  const span = low + " 이상" + (high ? " · " + high + " 까지" : "");
+  const s = prompt(q + " (" + span + ")", String(low));
   const n = parseInt(s, 10);
-  return Number.isFinite(n) && n >= low ? n : 0;
+  if (!Number.isFinite(n) || n < low) return 0;
+  if (high && n > high){ say("playMsg", "가진 토큰은 " + high + "개입니다.", "bad"); return 0; }
+  return n;
 }
 
 function soldView(box, L){
@@ -596,46 +633,41 @@ function soldView(box, L){
     wheelSVG(L.wheel.cells, 0) + '</div>';
 }
 
-/* 돌리기 — 모든 팀의 같은 차례 룰렛을 한꺼번에.
-   한 차례를 그린 뒤에는 다시 그리지 않는다. 도는 중에 다른 알림이 와서
-   다시 그리면 바퀴가 처음으로 되돌아간다. */
+/* 집계 표. 한 차례는 셋으로 끊긴다 —
+     roll  5초 바퀴가 돈다
+     (멎고) 5초 값을 읽는다
+     move  점수가 올라 행끼리 자리를 바꾸고, 다시 5초 바뀐 자리를 본다
+   도는 중에는 다시 그리지 않는다. 다시 그리면 바퀴가 처음으로 되돌아간다. */
 function spinView(box){
   const S = V.spin;
-  if (box.dataset.round === String(S.round)) return;
-  box.dataset.round = String(S.round);
+  const key = S.round + ":" + S.phase;
+  if (box.dataset.turn === key) return;
+  const rolling = S.phase === "roll" && S.left > 0;
+  box.dataset.turn = key;
   box.className = "card";
-  const done = S.left <= 0;
-  const ms = Math.max(300, S.left);      /* 늦게 들어온 사람은 남은 만큼만 돈다 */
   box.innerHTML =
-    '<p class="hint" style="margin:0 0 var(--s3);text-align:center">' +
-    S.round + '번째 룰렛 · 모두 함께 돌립니다 (' + S.round + ' / ' + S.rounds + ')</p>' +
-    '<div class="spinwrap">' + S.rolls.map(r => {
-      const t = (V.board || []).find(x => x.id === r.team);
-      return '<div class="one" data-team="' + r.team + '">' +
-        '<div class="nm">' + esc(t ? t.name : "") + '</div>' +
-        wheelSVG(r.cells, done ? landing(r.at) % 360 : 0, done ? r.at : -1) +
-        '<div class="got' + (done ? " show" + (r.got < 0 ? " minus" : "") : "") + '">' +
-        (done ? sgn(r.got) : "…") + '</div></div>';
-    }).join("") + '</div>';
-  if (done) return;
-  spun = S.round;
+    '<p class="turnline"><b>' + S.round + '번째</b> 룰렛 · 모두 함께 돌립니다 (' +
+    S.round + ' / ' + S.rounds + ')</p>' + tableHTML(S.round - 1, S.phase);
+  slide(box);
+  if (!rolling) return;
   /* 바퀴를 돌린다. 다섯 바퀴를 돌아 제 칸에서 멎는다 */
+  const ms = Math.max(300, S.left);
   requestAnimationFrame(() => {
-    box.querySelectorAll(".one").forEach(one => {
-      const r = S.rolls.find(x => x.team === +one.dataset.team);
-      const g = one.querySelector(".spin");
-      if (!r || !g) return;
+    box.querySelectorAll(".cel.now").forEach(cel => {
+      const g = cel.querySelector(".spin");
+      const at = +cel.dataset.at;
+      if (!g || !(at >= 0)) return;
       g.style.transition = "transform " + ms + "ms cubic-bezier(.17,.67,.23,1)";
-      g.style.transform = "rotate(" + landing(r.at) + "deg)";
+      g.style.transform = "rotate(" + landing(at) + "deg)";
     });
     setTimeout(() => {
-      box.querySelectorAll(".one").forEach(one => {
-        const r = S.rolls.find(x => x.team === +one.dataset.team);
-        const n = one.querySelector(".got");
-        if (!r || !n) return;
-        n.textContent = sgn(r.got);
-        n.className = "got show" + (r.got < 0 ? " minus" : "");
-        const seg = one.querySelector(".s" + r.at), lab = one.querySelector(".l" + r.at);
+      box.querySelectorAll(".cel.now").forEach(cel => {
+        const n = cel.querySelector(".got");
+        if (!n || !cel.dataset.got) return;
+        n.textContent = sgn(+cel.dataset.got);
+        n.className = "got" + (+cel.dataset.got < 0 ? " minus" : "");
+        const seg = cel.querySelector(".s" + cel.dataset.at);
+        const lab = cel.querySelector(".l" + cel.dataset.at);
         if (seg) seg.classList.add("hit");
         if (lab) lab.classList.add("hit");
       });
@@ -643,18 +675,75 @@ function spinView(box){
   });
 }
 
+/* 행은 팀, 열은 룰렛. cur 열이 지금 돌리는 열이다(-1 이면 다 끝났다) */
+function tableHTML(cur, phase){
+  const rows = V.board || [];
+  const all = V.rolls || [];
+  const cols = rows.reduce((m, t) => Math.max(m, t.won.length), 1);
+  const mine = V.me ? V.me.team : -1;
+  return '<div class="tbl">' + rows.map(t => {
+    let cs = "";
+    for (let k = 0; k < cols; k++){
+      const w = t.won[k];
+      if (!w){ cs += '<div class="cel blank"></div>'; continue; }
+      const got = (all[k] || []).find(x => x.team === t.id);
+      const live = k === cur;
+      const open = got && (!live || phase !== "roll");   /* 값을 보여도 되나 */
+      const cls = live ? "now" : (k < cur || cur < 0 ? "past" : "yet");
+      cs += '<div class="cel ' + cls + '"' +
+            (got ? ' data-at="' + got.at + '" data-got="' + got.got + '"' : "") + '>' +
+            wheelSVG(w.cells, open ? landing(got.at) % 360 : 0,
+                     open ? got.at : -1) +
+            '<div class="got' + (open && got.got < 0 ? " minus" : "") + '">' +
+            (open ? sgn(got.got) : "") + '</div></div>';
+    }
+    return '<div class="srow' + (t.id === mine ? " me" : "") +
+      '" data-team="' + t.id + '">' +
+      '<span class="no">' + t.rank + '위</span>' +
+      '<span class="who">' + esc(t.name) + '</span>' +
+      '<span class="cells2">' + cs + '</span>' +
+      '<span class="pt' + (t.score < 0 ? " minus" : "") + '">' + t.score + '</span>' +
+      '</div>';
+  }).join("") + '</div>';
+}
+
+/* 자리가 바뀌면 미끄러진다. 바뀐 것을 눈이 따라가야 한다 */
+let seats = {};
+function slide(box){
+  const now = {};
+  box.querySelectorAll(".srow").forEach(n => {
+    now[n.dataset.team] = n.getBoundingClientRect().top;
+  });
+  box.querySelectorAll(".srow").forEach(n => {
+    const was = seats[n.dataset.team];
+    if (was === undefined) return;
+    const dy = was - now[n.dataset.team];
+    if (!dy) return;
+    n.style.transition = "none";
+    n.style.transform = "translateY(" + dy + "px)";
+    requestAnimationFrame(() => {
+      n.style.transition = "transform 900ms cubic-bezier(.2,.8,.2,1)";
+      n.style.transform = "translateY(0)";
+    });
+  });
+  seats = now;
+}
+
 function doneView(box){
   box.className = "card";
   const top = (V.board || [])[0];
-  box.innerHTML = '<div class="sold"><div class="big">' +
+  box.innerHTML = '<div class="sold" style="padding-bottom:var(--s3)"><div class="big">' +
     (top ? esc(top.name) + " 우승" : "끝났습니다") + '</div>' +
-    '<div class="small">룰렛을 다 돌렸습니다. 아래가 최종 순위입니다.</div></div>';
+    '<div class="small">룰렛을 다 돌렸습니다.</div></div>' + tableHTML(-1, "done");
+  slide(box);
 }
 
 /* ── 순위판 — 자리가 바뀌면 미끄러진다 ───────────────────────────── */
 function paintRanks(){
   const box = el("ranks");
   const list = V.board || [];
+  /* 집계 표가 순위와 점수를 이미 안고 있다. 두 벌을 띄울 까닭이 없다 */
+  if (V.state === "spin" || V.state === "done"){ box.innerHTML = ""; return; }
   if (!list.length){ box.innerHTML = ""; return; }
   const before = {};
   box.querySelectorAll(".rank").forEach(n => {
@@ -665,7 +754,8 @@ function paintRanks(){
     '" data-team="' + t.id + '">' +
     '<span class="no">' + t.rank + '위</span>' +
     '<span class="nm">' + esc(t.name) + '</span>' +
-    '<span class="tk">토큰 ' + t.tokens + ' · 룰렛 ' + t.won.length + '</span>' +
+    '<span class="tk">' + (t.tokens === undefined ? "" : "토큰 " + t.tokens + " · ") +
+      '룰렛 ' + t.won.length + '</span>' +
     '<span class="pt' + (t.score < 0 ? " minus" : "") + '">' + t.score + '</span>' +
     '</div>').join("");
   /* 옮겨 간 만큼 되돌려 놓았다가 제자리로 보낸다 */
@@ -684,25 +774,41 @@ function paintRanks(){
 }
 
 /* ── 경매 현황 ────────────────────────────────────────────────────── */
-/* 아직 안 나온 룰렛만. 끝난 것도, 번호도 보여 주지 않는다 —
-   무엇이 언제 나올지는 끝까지 몰라야 한다. */
+/* 두 칸이다 — 우리 팀이 가져간 룰렛, 그리고 아직 안 나온 룰렛.
+   끝난 것도 번호도 보여 주지 않는다. 무엇이 언제 나올지는 끝까지 몰라야 한다. */
+function wheelCard(w, cls){
+  return '<div class="item ' + (cls || "") + (w.bad ? " minus" : "") + '">' +
+         wheelSVG(w.cells, 0) +
+         '<div class="e">' + w.ev.toFixed(2) + '</div>' +
+         (w.at === "now" ? '<div class="st">지금 경매 중</div>' : "") +
+         '</div>';
+}
 function paintSheet(){
-  const list = ((V && V.sheet) || []).filter(w => w.at !== "done");
   nowLine();
-  el("sheetTitle").textContent = "아직 안 나온 룰렛 " + list.length + "개";
-  if (!list.length){
-    el("sheetBody").innerHTML =
-      '<p class="sheet-none">남은 룰렛이 없습니다.</p>';
-    return;
+  el("sheetTitle").textContent = "경매 현황";
+  const left = ((V && V.sheet) || []).filter(w => w.at !== "done")
+                 .sort((a, b) => b.ev - a.ev || a.id - b.id);
+  /* 우리 팀 것은 순위판 줄에 실려 온다 — 칸 값까지 함께 */
+  const row = V && V.me ? (V.board || []).find(t => t.id === V.me.team) : null;
+  const mine = row ? row.won.slice().sort((a, b) => b.ev - a.ev || a.id - b.id) : [];
+  let out = "";
+  if (row){
+    const sum = mine.reduce((n, w) => n + w.ev, 0);
+    out += '<section class="blk mineblk"><h4>우리 팀이 가져간 룰렛 <b>' +
+      mine.length + '개</b>' +
+      (mine.length ? ' · 기댓값 합 <b>' + (Math.round(sum * 100) / 100).toFixed(2) +
+                     '</b>' : "") + '</h4>' +
+      (mine.length
+        ? '<div class="wgrid">' + mine.map(w => wheelCard(w, "own")).join("") + '</div>'
+        : '<p class="sheet-none" style="padding:var(--s3) 0">아직 가져간 룰렛이 없습니다.</p>') +
+      '</section>';
   }
-  el("sheetBody").innerHTML = list.slice()
-    .sort((a, b) => b.ev - a.ev || a.id - b.id)
-    .map(w =>
-      '<div class="item ' + w.at + (w.bad ? " minus" : "") + '">' +
-      wheelSVG(w.cells, 0) +
-      '<div class="e">' + w.ev.toFixed(2) + '</div>' +
-      (w.at === "now" ? '<div class="st">지금 경매 중</div>' : "") +
-      '</div>').join("");
+  out += '<section class="blk"><h4>아직 안 나온 룰렛 <b>' + left.length + '개</b></h4>' +
+    (left.length
+      ? '<div class="wgrid">' + left.map(w => wheelCard(w, w.at)).join("") + '</div>'
+      : '<p class="sheet-none" style="padding:var(--s3) 0">남은 룰렛이 없습니다.</p>') +
+    '</section>';
+  el("sheetBody").innerHTML = out;
 }
 /* 모달이 본 화면을 덮으니, 지금 걸린 품목의 값을 여기에도 적는다 */
 function nowLine(){

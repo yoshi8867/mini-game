@@ -468,6 +468,15 @@ function onAdmin(what, m, done, ip){
       pushBid(b);
       return done(200, {ok: true, bid: b.full()});
     }
+    /* 돌림판만 처음부터 다시. 경매 결과는 그대로 두고 눈만 새로 뽑는다 */
+    case "bidagain": {
+      const b = bid();
+      if (!b) return done(404, {ok: false, why: "nobid"});
+      const r = b.respin(Date.now());
+      if (r.err) return done(409, {ok: false, why: r.err});
+      pushBid(b);
+      return done(200, {ok: true, bid: b.full(), rounds: r.rounds});
+    }
     case "bidclose": {
       const b = bid();
       if (!b) return done(404, {ok: false, why: "nobid"});

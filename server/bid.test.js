@@ -1,7 +1,7 @@
 /* 돌림판 비딩 검사. 시계는 넣어 준다 — 기다리지 않고 끝까지 돌려 본다 */
 "use strict";
 const assert = require("assert");
-const {Bid, TOKENS, LOTS, BLOCK, SECS, QUIET, SEAL, SHOW, OPEN, SPIN} = require("./bid.js");
+const {Bid, TOKENS, LOTS, BLOCK, SECS, QUIET, SEAL, SHOW, OPEN, SPIN, HOLD} = require("./bid.js");
 
 /* 결과를 보여 주는 참은 품목에 따라 다르다. 검사에서는 넉넉한 쪽으로 넘긴다 */
 const PAST = Math.max(SHOW, OPEN);
@@ -297,12 +297,13 @@ function open(n, opt){
   assert.ok(first.length >= 1, "첫 차례에 돌릴 것이 없다");
   assert.ok(b.teams.every(x => x.score === 0), "바퀴가 돌기도 전에 점수가 올랐다");
   assert.strictEqual(b.tick(t + SPIN - 1), false, "바퀴가 일찍 멎었다");
-  b.tick(t += SPIN);
+  assert.strictEqual(b.tick(t + SPIN + HOLD - 1), false, "읽을 참도 안 주고 점수가 올랐다");
+  b.tick(t += SPIN + HOLD);
   first.forEach(s => assert.ok(b.teams[s.team].score !== 0 || s.got === 0,
                                "멎었는데 점수가 안 올랐다"));
 
   guard = 0;
-  while (b.state !== "done" && guard++ < 100) b.tick(t += SPIN);
+  while (b.state !== "done" && guard++ < 100) b.tick(t += SPIN + HOLD);
   assert.strictEqual(b.state, "done", "돌리기가 안 끝난다");
   /* 합계는 실제로 멈춘 칸의 합이다 */
   b.teams.forEach(x => {
@@ -313,6 +314,93 @@ function open(n, opt){
   const ranked = b.board();
   assert.ok(ranked[0].rank === 1, "1위가 없다");
   console.log("spin    " + LOTS + "품목 → 차례마다 한꺼번에 " + (SPIN/1000) + "초 · 합계는 멈춘 칸의 합");
+}
+
+/* ─── 돌림판 다시 돌리기 ────────────────────────────────────────────── */
+{
+  const b = open(4);
+  let t = 1000;
+  b.start(t);
+  assert.strictEqual(b.respin(t).err, "notdone", "경매 중인데 다시 돌려졌다");
+
+  /* 경매를 다 치운다 */
+  let guard = 0;
+  while (b.state !== "spin" && guard++ < 600){
+    const lot = b.lot;
+    if (!lot){ b.tick(t += PAST); continue; }
+    if (lot.bad){
+      b.seal("pid-0", 3, t); b.seal("pid-1", 2, t + 1);
+      b.seal("pid-2", 4, t + 2); b.seal("pid-3", 1, t + 3);
+    } else {
+      b.bid("pid-" + (b.nth % 4), 1, t);
+    }
+    if (!lot.done) b.tick(t = lot.ends);
+    b.tick(t += PAST);
+  }
+  assert.strictEqual(b.state, "spin", "경매가 안 끝났다");
+
+  /* 끝까지 돌린다 */
+  guard = 0;
+  while (b.state !== "done" && guard++ < 200) b.tick(t += SPIN + HOLD);
+  assert.strictEqual(b.state, "done", "돌리기가 안 끝났다");
+
+  const first = b.teams.map(x => x.score);
+  const won   = b.teams.map(x => x.won.slice());
+  const purse = b.teams.map(x => x.tokens);
+  assert.ok(first.some(v => v !== 0), "첫 번째 결과가 전부 0 이다");
+
+  /* 처음부터 다시 */
+  const r = b.respin(t);
+  assert.strictEqual(r.err, undefined, "다시 돌리기가 거절됐다: " + r.err);
+  assert.strictEqual(b.state, "spin", "돌리기로 안 돌아갔다");
+  assert.strictEqual(b.round, 0, "첫 차례부터가 아니다");
+  assert.ok(b.teams.every(x => x.score === 0), "점수가 안 지워졌다");
+  /* 경매 결과는 건드리지 않는다 */
+  b.teams.forEach((x, i) => {
+    assert.deepStrictEqual(x.won, won[i], x.name + " 가 가져간 룰렛이 바뀌었다");
+    assert.strictEqual(x.tokens, purse[i], x.name + " 토큰이 바뀌었다");
+  });
+
+  guard = 0;
+  while (b.state !== "done" && guard++ < 200) b.tick(t += SPIN + HOLD);
+  assert.strictEqual(b.state, "done", "두 번째 돌리기가 안 끝났다");
+  /* 합계는 이번에 멈춘 칸의 합이어야 한다 */
+  b.teams.forEach(x => {
+    const sum = b.spins.flat().filter(z => z.team === x.id)
+                              .reduce((n, z) => n + z.got, 0);
+    assert.strictEqual(x.score, sum, x.name + " 합계가 안 맞는다");
+  });
+  console.log("again   끝난 뒤 처음부터 다시 · 점수만 새로 · 룰렛과 토큰은 그대로");
+}
+
+/* ─── 동점 가르기 ───────────────────────────────────────────────────── */
+{
+  const b = open(4);
+  b.start(1000);
+  b.state = "done";                       // 집계가 끝난 자리로 둔다
+  const [a0, a1, a2, a3] = b.teams;
+  a0.score = 100; a0.tokens = 5;  a0.won = [1, 2];
+  a1.score = 100; a1.tokens = 12; a1.won = [1];       // 토큰이 많다 → 위
+  a2.score = 100; a2.tokens = 5;  a2.won = [1, 2, 3]; // 토큰 같고 룰렛이 많다 → 위
+  a3.score = 40;  a3.tokens = 30; a3.won = [];
+  const r = b.ranks();
+  assert.strictEqual(r[a1.id], 1, "토큰이 많은 팀이 1위가 아니다");
+  assert.strictEqual(r[a2.id], 2, "토큰 같고 룰렛이 많은 팀이 2위가 아니다");
+  assert.strictEqual(r[a0.id], 3, "셋째가 아니다");
+  assert.strictEqual(r[a3.id], 4, "점수가 낮은 팀이 꼴찌가 아니다");
+  assert.deepStrictEqual(b.board().map(t => t.id), [a1.id, a2.id, a0.id, a3.id],
+                         "순위판 차례가 안 맞는다");
+
+  /* 셋이 다 같으면 공동 순위다 */
+  a0.tokens = 12; a0.won = [1];
+  assert.strictEqual(b.ranks()[a0.id], b.ranks()[a1.id], "똑같은데 공동이 아니다");
+
+  /* 경매 중에는 점수만 본다 — 토큰으로 줄을 세우면 비공개가 무너진다 */
+  b.state = "running";
+  b.teams.forEach(t => t.score = 0);
+  const mid = b.ranks();
+  assert.ok(b.teams.every(t => mid[t.id] === 1), "경매 중에 토큰으로 줄이 섰다");
+  console.log("tie     점수 → 남은 토큰 → 룰렛 수 · 경매 중에는 점수만 본다");
 }
 
 console.log("\n전부 통과");
