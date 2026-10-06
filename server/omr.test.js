@@ -1,5 +1,7 @@
 /* node omr.test.js — 명제 배부, 마킹 참, 정답을 늦게 여는 것, 채점과 등급 */
 "use strict";
+/* 진짜 판이 .env 에 있어도 검사는 연습판으로 돌린다 */
+process.env.OMR_PROPS = "";
 const assert = require("assert");
 const {Omr, PLAN, KEY, PROPS, stepAt, openedAt, grade,
        QUESTIONS, PER, STEP, SIT, END, OPEN, SCORE, LEN} = require("./omr.js");

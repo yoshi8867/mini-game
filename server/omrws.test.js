@@ -3,6 +3,8 @@
    당겨 가며 마킹하고 채점까지 간다. 40분을 기다릴 수는 없으니 omrwarp 로
    건너뛴다. DB 는 끄고, 관리자 비번은 ADMIN_PW 로 넣는다. */
 "use strict";
+/* 진짜 판이 .env 에 있어도 검사는 연습판으로 돌린다 */
+process.env.OMR_PROPS = "";
 const assert = require("assert");
 const {spawn} = require("child_process");
 const path = require("path");
@@ -65,7 +67,7 @@ async function admin(what, body){
 (async () => {
   const srv = spawn(process.execPath, [path.join(__dirname, "index.js")], {
     env: Object.assign({}, process.env,
-                       {PORT: String(PORT), DATABASE_URL: "", ADMIN_PW: PW}),
+                       {PORT: String(PORT), DATABASE_URL: "", ADMIN_PW: PW, OMR_PROPS: ""}),
     stdio: ["ignore", "pipe", "pipe"],
   });
   srv.stdout.on("data", () => {});

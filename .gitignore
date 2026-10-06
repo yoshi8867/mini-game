@@ -9,8 +9,15 @@ node_modules/
 .env.*
 !.env.example
 
+# 진짜 판 — 정답과 명제. 저장소는 공개라 여기 둘 수 없다
+server/props.local.js
+
 # 대조표 — 정답과 명제를 모은 선생용 쪽. 로컬에만 둔다
 answers.html
 docs/design/answers.template.html
 docs/design/answers-data.js
 tools/answers.js
+
+# 출제 화면 — 새 판을 짜는 연장. 로컬에만 둔다
+maker.html
+docs/design/maker.template.html

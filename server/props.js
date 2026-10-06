@@ -16,19 +16,24 @@
    순서가 중요하다. **C1(예전 P10) 하나면 답이 못 박힌다.** 나머지 셋은 그
    앞에 있어야 쓸모가 있다 — 순서는 관리자가 판마다 바꿀 수 있다.
 
+   **여기 적힌 것은 연습용이다.** 저장소가 공개라 정답을 둘 수 없다 —
+   진짜 판은 `OMR_PROPS` 환경변수에 JSON 한 줄로 넣는다. Render 대시보드와
+   로컬 `server/.env` 에만 있고 git 에는 안 들어간다. 넣는 법은 tools/pack-props.js.
+
    **이 파일은 화면으로 내려가지 않는다.** 내 명제 한 줄만, 그것도 공개하는
    1분 동안만 나간다. 정답은 종료령 뒤에 하나씩 열린다.
    ══════════════════════════════════════════════════════════════════════ */
 "use strict";
+require("./env.js");                         // 로컬에서는 .env 가 값을 얹는다
 
 /* 닿는 칸 — 어느 문항을 주무르는 명제인가. 힌트를 고를 때 이걸 본다 */
 const R = (a, b) => Array.from({length: b - a + 1}, (_, i) => a + i);
 const ODD = R(1, 20).filter(q => q % 2);
 
-const KEY = [5,2,5,2,1, 5,3,2,5,5, 1,3,3,2,5, 3,3,2,5,5];
+const BUILT_KEY = [5,2,5,2,1, 5,3,2,5,5, 1,3,3,2,5, 3,3,2,5,5];
 
 /* 나눠 주는 명제. ☆ 는 사람이 모자랄 때 먼저 빠진다 */
-const PROPS = [
+const BUILT_PROPS = [
   {id: "P01", star: false, text: "1번과 2번 답의 합은 7이다.", cells: [1, 2]},
   {id: "P02", star: false, text: "1~5번 문제의 답에는 3번이 없다.", cells: R(1, 5)},
   {id: "P03", star: false, text: "3~5번 문제의 답은 내림차순이다.", cells: [3, 4, 5]},
@@ -57,22 +62,49 @@ const PROPS = [
 ];
 
 /* 사람이 모자라면 앞에서부터 뺀다. 모두 ☆ 다 */
-const DROP = ["P24", "P19", "P08", "P14", "P07", "P22"];
+const BUILT_DROP = ["P24", "P19", "P08", "P14", "P07", "P22"];
 
 /* 모두에게 띄우는 힌트. 15 · 20 · 25분 순서고, 번호를 따로 매겼다.
    was 는 나눠 주던 시절의 번호다 — omr-quiz/README.md 를 읽을 때 필요하다 */
-const COMMON = [
+const BUILT_COMMON = [
   {id: "C1", was: "P10", text: "홀수 번호 문제의 답은 홀수이다.", cells: ODD},
   {id: "C2", was: null,  text: "답이 5인 문제는 8개이다.", cells: R(1, 20)},
   {id: "C3", was: "P23", text: "답이 4인 문제는 하나도 없다.", cells: R(1, 20)},
 ];
-const HINTS = COMMON.map(c => c.text);
 
 /* 사람 수에 맞춰 나눠 줄 명제를 고른다. 적을수록 ☆ 부터 빠진다 */
+/* ─── 진짜 판은 밖에서 들어온다 ──────────────────────────────────────
+   OMR_PROPS 에 {KEY, PROPS, DROP, COMMON} 을 JSON 으로 넣는다. 없거나
+   깨졌으면 위에 적힌 연습판으로 간다 — 교실이 멎는 것보다는 낫다 */
+function brought(){
+  const raw = process.env.OMR_PROPS;
+  if (!raw || !raw.trim()) return null;
+  let j;
+  try { j = JSON.parse(raw); }
+  catch (e){ console.error("OMR_PROPS 가 JSON 이 아니다 — 연습판으로 간다"); return null; }
+  const ok = j && Array.isArray(j.KEY) && Array.isArray(j.PROPS) &&
+             Array.isArray(j.COMMON) && Array.isArray(j.DROP) &&
+             j.KEY.length && j.PROPS.length >= 2 &&
+             j.KEY.every(n => n >= 1 && n <= 5) &&
+             j.PROPS.every(p => p && p.id && p.text) &&
+             j.COMMON.every(c => c && c.id && c.text);
+  if (!ok){ console.error("OMR_PROPS 모양이 틀렸다 — 연습판으로 간다"); return null; }
+  j.PROPS.forEach(p => { p.star = !!p.star; p.cells = p.cells || []; });
+  j.COMMON.forEach(c => { c.cells = c.cells || []; });
+  return j;
+}
+const LIVE = brought();
+const CUSTOM = !!LIVE;                       // 진짜 판으로 돌고 있는가
+const KEY    = CUSTOM ? LIVE.KEY    : BUILT_KEY;
+const PROPS  = CUSTOM ? LIVE.PROPS  : BUILT_PROPS;
+const DROP   = CUSTOM ? LIVE.DROP   : BUILT_DROP;
+const COMMON = CUSTOM ? LIVE.COMMON : BUILT_COMMON;
+const HINTS  = COMMON.map(c => c.text);
+
 function deal(n){
   const cut = Math.max(0, PROPS.length - n);
   const gone = new Set(DROP.slice(0, cut));
   return PROPS.filter(p => !gone.has(p.id));
 }
 
-module.exports = {KEY, PROPS, DROP, COMMON, HINTS, deal};
+module.exports = {KEY, PROPS, DROP, COMMON, HINTS, deal, CUSTOM};
