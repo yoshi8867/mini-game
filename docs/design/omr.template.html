@@ -1,0 +1,428 @@
+<!doctype html><html lang="ko"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<title>블라인드 — 플레이 화면</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@400;700;800&family=Gowun+Batang:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* 종이 답안지를 그대로 베낀다. 괘선은 파랑, 보기는 분홍 스타디움, 문항칸은 하늘색 —
+   사진에서 가져왔다. 바탕 연노랑과 짙은 노랑 테두리, 우하단 사선, 하단 바코드는 기획서다 */
+:root{
+  color-scheme:light;
+  --wall:#ffffff; --wall-2:#f6f6f7; --wall-line:#dcdce1;
+  --chalk:#16171a; --chalk-dim:#63646b; --dim-2:#8d8e95;
+  --red:#cc2b2b; --blue:#5a7fb0; --sky:#cfe2f3;
+  --paper:#fdf5d4; --rim:#c9a227; --bub:#e0867f;
+  --band-y:#fcf0c2; --band-p:#fbdfe1;
+  --s1:4px; --s2:10px; --s3:16px; --s4:24px;
+}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+html,body{margin:0;background:var(--wall);color:var(--chalk);
+  font:400 15px/1.6 'Gothic A1',system-ui,sans-serif;-webkit-text-size-adjust:100%}
+body{padding:var(--s3) var(--s3) 72px}
+.wrap{max-width:900px;margin:0 auto}
+
+/* ── 머리 ─────────────────────────────────────────────── */
+h1{font-family:'Gowun Batang',serif;font-size:26px;margin:0 0 2px;font-weight:700}
+h1 .code{color:var(--chalk-dim);font-size:19px}
+.sub{color:var(--chalk-dim);font-size:13.5px;margin:0 0 var(--s4)}
+.sub b{color:var(--chalk)}
+body.teach h1{font-size:40px}
+body.teach .sub{font-size:19px}
+
+/* ── 시간 게이지 ───────────────────────────────────────── */
+.gauge{position:relative;margin-bottom:var(--s2)}
+.bar{height:16px;background:var(--wall-2);border:1px solid var(--wall-line);
+  border-radius:999px;overflow:hidden}
+.fill{height:100%;width:0;background:linear-gradient(90deg,#dbe6f3,#8fb0d8);
+  transition:width .25s linear}
+.marks{position:relative;height:40px;margin-top:2px}
+body.teach .marks{height:52px}
+.mk{position:absolute;top:0;transform:translateX(-50%);text-align:center;width:0}
+.mk.low{top:19px}
+body.teach .mk.low{top:25px}
+.mk i{display:block;width:0;height:0;margin:0 auto;
+  border:5px solid transparent;border-bottom-color:var(--blue);margin-top:-7px}
+.mk b{display:block;white-space:nowrap;font:700 10.5px/1.4 'Gothic A1',sans-serif;
+  color:var(--chalk-dim);transform:translateX(-50%);margin-left:50%;padding-top:1px}
+body.teach .mk b{font-size:14px}
+.mk.past i{border-bottom-color:var(--chalk)}
+.mk.past b{color:var(--chalk)}
+.hand{position:absolute;top:-3px;width:2px;height:22px;background:var(--red);
+  transform:translateX(-1px);transition:left .25s linear}
+.clock{display:flex;align-items:baseline;gap:var(--s2);margin-bottom:var(--s3)}
+.clock b{font:700 22px/1 'JetBrains Mono',monospace}
+.clock span{color:var(--chalk-dim);font-size:13.5px}
+body.teach .clock b{font-size:34px}
+body.teach .clock span{font-size:18px}
+
+/* ── 안내 창 ───────────────────────────────────────────── */
+.notice{border:1px solid var(--wall-line);border-left:4px solid var(--blue);
+  border-radius:8px;background:var(--wall-2);padding:var(--s3);margin-bottom:var(--s3)}
+.notice.hint{border-left-color:var(--rim);background:#fdfaef}
+.ntitle{font:700 13px/1 'Gothic A1',sans-serif;color:var(--chalk-dim);
+  letter-spacing:.04em;margin-bottom:8px}
+.nbody{font-size:17px;font-weight:700;line-height:1.7;white-space:pre-line}
+body.teach .nbody{font-size:26px}
+.ngone{margin-top:8px;font:700 13px/1 'JetBrains Mono',monospace;color:var(--red)}
+
+/* ── 교사용 일정표 ─────────────────────────────────────── */
+.plan{list-style:none;margin:0;padding:0;border-top:1px solid var(--wall-line)}
+.plan li{display:flex;gap:var(--s3);align-items:baseline;padding:9px 2px;
+  border-bottom:1px solid var(--wall-line);color:var(--dim-2);font-size:17px}
+.plan li em{font:700 15px/1 'JetBrains Mono',monospace;font-style:normal;
+  width:3.4em;flex:none;text-align:right}
+.plan li.past{color:var(--chalk-dim)}
+.plan li.now{color:var(--chalk);font-weight:800;background:#fdfaef}
+.plan li.now::after{content:"◀";color:var(--red);margin-left:auto;font-size:13px}
+.plan li .note{color:var(--dim-2);font-weight:400;font-size:14px}
+
+/* ── 답안지 ───────────────────────────────────────────── */
+.sheetbar{display:flex;align-items:center;gap:var(--s2);margin-bottom:var(--s2)}
+.sheetbar button{font:700 13px/1 'Gothic A1',sans-serif;cursor:pointer;border-radius:999px;
+  padding:10px 18px;border:1px solid var(--wall-line);background:none;color:var(--chalk-dim)}
+.sheetbar .left{margin-left:auto;font:700 14px/1 'JetBrains Mono',monospace;color:var(--red)}
+.fit{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch}
+.zoom{transform-origin:top left;width:860px}
+.flip{position:relative;transition:transform .45s ease;transform-style:preserve-3d}
+.flip.back{transform:rotateY(180deg)}
+.flip>.omr{backface-visibility:hidden;-webkit-backface-visibility:hidden}
+.flip>.omr.rear{position:absolute;inset:0;transform:rotateY(180deg)}
+
+/* 테두리를 두 겹으로 겹쳐 사선 모서리에도 선이 남게 한다 */
+.omr{--cut:polygon(0 0,100% 0,100% calc(100% - 22px),calc(100% - 22px) 100%,0 100%);
+  background:var(--rim);padding:2px;clip-path:var(--cut);font-size:11px}
+.paper{background:var(--paper);clip-path:var(--cut);padding:10px 10px 0}
+.omr.rear .paper{display:flex;align-items:center;justify-content:center;min-height:360px}
+
+.head{display:flex;border:1px solid var(--blue);border-bottom:none;font-size:12px}
+.head .k{width:84px;flex:none;background:var(--sky);border-right:1px solid var(--blue);
+  padding:6px 0;text-align:center;letter-spacing:.5em;text-indent:.5em;font-weight:700}
+.head .v{flex:1;padding:6px 10px;font-weight:700}
+.head+.head{border-top:1px solid var(--blue)}
+
+.grid{display:flex;border:1px solid var(--blue);border-top:none}
+.blk{flex:1;min-width:0;border-right:1px solid var(--blue)}
+.blk:last-child{border-right:none}
+.hd,.qr{display:grid;grid-template-columns:2.6em repeat(5,1fr);align-items:stretch}
+.hd{background:var(--sky);border-bottom:1px solid var(--blue);text-align:center;
+  font-weight:700;font-size:11px}
+.hd i,.hd b{font-style:normal;padding:4px 0}
+.hd i{border-right:1px solid var(--blue)}
+.qr{border-bottom:1px dotted #b9cce3}
+.qr:last-child{border-bottom:none}
+.qr.y{background:var(--band-y)} .qr.p{background:var(--band-p)}
+.qr.dead{opacity:.5}
+.no{position:relative;background:var(--sky);border-right:1px solid var(--blue);
+  display:flex;align-items:center;justify-content:center;
+  font:700 12px/1 'Gothic A1',sans-serif;color:var(--chalk)}
+.op{position:relative;display:flex;align-items:center;justify-content:center;
+  padding:3px 0;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.qr.dead .op,.qr.shut .op{cursor:default}
+.op em{position:relative;display:flex;align-items:center;justify-content:center;
+  width:1.55em;height:2.25em;border:.14em solid var(--bub);border-radius:999px;
+  color:var(--bub);font-style:normal;font-size:11px;line-height:1;background:transparent}
+/* 칠한 칸 — 스타디움보다 조금 넓게 덮는다 */
+.op.on em::after{content:"";position:absolute;inset:-.28em -.34em;border-radius:999px;
+  background:rgba(0,0,0,.9)}
+/* 틀린 문제의 정답 자리 */
+.op.key em::before{content:"";position:absolute;inset:-.34em -.42em;border-radius:999px;
+  border:.17em solid var(--red)}
+.qr.hit .no::after,.qr.miss .no::after{position:absolute;inset:0;display:flex;
+  align-items:center;justify-content:center;color:var(--red);font-size:19px;font-weight:700}
+.qr.hit .no::after{content:"○"}
+.qr.miss .no::after{content:"✕"}
+
+.foot{display:flex;border:1px solid var(--blue);border-top:none;font-size:12px}
+.foot .k{width:84px;flex:none;background:var(--sky);border-right:1px solid var(--blue);
+  padding:6px 0;text-align:center;font-weight:700}
+.foot .v{width:150px;border-right:1px solid var(--blue);padding:4px 8px}
+.foot .v:last-child{border-right:none;flex:1}
+.foot input{width:100%;border:none;background:none;font:700 13px/1.4 'JetBrains Mono',monospace;
+  color:var(--chalk);padding:0}
+.foot input:focus{outline:none}
+.foot .real{font:700 14px/1.4 'JetBrains Mono',monospace;color:var(--red)}
+/* 상단 바코드 — 굵은 막대가 서너 개씩 뭉쳐 있고 뭉치 사이는 넓다 */
+.code{display:flex;align-items:flex-end;height:26px;margin:0 2px 8px;gap:0}
+.code i{background:#1a1a1a;height:100%;flex:none}
+.code .gap{background:none}
+.rear .warn{border:1px solid var(--blue);padding:14px 18px;max-width:300px}
+.rear .warn h4{margin:0 0 8px;font:700 13px/1 'Gothic A1',sans-serif;
+  letter-spacing:.4em;text-indent:.4em;text-align:center}
+.rear .warn p{margin:0;font-size:11.5px;line-height:1.8;color:#5b4a1d}
+
+/* ── 결과 ─────────────────────────────────────────────── */
+.result{display:flex;gap:var(--s2);flex-wrap:wrap;margin-top:var(--s3)}
+.cell{flex:1;min-width:110px;border:1px solid var(--wall-line);border-radius:10px;
+  background:var(--wall-2);padding:var(--s3);text-align:center}
+.cell small{display:block;color:var(--chalk-dim);font-size:12px;margin-bottom:4px}
+.cell b{font:700 28px/1 'JetBrains Mono',monospace}
+body.teach .cell b{font-size:40px}
+
+/* ── 리허설 막대 (서버에 붙이면 지운다) ───────────────────── */
+.rehearse{position:fixed;left:0;right:0;bottom:0;z-index:9;display:flex;gap:var(--s2);
+  align-items:center;padding:8px 12px;background:rgba(255,255,255,.96);
+  border-top:1px solid var(--wall-line)}
+.rehearse button{font:700 12px/1 'Gothic A1',sans-serif;cursor:pointer;border-radius:999px;
+  padding:9px 14px;border:1px solid var(--wall-line);background:none;color:var(--chalk-dim);
+  white-space:nowrap}
+.rehearse button.on{background:var(--chalk);color:#fff;border-color:var(--chalk)}
+.rehearse input{flex:1;min-width:80px}
+.rehearse .tag{font:700 11px/1 'JetBrains Mono',monospace;color:var(--dim-2)}
+</style>
+
+<div class="wrap">
+  <h1>블라인드<span class="code">(99)</span></h1>
+  <p class="sub"><span id="span">10:10~10:40</span> · <span id="day">10/06(화)</span> · 응시 <b id="heads">21</b>명</p>
+
+  <div class="gauge">
+    <div class="bar"><div class="fill" id="fill"></div></div>
+    <div class="hand" id="hand"></div>
+    <div class="marks" id="marks"></div>
+  </div>
+  <div class="clock"><b id="mmss">00:00</b><span id="phase">시작 전</span></div>
+
+  <section class="notice" id="notice" hidden>
+    <div class="ntitle" id="ntitle"></div>
+    <div class="nbody" id="nbody"></div>
+    <div class="ngone" id="ngone" hidden></div>
+  </section>
+
+  <ol class="plan" id="plan" hidden></ol>
+
+  <section id="sheet" hidden>
+    <div class="sheetbar">
+      <button id="hide">숨기기</button>
+      <span class="left" id="left"></span>
+    </div>
+    <div class="fit" id="fit"><div class="zoom" id="zoom"><div class="flip" id="flip">
+      <div class="omr"><div class="paper">
+        <div class="code" id="code"></div>
+        <div class="head"><div class="k">성명</div><div class="v" id="who">우렁찬 비둘기</div></div>
+        <div class="head"><div class="k">과목명</div><div class="v">블라인드</div></div>
+        <div class="grid" id="grid"></div>
+        <div class="foot">
+          <div class="k">예상점수</div>
+          <div class="v"><input id="guess" inputmode="numeric" maxlength="3" placeholder=""></div>
+          <div class="v real" id="real"></div>
+        </div>
+      </div></div>
+      <div class="omr rear"><div class="paper">
+        <div class="warn">
+          <h4>유 의 사 항</h4>
+          <p>1. 컴퓨터용 수성 사인펜만 사용할 것.<br>
+             2. 본 답안지를 칼로 긁거나 수정액을 칠하거나 구기지 말 것.<br>
+             3. 숨기기를 한 번 더 누르면 앞면이 보인다.</p>
+        </div>
+      </div></div>
+    </div></div></div>
+  </section>
+
+  <section class="result" id="result" hidden></section>
+</div>
+
+<div class="rehearse">
+  <span class="tag">리허설</span>
+  <button id="play">▶</button>
+  <button id="rate">×60</button>
+  <input type="range" id="scrub" min="0" max="2400" step="1" value="0">
+  <button id="teach">교사용</button>
+</div>
+
+<script>
+(function(){
+"use strict";
+const el = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const MIN = 60, LEN = 40 * MIN;            /* 40분짜리 판이다 */
+const KEY = [5,2,5,2,1,5,3,2,5,5,1,3,3,2,5,3,3,2,5,5];   /* 1판 정답 */
+const USED = 20, SHOWN = 40;               /* 쓰는 건 20까지, 보이는 건 40까지 */
+const PER = 5;                             /* 한 문제 5점 */
+
+/* ── 진행표. [대괄호]로 적은 것만 게이지에 세모를 세운다 ──────────── */
+const PLAN = [
+  {m:0,  mark:1, t:"준비령",
+   say:"준비령이 울렸습니다.\n자리에 앉아 기다립니다."},
+  {m:4,  mark:0, t:"개별 힌트 공개", gone:1,
+   say:"내 명제 — 홀수 번호 문제의 답은 홀수이다.",
+   head:"나에게만 보이는 힌트 · 1분 후 사라집니다"},
+  {m:5,  mark:1, t:"본령",
+   say:"본령이 울렸습니다.\n이제부터 자유롭게 이동하거나 대화해도 좋습니다."},
+  {m:15, mark:1, t:"1차 공통 힌트 공개", gone:1,
+   say:"4의 배수 문제는 답이 4가 아니다.", head:"1차 공통 힌트 · 1분 후 사라집니다"},
+  {m:20, mark:1, t:"2차 공통 힌트 공개", gone:1,
+   say:"16~20번 문제의 답은 소수이다.", head:"2차 공통 힌트 · 1분 후 사라집니다"},
+  {m:25, mark:1, t:"3차 공통 힌트 공개", gone:1,
+   say:"3번, 6번, 9번 문제는 답이 같다.", head:"3차 공통 힌트 · 1분 후 사라집니다"},
+  {m:32, mark:1, t:"착석 안내", note:"종료까지 3분 남음",
+   say:"착석하기 바랍니다.\n이제부터 서로 대화할 수 없습니다.\n3분 간 OMR 카드에 답안 마킹이 가능합니다."},
+  {m:35, mark:1, t:"종료령",
+   say:"종료령이 울렸습니다.\n답안은 자동으로 제출되었습니다."},
+  {m:36, mark:0, t:"정답 공개", note:"1번부터 5초마다 1개씩",
+   say:"정답을 공개합니다."},
+  {m:38, mark:0, t:"점수 공개", note:"등수 · 등급 · 평균",
+   say:"채점이 끝났습니다."}
+];
+const AT = t => {                           /* 지금 몇 번째 단계인가 */
+  let k = -1;
+  PLAN.forEach((p, i) => { if (t >= p.m * MIN) k = i; });
+  return k;
+};
+const SIT = 32 * MIN, END = 35 * MIN, OPEN = 36 * MIN, SCORE = 38 * MIN;
+const STEP = 5;                             /* 정답은 5초에 하나씩 */
+
+/* ── 답안지 그리기 ─────────────────────────────────────── */
+const band = q => { const r = (q - 1) % 20 + 1; return (r <= 5 || r >= 16) ? "y" : "p"; };
+let html = "";
+for (let b = 0; b < SHOWN / 10; b++){
+  html += '<div class="blk"><div class="hd"><i>문항</i>' +
+          [1,2,3,4,5].map(n => "<b>" + n + "</b>").join("") + "</div>";
+  for (let i = 1; i <= 10; i++){
+    const q = b * 10 + i;
+    html += '<div class="qr ' + band(q) + (q > USED ? " dead" : "") + '" data-q="' + q + '">' +
+            '<i class="no">' + q + "</i>" +
+            [1,2,3,4,5].map(n => '<span class="op" data-n="' + n + '"><em>' + n + "</em></span>").join("") +
+            "</div>";
+  }
+  html += "</div>";
+}
+el("grid").innerHTML = html;
+
+/* 상단 바코드 — 굵은 막대 서너 개씩 묶음, 묶음 사이는 넓게 띄운다 */
+const CODE = [[6,34],[6,52],[4,30],[5,46],[5,34],[6,40],[5,0]];
+el("code").innerHTML = CODE.map(([n, gap], i) =>
+  Array.from({length: n}, (_, j) =>
+    '<i style="width:6px"></i>' + (j < n - 1 ? '<i class="gap" style="width:8px"></i>' : "")
+  ).join("") + (gap ? '<i class="gap" style="width:' + gap + 'px"></i>' : "")).join("");
+
+const marked = {};                          /* 문항 → 고른 보기 */
+el("grid").addEventListener("click", e => {
+  const op = e.target.closest(".op"); if (!op) return;
+  const row = op.closest(".qr"), q = +row.dataset.q;
+  if (q > USED || now >= END) return;        /* 21번부터는 종이에만 있다 */
+  const n = +op.dataset.n;
+  const same = marked[q] === n;
+  row.querySelectorAll(".op.on").forEach(o => o.classList.remove("on"));
+  if (same) delete marked[q]; else { marked[q] = n; op.classList.add("on"); }
+});
+
+/* ── 게이지 눈금 ───────────────────────────────────────── */
+el("marks").innerHTML = PLAN.filter(p => p.mark).map((p, i) =>
+  '<div class="mk' + (i % 2 ? " low" : "") + '" data-m="' + p.m + '" style="left:' +
+  (p.m / 40 * 100) + '%"><i></i><b>' + esc(p.t) + "</b></div>").join("");
+
+/* ── 상태 ────────────────────────────────────────────── */
+let now = 0, teach = new URLSearchParams(location.search).has("t"), flipped = false;
+const mmss = s => String(Math.floor(s / 60)).padStart(2, "0") + ":" +
+                  String(Math.floor(s % 60)).padStart(2, "0");
+
+function paint(){
+  document.body.classList.toggle("teach", teach);
+  el("fill").style.width = (now / LEN * 100) + "%";
+  el("hand").style.left = (now / LEN * 100) + "%";
+  el("mmss").textContent = mmss(now);
+  const k = AT(now), step = PLAN[k];
+  el("phase").textContent = step ? step.t : "시작 전";
+  document.querySelectorAll(".mk").forEach(m =>
+    m.classList.toggle("past", now >= +m.dataset.m * MIN));
+
+  /* 안내 창 — 힌트는 1분 뒤 사라지고, 멘트는 다음 단계까지 남는다 */
+  const live = step && (!step.gone || now - step.m * MIN < MIN);
+  el("notice").hidden = !live;
+  if (live){
+    el("notice").classList.toggle("hint", !!step.gone);
+    el("ntitle").textContent = step.head || step.t;
+    el("nbody").textContent = step.say;
+    el("ngone").hidden = !step.gone;
+    if (step.gone) el("ngone").textContent = Math.ceil(MIN - (now - step.m * MIN)) + "초 후 사라집니다";
+  }
+
+  /* 교사용은 일정표, 학생용은 답안지 */
+  el("plan").hidden = !teach;
+  el("sheet").hidden = teach || now < SIT;
+  if (teach) el("plan").innerHTML = PLAN.map((p, i) =>
+    '<li class="' + (i === k ? "now" : i < k ? "past" : "") + '"><em>' + p.m +
+    '분</em><span>' + esc(p.t) + (p.note ? ' <span class="note">' + esc(p.note) + "</span>" : "") +
+    "</span></li>").join("");
+
+  el("left").textContent = now < END ? "마킹 " + mmss(END - now) : "마킹 종료";
+  el("guess").disabled = now >= END;
+  document.querySelectorAll(".qr").forEach(r => r.classList.toggle("shut", now >= END));
+
+  /* 정답 공개 — 1번부터 5초마다 한 개씩 */
+  const open = now < OPEN ? 0 : Math.min(USED, Math.floor((now - OPEN) / STEP) + 1);
+  let hits = 0;
+  for (let q = 1; q <= USED; q++){
+    const row = el("grid").querySelector('.qr[data-q="' + q + '"]');
+    const done = q <= open, right = marked[q] === KEY[q - 1];
+    row.classList.toggle("hit", done && right);
+    row.classList.toggle("miss", done && !right);
+    row.querySelectorAll(".op").forEach(o =>
+      o.classList.toggle("key", done && !right && +o.dataset.n === KEY[q - 1]));
+    if (done && right) hits++;
+  }
+  el("real").textContent = open ? hits * PER + "점" : "";
+
+  /* 점수·등수·등급·평균 */
+  const show = now >= SCORE;
+  el("result").hidden = !show;
+  if (show){
+    const mine = hits * PER, all = CROWD.concat([mine]);
+    const rank = 1 + CROWD.filter(s => s > mine).length;
+    const avg = all.reduce((a, b) => a + b, 0) / all.length;
+    el("result").innerHTML =
+      cell("점수", mine + "점") + cell("등수", rank + "위") +
+      cell("등급", grade(rank, all.length) + "등급") + cell("평균", avg.toFixed(1) + "점");
+  }
+  fit();
+}
+const cell = (k, v) => '<div class="cell"><small>' + k + "</small><b>" + v + "</b></div>";
+/* 데모용 또래 점수 — 서버에 붙이면 실제 응시자 점수로 바뀐다 */
+const CROWD = [85,80,75,75,70,70,70,65,65,60,60,55,55,50,50,45,40,40,35,30];
+const CUT = [4,11,23,40,60,77,89,96];
+function grade(rank, n){
+  const pct = rank / n * 100;
+  for (let i = 0; i < CUT.length; i++) if (pct <= CUT[i]) return i + 1;
+  return 9;
+}
+
+/* 좁은 화면에서는 줄이고, 더 좁으면 가로로 민다 */
+function fit(){
+  const box = el("fit"); if (!box.offsetWidth) return;
+  const z = Math.max(.62, Math.min(1, box.clientWidth / 860));
+  el("zoom").style.transform = "scale(" + z + ")";
+  box.style.height = Math.ceil(el("flip").offsetHeight * z) + "px";
+}
+addEventListener("resize", fit);
+
+el("hide").addEventListener("click", () => {
+  flipped = !flipped;
+  el("flip").classList.toggle("back", flipped);
+  el("hide").textContent = flipped ? "보기" : "숨기기";
+});
+
+/* ── 리허설 — 서버에 붙이면 이 아래는 지운다 ────────────────── */
+let timer = null, rate = 60;
+const scrub = el("scrub");
+function tick(){ now = Math.min(LEN, now + rate / 4); scrub.value = now; paint();
+                 if (now >= LEN) stop(); }
+function stop(){ clearInterval(timer); timer = null; el("play").textContent = "▶";
+                 el("play").classList.remove("on"); }
+el("play").addEventListener("click", () => {
+  if (timer) return stop();
+  timer = setInterval(tick, 250); el("play").textContent = "❚❚"; el("play").classList.add("on");
+});
+el("rate").addEventListener("click", () => {
+  rate = rate === 60 ? 1 : rate === 1 ? 10 : 60;
+  el("rate").textContent = "×" + rate;
+});
+scrub.addEventListener("input", () => { now = +scrub.value; paint(); });
+el("teach").addEventListener("click", () => {
+  teach = !teach; el("teach").classList.toggle("on", teach); paint();
+});
+el("teach").classList.toggle("on", teach);
+paint();
+})();
+</script>

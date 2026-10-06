@@ -58,7 +58,7 @@ def main():
         print("크롬이나 엣지를 못 찾았다. 검사를 건너뛴다.")
         return 0
 
-    names = sys.argv[1:] or ["index.html", "admin.html", "quiz.html", "bid.html"]
+    names = sys.argv[1:] or ["index.html", "admin.html", "quiz.html", "omr.html", "bid.html"]
     bad_total = 0
     for name in names:
         path = os.path.join(ROOT, name)
