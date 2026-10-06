@@ -164,6 +164,36 @@ button:disabled{opacity:.4;cursor:not-allowed}
 
   <div id="quizzes"></div>
 
+  <!-- 블라인드 열기 -->
+  <form class="card" id="omaker" hidden>
+    <h2>새 블라인드 열기</h2>
+    <div class="row">
+      <div style="flex:2">
+        <label for="otitle">이름</label>
+        <input id="otitle" value="블라인드" maxlength="40">
+      </div>
+      <div style="max-width:140px">
+        <label for="opin">참가 비밀번호 (숫자 4자리)</label>
+        <input id="opin" class="pin" inputmode="numeric" maxlength="4" value="">
+      </div>
+      <button class="go" type="submit">열기</button>
+    </div>
+    <details style="margin-top:12px">
+      <summary style="cursor:pointer;font-size:13px;color:var(--chalk-dim)">공통 힌트 바꾸기</summary>
+      <div style="margin-top:10px;display:grid;gap:10px">
+        <div><label for="oh1">1차 — 15분</label>
+          <input id="oh1" maxlength="120" placeholder="비우면 기본 힌트가 나갑니다"></div>
+        <div><label for="oh2">2차 — 20분</label>
+          <input id="oh2" maxlength="120" placeholder="비우면 기본 힌트가 나갑니다"></div>
+        <div><label for="oh3">3차 — 25분</label>
+          <input id="oh3" maxlength="120" placeholder="비우면 기본 힌트가 나갑니다"></div>
+      </div>
+    </details>
+    <p class="msg" id="omakeMsg">학생들은 <b>omr.html</b> 로 들어옵니다. 교실 앞에는 <b>omr.html?t=1</b> 을 띄웁니다.</p>
+  </form>
+
+  <div id="omrs"></div>
+
   <!-- 돌림판 비딩 열기 -->
   <form class="card" id="bmaker" hidden>
     <h2>새 돌림판 비딩 열기</h2>
@@ -232,7 +262,7 @@ function signOut(why){
   try { sessionStorage.removeItem("shogi-admin"); } catch (e) {}
   clearInterval(timer); timer = null;
   el("gate").hidden = false; el("maker").hidden = true; el("qmaker").hidden = true;
-  el("bmaker").hidden = true;
+  el("bmaker").hidden = true; el("omaker").hidden = true;
   el("cups").innerHTML = ""; el("quizzes").innerHTML = ""; el("bidsBox").innerHTML = "";
   el("empty").hidden = true; el("foot").hidden = true;
   say("gateMsg", why || "", why ? "bad" : "");
@@ -261,7 +291,7 @@ el("gate").addEventListener("submit", async e => {
 
 function enter(){
   el("gate").hidden = true; el("maker").hidden = false; el("qmaker").hidden = false;
-  el("bmaker").hidden = false;
+  el("bmaker").hidden = false; el("omaker").hidden = false;
   say("gateMsg", "");
   refresh();
   clearInterval(timer);
@@ -283,7 +313,9 @@ el("maker").addEventListener("submit", async e => {
 
 const ERR = {badpin:"비밀번호는 숫자 네 자리입니다", busy:"너무 많습니다",
              nocup:"없는 대회입니다", noquiz:"없는 퀴즈입니다",
-             nobid:"없는 비딩입니다", notplan:"지금은 작전타임이 아닙니다",
+             nobid:"없는 비딩입니다", noomr:"없는 블라인드입니다",
+             early:"아직 마킹할 때가 아닙니다", late:"마킹이 끝났습니다",
+             notrunning:"아직 시작하지 않았습니다", notplan:"지금은 작전타임이 아닙니다",
              yours:"이미 그 팀이 최고가입니다", min:"1 이상이어야 합니다",
              notdone:"아직 돌릴 때가 아닙니다", nothing:"돌릴 룰렛이 없습니다",
              few:"사람이 모자랍니다 — 대회·비딩은 둘, 퀴즈는 여섯부터",
@@ -301,7 +333,7 @@ const STATE = {open:"접수 중", running:"진행 중", done:"끝남"};
 function paint(j){
   const box = el("cups");
   el("empty").hidden = j.cups.length > 0 || (j.quizzes || []).length > 0 ||
-                       (j.bids || []).length > 0;
+                       (j.bids || []).length > 0 || (j.omrs || []).length > 0;
   el("foot").hidden = false;
   el("foot").textContent =
     "서버에 접속 중인 사람 " + j.players + "명 · 열린 대국 " + j.rooms + "개";
@@ -336,6 +368,7 @@ function paint(j){
   box.querySelectorAll("button[data-do]").forEach(b =>
     b.addEventListener("click", () => act(b.dataset.do, b.dataset.code)));
   quizPaint(j);
+  omrPaint(j);
   bidPaint(j);
 }
 function btn(what, code, cls, text){
@@ -487,6 +520,120 @@ async function qact(what, code){
   if (!j.ok) return alert(ERR[j.why] || j.why);
   if (what === "quizstart")
     alert(j.teams + "팀 — " + j.sizes.join("명 · ") + "명");
+  refresh();
+}
+
+/* ─── 블라인드 ─── */
+el("omaker").addEventListener("submit", async e => {
+  e.preventDefault();
+  const pin = el("opin").value.replace(/[^0-9]/g, "");
+  if (pin.length !== 4) return say("omakeMsg", "참가 비밀번호는 숫자 네 자리입니다.", "bad");
+  say("omakeMsg", "여는 중입니다…");
+  const hints = [el("oh1").value.trim(), el("oh2").value.trim(), el("oh3").value.trim()];
+  const j = await call("omropen", {pin, title: el("otitle").value.trim(), hints});
+  if (!j.ok) return say("omakeMsg", ERR[j.why] || j.why, "bad");
+  say("omakeMsg", "블라인드 " + j.omr.code + " 를 열었습니다. 학생은 omr.html, 교실 앞은 omr.html?t=1 입니다.", "good");
+  el("opin").value = "";
+  refresh();
+});
+
+function omrPaint(j){
+  const box = el("omrs");
+  const list = j.omrs || [];
+  box.innerHTML = list.map(o => {
+    const acts = [];
+    if (o.state === "open"){
+      acts.push(obtn("omrstart", o.code, "go", "명제 나눠 주고 시작"));
+      acts.push(obtn("omrmock", o.code, "", "연습 참가자 넣기"));
+    }
+    if (o.state === "running") acts.push(obtn("omrwarp", o.code, "", "시계 옮기기"));
+    acts.push(obtn("omrclose", o.code, "bad right",
+                   o.state === "running" ? "블라인드 중단" : "블라인드 닫기"));
+
+    /* 지금 몇 분이고 어느 단계인지는 관리자만 본다 — 교실에서 읽어 줘야 한다 */
+    const live = o.state === "open" ? "" :
+      '<span>지금 <b>' + esc(o.step || "—") + '</b></span>' +
+      '<span>경과 <b>' + clock(o.spent / 1000) + '</b> / ' + clock(o.len / 1000) + '</span>' +
+      (o.opened ? '<span>정답 <b>' + o.opened + '</b>개 열림</span>' : "") +
+      (o.avg === null ? "" : '<span>평균 <b>' + o.avg.toFixed(1) + '</b>점</span>');
+
+    return '<div class="card">' +
+      '<div class="cup-head">' +
+        '<h2>' + esc(o.title) + '</h2>' +
+        '<span class="code">' + esc(o.code) + '</span>' +
+        '<span class="tag ' + o.state + '">' + STATE[o.state] + '</span>' +
+      '</div>' +
+      '<div class="facts">' +
+        '<span>참가 <b>' + o.people + '</b>명</span>' +
+        '<span>참가 비번 <b>' + esc(o.pin || "없음") + '</b></span>' +
+        live +
+      '</div>' +
+      ohints(o) +
+      (o.board.length ? oboard(o) : owaiting(o)) +
+      '<div class="acts">' + acts.join("") + '</div>' +
+    '</div>';
+  }).join("");
+
+  box.querySelectorAll("button[data-do]").forEach(b =>
+    b.addEventListener("click", () => oact(b.dataset.do, b.dataset.code)));
+}
+function obtn(what, code, cls, text){
+  return '<button class="' + cls + '" data-do="' + what + '" data-code="' + code + '">' +
+         text + '</button>';
+}
+/* 공통 힌트는 교실에서 읽어 줄 수도 있으니 미리 보여 둔다 */
+function ohints(o){
+  return '<div class="who" style="margin-top:12px">' + o.hints.map((h, i) =>
+    '<span>' + (i + 1) + '차 · ' + esc(h) + '</span>').join("") + '</div>';
+}
+function owaiting(o){
+  if (!o.entrants.length)
+    return '<p class="hint" style="margin-top:12px">아직 아무도 안 들어왔습니다. ' +
+           '학생들에게 <b>omr.html</b> 과 비밀번호 <b>' + esc(o.pin) + '</b> 를 알려 주세요.</p>';
+  const n = o.entrants.length;
+  const note = o.state === "open"
+    ? (n < 2 ? "둘은 있어야 시작합니다." : n + "명에게 명제를 한 줄씩 나눠 줍니다.")
+    : "";
+  return (note ? '<p class="hint" style="margin-top:12px">' + note + '</p>' : "") +
+    '<div class="who">' + o.entrants.map(p =>
+      '<span>' + esc(p.name) + (p.prop ? " " + p.prop : "") +
+      (p.marked ? " · " + p.marked + "칸" : "") + '</span>').join("") + '</div>';
+}
+/* 종료령 뒤에만 나온다 — 그 전에는 서버가 점수를 안 준다 */
+function oboard(o){
+  return '<div class="ranks">' + o.board.map(p =>
+    '<div class="rankrow">' +
+      '<span class="place">' + p.rank + '위</span>' +
+      '<span class="tname">' + esc(p.name) +
+        '<span class="pill">' + p.grade + '등급</span></span>' +
+      '<span class="mates">' + (p.guess === null ? "" : "예상 " + p.guess + "점") + '</span>' +
+      '<span class="pts">' + p.score + '점</span>' +
+    '</div>').join("") + '</div>';
+}
+
+async function oact(what, code){
+  if (what === "omrclose" &&
+      !confirm("블라인드 " + code + " 를 닫습니다. 답안도 점수도 사라집니다. 닫을까요?")) return;
+  if (what === "omrstart" &&
+      !confirm("여기서 참가가 마감되고 40분이 흐르기 시작합니다. 시작할까요?")) return;
+  const body = {code};
+  if (what === "omrmock"){
+    const n = prompt("연습 참가자를 몇 명 넣을까요?", "21");
+    if (n === null) return;
+    body.n = Math.max(1, Math.min(48, parseInt(n, 10) || 0));
+    if (!body.n) return;
+  }
+  if (what === "omrwarp"){
+    const m = prompt("몇 분 당길까요? 되감으려면 음수를 넣으세요.", "5");
+    if (m === null) return;
+    body.m = parseFloat(m) || 0;
+    if (!body.m) return;
+  }
+  const j = await call(what, body);
+  if (!j.ok) return alert(ERR[j.why] || j.why);
+  if (what === "omrstart")
+    alert(j.people + "명에게 명제 " + j.props + "개를 나눠 줬습니다." +
+          (j.short ? "\n사람이 명제보다 많아 겹쳐 받은 사람이 있습니다." : ""));
   refresh();
 }
 

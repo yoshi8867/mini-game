@@ -161,6 +161,47 @@ body.teach .nbody{font-size:26px}
 .cell b{font:700 28px/1 'JetBrains Mono',monospace}
 body.teach .cell b{font-size:40px}
 
+/* ── 고르기 · 기다리기 ─────────────────────────────────── */
+.card{background:var(--wall-2);border:1px solid var(--wall-line);border-radius:10px;
+  padding:var(--s3);margin-bottom:var(--s3)}
+.hint{color:var(--chalk-dim);font-size:13.5px;margin:0}
+.big{font-size:19px;font-weight:700;margin:0 0 8px}
+.gatename{margin:0 0 12px;font-size:14px;color:var(--chalk-dim)}
+label{display:block;font-size:12.5px;color:var(--chalk-dim);margin-bottom:5px}
+.row{display:flex;gap:var(--s2);align-items:center}
+input{width:100%;background:var(--wall);color:var(--chalk);
+  border:1px solid var(--wall-line);border-radius:6px;padding:12px;
+  font:400 16px/1 'Gothic A1',system-ui,sans-serif}
+input:focus{outline:none;border-color:var(--rim)}
+input.pin{font-family:'JetBrains Mono',monospace;letter-spacing:.3em;text-align:center}
+button.go{font:700 14px/1 'Gothic A1',sans-serif;cursor:pointer;border-radius:999px;
+  padding:13px 20px;border:1px solid #d9ad38;background:var(--rim);color:#1b1a14;
+  white-space:nowrap}
+.pickrow{display:flex;align-items:center;gap:var(--s2);width:100%;text-align:left;
+  background:var(--wall);border:1px solid var(--wall-line);border-radius:8px;
+  padding:14px var(--s3);margin-bottom:8px;cursor:pointer;
+  font:400 15px/1.3 'Gothic A1',sans-serif;color:var(--chalk)}
+.pickrow:last-child{margin-bottom:0}
+.pickrow:disabled{opacity:.45;cursor:default}
+.pickrow b{flex:1;font-weight:700}
+.pickrow .tag,.pickrow .n{font-size:12px;color:var(--chalk-dim);flex:none}
+.msg{font-size:13px;color:var(--chalk-dim);margin:10px 0 0;min-height:1.4em}
+.msg.bad{color:var(--lose,#c62828)}
+.msg.good{color:#1f7a3d}
+
+/* ── 교실 앞 순위 ──────────────────────────────────────── */
+.ranks{margin-top:var(--s3);border-top:1px solid var(--wall-line)}
+.rankrow{display:flex;align-items:baseline;gap:var(--s2);padding:9px 2px;
+  border-bottom:1px solid var(--wall-line)}
+.rankrow .place{font:700 13px/1 'JetBrains Mono',monospace;color:var(--chalk-dim);
+  width:3.2em;flex:none}
+.rankrow .tname{flex:1;font-weight:700}
+.rankrow .pill{font-size:11px;font-weight:700;color:var(--mark,#8a5a00);
+  background:#fdf3d8;border-radius:999px;padding:3px 8px;flex:none}
+.rankrow .pts{font:700 16px/1 'JetBrains Mono',monospace;flex:none}
+body.teach .rankrow{font-size:20px;padding:12px 2px}
+body.teach .rankrow .pts{font-size:22px}
+
 /* ── 리허설 막대 (서버에 붙이면 지운다) ───────────────────── */
 .rehearse{position:fixed;left:0;right:0;bottom:0;z-index:9;display:flex;gap:var(--s2);
   align-items:center;padding:8px 12px;background:rgba(255,255,255,.96);
@@ -174,8 +215,36 @@ body.teach .cell b{font-size:40px}
 </style>
 
 <div class="wrap">
-  <h1>블라인드<span class="code">(99)</span></h1>
-  <p class="sub"><span id="span">10:10~10:40</span> · <span id="day">10/06(화)</span> · 응시 <b id="heads">21</b>명</p>
+  <!-- 들어갈 판 고르기 -->
+  <section id="pick">
+    <h1>블라인드</h1>
+    <p class="sub">들어갈 판을 고르고 비밀번호를 넣으세요.</p>
+    <div class="card" id="plist"><p class="hint">불러오는 중…</p></div>
+    <div class="card" id="gate" hidden>
+      <p class="gatename"><b id="gateName"></b> 에 들어갑니다.</p>
+      <label for="pin">참가 비밀번호 (숫자 4자리)</label>
+      <div class="row">
+        <input id="pin" class="pin" inputmode="numeric" maxlength="4">
+        <button class="go" id="enter">들어가기</button>
+      </div>
+      <p class="msg" id="pickMsg"></p>
+    </div>
+  </section>
+
+  <!-- 기다리기 -->
+  <section id="lobby" hidden>
+    <h1 id="lobbyTitle">블라인드</h1>
+    <p class="sub">내 이름은 <b id="lobbyName"></b> 입니다.</p>
+    <div class="card">
+      <p class="big">들어왔습니다. 선생님이 시작할 때까지 기다리세요.</p>
+      <p class="hint">지금 <b id="lobbyN">0</b>명이 들어와 있습니다.
+        시작하면 <b>나에게만 보이는 명제 한 줄</b>이 뜹니다. 1분 뒤 사라지니 잘 외워 두세요.</p>
+    </div>
+  </section>
+
+  <section id="play" hidden>
+  <h1><span id="title">블라인드</span><span class="code" id="code2"></span></h1>
+  <p class="sub" id="sub"></p>
 
   <div class="gauge">
     <div class="bar"><div class="fill" id="fill"></div></div>
@@ -200,7 +269,7 @@ body.teach .cell b{font-size:40px}
     <div class="fit" id="fit"><div class="zoom" id="zoom"><div class="flip" id="flip">
       <div class="omr"><div class="paper">
         <div class="code" id="code"></div>
-        <div class="head"><div class="k">성명</div><div class="v" id="who">우렁찬 비둘기</div></div>
+        <div class="head"><div class="k">성명</div><div class="v" id="who2"></div></div>
         <div class="head"><div class="k">과목명</div><div class="v">블라인드</div></div>
         <div class="grid" id="grid"></div>
         <div class="foot">
@@ -221,14 +290,15 @@ body.teach .cell b{font-size:40px}
   </section>
 
   <section class="result" id="result" hidden></section>
+  <div class="ranks" id="ranks" hidden></div>
+  </section>
 </div>
 
-<div class="rehearse">
+<div class="rehearse" id="rehearse" hidden>
   <span class="tag">리허설</span>
-  <button id="play">▶</button>
+  <button id="play2">▶</button>
   <button id="rate">×60</button>
   <input type="range" id="scrub" min="0" max="2400" step="1" value="0">
-  <button id="teach">교사용</button>
 </div>
 
 <script>
@@ -236,193 +306,370 @@ body.teach .cell b{font-size:40px}
 "use strict";
 const el = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const MIN = 60, LEN = 40 * MIN;            /* 40분짜리 판이다 */
-const KEY = [5,2,5,2,1,5,3,2,5,5,1,3,3,2,5,3,3,2,5,5];   /* 1판 정답 */
-const USED = 20, SHOWN = 40;               /* 쓰는 건 20까지, 보이는 건 40까지 */
-const PER = 5;                             /* 한 문제 5점 */
+const MIN = 60000;
 
-/* ── 진행표. [대괄호]로 적은 것만 게이지에 세모를 세운다 ──────────── */
-const PLAN = [
-  {m:0,  mark:1, t:"준비령",
-   say:"준비령이 울렸습니다.\n자리에 앉아 기다립니다."},
-  {m:4,  mark:0, t:"개별 힌트 공개", gone:1,
-   say:"내 명제 — 홀수 번호 문제의 답은 홀수이다.",
-   head:"나에게만 보이는 힌트 · 1분 후 사라집니다"},
-  {m:5,  mark:1, t:"본령",
-   say:"본령이 울렸습니다.\n이제부터 자유롭게 이동하거나 대화해도 좋습니다."},
-  {m:15, mark:1, t:"1차 공통 힌트 공개", gone:1,
-   say:"4의 배수 문제는 답이 4가 아니다.", head:"1차 공통 힌트 · 1분 후 사라집니다"},
-  {m:20, mark:1, t:"2차 공통 힌트 공개", gone:1,
-   say:"16~20번 문제의 답은 소수이다.", head:"2차 공통 힌트 · 1분 후 사라집니다"},
-  {m:25, mark:1, t:"3차 공통 힌트 공개", gone:1,
-   say:"3번, 6번, 9번 문제는 답이 같다.", head:"3차 공통 힌트 · 1분 후 사라집니다"},
-  {m:32, mark:1, t:"착석 안내", note:"종료까지 3분 남음",
-   say:"착석하기 바랍니다.\n이제부터 서로 대화할 수 없습니다.\n3분 간 OMR 카드에 답안 마킹이 가능합니다."},
-  {m:35, mark:1, t:"종료령",
-   say:"종료령이 울렸습니다.\n답안은 자동으로 제출되었습니다."},
-  {m:36, mark:0, t:"정답 공개", note:"1번부터 5초마다 1개씩",
-   say:"정답을 공개합니다."},
-  {m:38, mark:0, t:"점수 공개", note:"등수 · 등급 · 평균",
-   say:"채점이 끝났습니다."}
-];
-const AT = t => {                           /* 지금 몇 번째 단계인가 */
-  let k = -1;
-  PLAN.forEach((p, i) => { if (t >= p.m * MIN) k = i; });
-  return k;
-};
-const SIT = 32 * MIN, END = 35 * MIN, OPEN = 36 * MIN, SCORE = 38 * MIN;
-const STEP = 5;                             /* 정답은 5초에 하나씩 */
-
-/* ── 답안지 그리기 ─────────────────────────────────────── */
-const band = q => { const r = (q - 1) % 20 + 1; return (r <= 5 || r >= 16) ? "y" : "p"; };
-let html = "";
-for (let b = 0; b < SHOWN / 10; b++){
-  html += '<div class="blk"><div class="hd"><i>문항</i>' +
-          [1,2,3,4,5].map(n => "<b>" + n + "</b>").join("") + "</div>";
-  for (let i = 1; i <= 10; i++){
-    const q = b * 10 + i;
-    html += '<div class="qr ' + band(q) + (q > USED ? " dead" : "") + '" data-q="' + q + '">' +
-            '<i class="no">' + q + "</i>" +
-            [1,2,3,4,5].map(n => '<span class="op" data-n="' + n + '"><em>' + n + "</em></span>").join("") +
-            "</div>";
+/* 사람을 알아보는 것은 이 값 하나다. 대국 화면과 같은 것을 쓴다 —
+   같은 학생이 쇼기에서도 블라인드에서도 같은 이름으로 나온다. */
+function myPid(){
+  let v = null;
+  try { v = localStorage.getItem("shogi-pid"); } catch (e) {}
+  if (!v || v.length < 8){
+    v = "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
+    try { localStorage.setItem("shogi-pid", v); } catch (e) {}
   }
-  html += "</div>";
+  return v;
 }
-el("grid").innerHTML = html;
+const PID = myPid();
+const Q = new URLSearchParams(location.search);
+const TEACH = Q.has("t");                 /* 교실 앞에 띄우는 화면 */
+const DEMO  = Q.has("demo");              /* 서버 없이 혼자 돌려 보는 리허설 */
+const SERVER = Q.get("server") || (
+  /^(localhost|127\.|192\.168\.|10\.)/.test(location.hostname)
+    ? "ws://" + (location.hostname || "127.0.0.1") + ":3000/ws"
+    : "wss://mini-shogi.onrender.com/ws");
 
-/* 상단 바코드 — 굵은 막대 서너 개씩 묶음, 묶음 사이는 넓게 띄운다 */
-const CODE = [[6,34],[6,52],[4,30],[5,46],[5,34],[6,40],[5,0]];
-el("code").innerHTML = CODE.map(([n, gap], i) =>
-  Array.from({length: n}, (_, j) =>
-    '<i style="width:6px"></i>' + (j < n - 1 ? '<i class="gap" style="width:8px"></i>' : "")
-  ).join("") + (gap ? '<i class="gap" style="width:' + gap + 'px"></i>' : "")).join("");
+const ERR = {badpin:"비밀번호가 맞지 않습니다", noomr:"없는 판입니다",
+             closed:"이미 시작했습니다", full:"자리가 다 찼습니다",
+             early:"아직 마킹할 때가 아닙니다", late:"마킹이 끝났습니다",
+             noq:"그 문항은 쓰지 않습니다", non:"없는 보기입니다",
+             stranger:"들어 있지 않습니다", notrunning:"아직 시작하지 않았습니다",
+             nohello:"다시 들어와 주세요"};
+const STATE = {open:"접수 중", running:"진행 중", done:"끝남"};
 
-const marked = {};                          /* 문항 → 고른 보기 */
-el("grid").addEventListener("click", e => {
-  const op = e.target.closest(".op"); if (!op) return;
-  const row = op.closest(".qr"), q = +row.dataset.q;
-  if (q > USED || now >= END) return;        /* 21번부터는 종이에만 있다 */
-  const n = +op.dataset.n;
-  const same = marked[q] === n;
-  row.querySelectorAll(".op.on").forEach(o => o.classList.remove("on"));
-  if (same) delete marked[q]; else { marked[q] = n; op.classList.add("on"); }
-});
+/* 서버가 안 붙었을 때 쓰는 진행표. 붙으면 서버 것으로 갈아 끼운다 */
+const PLAN0 = [
+  {m:0, t:"준비령", mark:true}, {m:4, t:"개별 힌트 공개", mark:false},
+  {m:5, t:"본령", mark:true}, {m:15, t:"1차 공통 힌트 공개", mark:true},
+  {m:20, t:"2차 공통 힌트 공개", mark:true}, {m:25, t:"3차 공통 힌트 공개", mark:true},
+  {m:32, t:"착석 안내", mark:true, note:"종료까지 3분 남음"},
+  {m:35, t:"종료령", mark:true},
+  {m:36, t:"정답 공개", mark:false, note:"1번부터 5초마다 1개씩"},
+  {m:38, t:"점수 공개", mark:false, note:"등수 · 등급 · 평균"}];
+const DEMOKEY = [5,2,5,2,1,5,3,2,5,5,1,3,3,2,5,3,3,2,5,5];
 
-/* ── 게이지 눈금 ───────────────────────────────────────── */
-el("marks").innerHTML = PLAN.filter(p => p.mark).map((p, i) =>
-  '<div class="mk' + (i % 2 ? " low" : "") + '" data-m="' + p.m + '" style="left:' +
-  (p.m / 40 * 100) + '%"><i></i><b>' + esc(p.t) + "</b></div>").join("");
+let sock = null, rows = [], chose = null;
+let joined = null;                    /* 들어간 판 — 끊기면 이걸로 돌아온다 */
+let V = null;                         /* 마지막으로 받은 내 모습 */
+let gotAt = 0;                        /* 그것을 받은 때 — 그 뒤로는 화면이 센다 */
+let flipped = false, film = null;
 
-/* ── 상태 ────────────────────────────────────────────── */
-let now = 0, teach = new URLSearchParams(location.search).has("t"), flipped = false;
-const mmss = s => String(Math.floor(s / 60)).padStart(2, "0") + ":" +
-                  String(Math.floor(s % 60)).padStart(2, "0");
+const send = (t, o) => {
+  if (sock && sock.readyState === 1) sock.send(JSON.stringify(Object.assign({t}, o || {})));
+};
+function connect(){
+  sock = new WebSocket(SERVER);
+  sock.onopen = () => {
+    send("hello", {pid: PID});
+    send("omrs", {});
+    if (joined) send(TEACH ? "omrwatch" : "omrjoin", {code: joined, pin: chose && chose.pin});
+  };
+  sock.onmessage = e => {
+    let m; try { m = JSON.parse(e.data); } catch (x) { return; }
+    if (m.t === "omrs"){ rows = m.omrs; paintList(); }
+    else if (m.t === "omrme"){ take(m.code ? m : null); }
+    else if (m.t === "omrgone"){ joined = null; take(null);
+                                 say("pickMsg", "판이 닫혔습니다.", "bad"); }
+    else if (m.t === "error"){ say("pickMsg", ERR[m.why] || m.why, "bad"); }
+  };
+  sock.onclose = () => { sock = null; setTimeout(connect, 2000); };
+}
+function say(id, text, cls){
+  const n = el(id); if (!n) return;
+  n.textContent = text || "";
+  n.className = "msg" + (cls ? " " + cls : "");
+}
+
+/* ── 고르기 ───────────────────────────────────────────────────────── */
+function paintList(){
+  const box = el("plist");
+  if (!rows.length){
+    box.innerHTML = '<p class="hint">아직 열린 판이 없습니다. 선생님이 열 때까지 기다리세요.</p>';
+    return;
+  }
+  box.innerHTML = rows.map(r =>
+    '<button class="pickrow" data-code="' + esc(r.code) + '"' +
+    (r.state === "open" || TEACH ? "" : " disabled") + '>' +
+      '<b>' + esc(r.title) + '</b>' +
+      '<span class="tag">' + STATE[r.state] + '</span>' +
+      '<span class="n">' + r.people + '명</span>' +
+    '</button>').join("");
+  box.querySelectorAll(".pickrow").forEach(b =>
+    b.addEventListener("click", () => {
+      chose = {code: b.dataset.code, pin: ""};
+      el("gate").hidden = false;
+      el("gateName").textContent = rows.find(r => r.code === chose.code).title;
+      el("pin").focus();
+    }));
+}
+function enter(){
+  if (!chose) return;
+  const pin = el("pin").value.replace(/[^0-9]/g, "");
+  if (pin.length !== 4) return say("pickMsg", "비밀번호는 숫자 네 자리입니다.", "bad");
+  chose.pin = pin;
+  joined = chose.code;
+  say("pickMsg", "들어가는 중입니다…");
+  send(TEACH ? "omrwatch" : "omrjoin", {code: chose.code, pin});
+}
+
+/* ── 서버가 준 모습 ───────────────────────────────────────────────── */
+function take(v){
+  V = v; gotAt = Date.now();
+  if (!v){ el("pick").hidden = false; el("lobby").hidden = true; el("play").hidden = true; return; }
+  el("pick").hidden = true;
+  if (v.state === "open" && !TEACH){
+    el("lobby").hidden = false; el("play").hidden = true;
+    el("lobbyName").textContent = v.name || "";
+    el("lobbyTitle").textContent = v.title;
+    el("lobbyN").textContent = v.people;
+    return;
+  }
+  el("lobby").hidden = true; el("play").hidden = false;
+  if (v.name) el("who2").textContent = v.name;      /* 답안지의 성명 칸 */
+  el("title").textContent = v.title;
+  marks(v.marks || {});
+  if (v.guess !== undefined && v.guess !== null && document.activeElement !== el("guess"))
+    el("guess").value = v.guess;
+  paint();
+}
+/* 내 답안은 서버가 쥐고 있다. 화면은 그것을 베껴 그릴 뿐이다 */
+function marks(mk){
+  el("grid").querySelectorAll(".qr").forEach(row => {
+    const q = +row.dataset.q, n = mk[q];
+    row.querySelectorAll(".op").forEach(o =>
+      o.classList.toggle("on", !!n && +o.dataset.n === n));
+  });
+}
+/* 흐른 참 — 받은 뒤로는 여기서 센다. 서버는 단계가 바뀔 때만 말해 준다 */
+const spent = () => DEMO ? demo : (V ? V.spent + (Date.now() - gotAt) : 0);
+const plan  = () => (V && V.plan) || PLAN0;
+const key   = () => DEMO ? DEMOKEY.slice(0, demoOpen()) : ((V && V.key) || []);
+
+/* ── 그리기 ───────────────────────────────────────────────────────── */
+const mmss = ms => {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
+};
+function marksRow(){ return plan().filter(p => p.mark); }
+let drewPlan = "";
+function paintMarks(){
+  const sig = JSON.stringify(plan());
+  if (sig === drewPlan) return;
+  drewPlan = sig;
+  el("marks").innerHTML = marksRow().map((p, i) =>
+    '<div class="mk' + (i % 2 ? " low" : "") + '" data-m="' + p.m + '" style="left:' +
+    (p.m / 40 * 100) + '%"><i></i><b>' + esc(p.t) + "</b></div>").join("");
+}
 
 function paint(){
-  document.body.classList.toggle("teach", teach);
-  el("fill").style.width = (now / LEN * 100) + "%";
-  el("hand").style.left = (now / LEN * 100) + "%";
-  el("mmss").textContent = mmss(now);
-  const k = AT(now), step = PLAN[k];
-  el("phase").textContent = step ? step.t : "시작 전";
+  document.body.classList.toggle("teach", TEACH);
+  paintMarks();
+  const t = spent(), len = (V && V.len) || 40 * MIN;
+  head(t, len);
+  const SIT = (V && V.sit) || 32 * MIN, END = (V && V.end) || 35 * MIN;
+  el("fill").style.width = (t / len * 100) + "%";
+  el("hand").style.left = Math.min(100, t / len * 100) + "%";
+  el("mmss").textContent = mmss(t);
+  let k = -1;
+  plan().forEach((p, i) => { if (t >= p.m * MIN) k = i; });
+  el("phase").textContent = k < 0 ? "시작 전" : plan()[k].t;
   document.querySelectorAll(".mk").forEach(m =>
-    m.classList.toggle("past", now >= +m.dataset.m * MIN));
+    m.classList.toggle("past", t >= +m.dataset.m * MIN));
 
-  /* 안내 창 — 힌트는 1분 뒤 사라지고, 멘트는 다음 단계까지 남는다 */
-  const live = step && (!step.gone || now - step.m * MIN < MIN);
-  el("notice").hidden = !live;
-  if (live){
-    el("notice").classList.toggle("hint", !!step.gone);
-    el("ntitle").textContent = step.head || step.t;
-    el("nbody").textContent = step.say;
-    el("ngone").hidden = !step.gone;
-    if (step.gone) el("ngone").textContent = Math.ceil(MIN - (now - step.m * MIN)) + "초 후 사라집니다";
+  /* 안내 창 — 힌트만 1분을 세고 사라진다 */
+  const n = DEMO ? demoNotice(t) : (V && V.now);
+  el("notice").hidden = !n;
+  if (n){
+    el("notice").classList.toggle("hint", !!n.gone);
+    el("ntitle").textContent = n.head || n.t;
+    el("nbody").textContent = n.say || "";
+    el("ngone").hidden = !n.gone;
+    if (n.gone) el("ngone").textContent = Math.ceil(n.left / 1000) + "초 후 사라집니다";
   }
 
-  /* 교사용은 일정표, 학생용은 답안지 */
-  el("plan").hidden = !teach;
-  el("sheet").hidden = teach || now < SIT;
-  if (teach) el("plan").innerHTML = PLAN.map((p, i) =>
+  /* 교사용은 진행표, 학생용은 답안지 */
+  el("plan").hidden = !TEACH;
+  el("sheet").hidden = TEACH || t < SIT;
+  if (TEACH) el("plan").innerHTML = plan().map((p, i) =>
     '<li class="' + (i === k ? "now" : i < k ? "past" : "") + '"><em>' + p.m +
     '분</em><span>' + esc(p.t) + (p.note ? ' <span class="note">' + esc(p.note) + "</span>" : "") +
     "</span></li>").join("");
 
-  el("left").textContent = now < END ? "마킹 " + mmss(END - now) : "마킹 종료";
-  el("guess").disabled = now >= END;
-  document.querySelectorAll(".qr").forEach(r => r.classList.toggle("shut", now >= END));
+  el("left").textContent = t < END ? "마킹 " + mmss(END - t) : "마킹 종료";
+  el("guess").disabled = t >= END;
+  document.querySelectorAll(".qr").forEach(r => r.classList.toggle("shut", t >= END));
 
-  /* 정답 공개 — 1번부터 5초마다 한 개씩 */
-  const open = now < OPEN ? 0 : Math.min(USED, Math.floor((now - OPEN) / STEP) + 1);
+  /* 정답 — 서버가 열어 준 만큼만 그린다 */
+  const open = key();
   let hits = 0;
-  for (let q = 1; q <= USED; q++){
-    const row = el("grid").querySelector('.qr[data-q="' + q + '"]');
-    const done = q <= open, right = marked[q] === KEY[q - 1];
-    row.classList.toggle("hit", done && right);
+  el("grid").querySelectorAll(".qr").forEach(row => {
+    const q = +row.dataset.q;
+    const done = q <= open.length;
+    const on = row.querySelector(".op.on");
+    const right = done && on && +on.dataset.n === open[q - 1];
+    row.classList.toggle("hit", !!right);
     row.classList.toggle("miss", done && !right);
     row.querySelectorAll(".op").forEach(o =>
-      o.classList.toggle("key", done && !right && +o.dataset.n === KEY[q - 1]));
-    if (done && right) hits++;
-  }
-  el("real").textContent = open ? hits * PER + "점" : "";
+      o.classList.toggle("key", done && !right && +o.dataset.n === open[q - 1]));
+    if (right) hits++;
+  });
+  el("real").textContent = open.length ? hits * ((V && V.per) || 5) + "점" : "";
 
-  /* 점수·등수·등급·평균 */
-  const show = now >= SCORE;
-  el("result").hidden = !show;
-  if (show){
-    const mine = hits * PER, all = CROWD.concat([mine]);
-    const rank = 1 + CROWD.filter(s => s > mine).length;
-    const avg = all.reduce((a, b) => a + b, 0) / all.length;
-    el("result").innerHTML =
-      cell("점수", mine + "점") + cell("등수", rank + "위") +
-      cell("등급", grade(rank, all.length) + "등급") + cell("평균", avg.toFixed(1) + "점");
-  }
+  /* 점수 · 등수 · 등급 · 평균 */
+  const r = DEMO ? demoResult(t, hits) : (V && V.result);
+  el("result").hidden = !r;
+  if (r) el("result").innerHTML =
+    cell("점수", r.score + "점") + cell("등수", r.rank + "위") +
+    cell("등급", r.grade + "등급") + cell("평균", r.avg.toFixed(1) + "점");
+
+  /* 교실 앞 화면은 끝나면 순위가 통째로 뜬다 */
+  const board = V && V.board;
+  el("ranks").hidden = !board;
+  if (board) el("ranks").innerHTML = board.map(p =>
+    '<div class="rankrow"><span class="place">' + p.rank + '위</span>' +
+    '<span class="tname">' + esc(p.name) + '</span>' +
+    '<span class="pill">' + p.grade + '등급</span>' +
+    '<span class="pts">' + p.score + '점</span></div>').join("");
   fit();
 }
-const cell = (k, v) => '<div class="cell"><small>' + k + "</small><b>" + v + "</b></div>";
-/* 데모용 또래 점수 — 서버에 붙이면 실제 응시자 점수로 바뀐다 */
-const CROWD = [85,80,75,75,70,70,70,65,65,60,60,55,55,50,50,45,40,40,35,30];
-const CUT = [4,11,23,40,60,77,89,96];
-function grade(rank, n){
-  const pct = rank / n * 100;
-  for (let i = 0; i < CUT.length; i++) if (pct <= CUT[i]) return i + 1;
-  return 9;
+/* 머리글 — 코드, 날짜, 그리고 시작·끝 시각. 시각은 흐른 참에서 거꾸로 센다 */
+function head(t, len){
+  if (!V) return;
+  el("code2").textContent = "(" + V.code + ")";
+  const DAY = ["일","월","화","수","목","금","토"];
+  const hm = d => String(d.getHours()).padStart(2, "0") + ":" +
+                  String(d.getMinutes()).padStart(2, "0");
+  const from = new Date(Date.now() - t), to = new Date(from.getTime() + len);
+  const bits = [];
+  if (V.name) bits.push("<b>" + esc(V.name) + "</b>");
+  bits.push((from.getMonth() + 1) + "/" + from.getDate() +
+            "(" + DAY[from.getDay()] + ")");
+  if (V.state !== "open") bits.push(hm(from) + "~" + hm(to));
+  bits.push("응시 <b>" + V.people + "</b>명");
+  el("sub").innerHTML = bits.join(" · ");
 }
+const cell = (k, v) => '<div class="cell"><small>' + k + "</small><b>" + v + "</b></div>";
 
 /* 좁은 화면에서는 줄이고, 더 좁으면 가로로 민다 */
 function fit(){
-  const box = el("fit"); if (!box.offsetWidth) return;
+  const box = el("fit"); if (!box || !box.offsetWidth) return;
   const z = Math.max(.62, Math.min(1, box.clientWidth / 860));
   el("zoom").style.transform = "scale(" + z + ")";
   box.style.height = Math.ceil(el("flip").offsetHeight * z) + "px";
 }
 addEventListener("resize", fit);
 
+/* ── 답안지 ───────────────────────────────────────────────────────── */
+const band = q => { const r = (q - 1) % 20 + 1; return (r <= 5 || r >= 16) ? "y" : "p"; };
+(function build(){
+  const USED = 20, SHOWN = 40;
+  let html = "";
+  for (let b = 0; b < SHOWN / 10; b++){
+    html += '<div class="blk"><div class="hd"><i>문항</i>' +
+            [1,2,3,4,5].map(n => "<b>" + n + "</b>").join("") + "</div>";
+    for (let i = 1; i <= 10; i++){
+      const q = b * 10 + i;
+      html += '<div class="qr ' + band(q) + (q > USED ? " dead" : "") + '" data-q="' + q + '">' +
+              '<i class="no">' + q + "</i>" +
+              [1,2,3,4,5].map(n => '<span class="op" data-n="' + n + '"><em>' + n + "</em></span>").join("") +
+              "</div>";
+    }
+    html += "</div>";
+  }
+  el("grid").innerHTML = html;
+  /* 상단 바코드 — 굵은 막대 서너 개씩 묶음, 묶음 사이는 넓게 띄운다 */
+  const CODE = [[6,34],[6,52],[4,30],[5,46],[5,34],[6,40],[5,0]];
+  el("code").innerHTML = CODE.map(([n, gap]) =>
+    Array.from({length: n}, (_, j) =>
+      '<i style="width:6px"></i>' + (j < n - 1 ? '<i class="gap" style="width:8px"></i>' : "")
+    ).join("") + (gap ? '<i class="gap" style="width:' + gap + 'px"></i>' : "")).join("");
+})();
+
+el("grid").addEventListener("click", e => {
+  const op = e.target.closest(".op"); if (!op) return;
+  const row = op.closest(".qr"), q = +row.dataset.q, n = +op.dataset.n;
+  if (row.classList.contains("dead") || row.classList.contains("shut")) return;
+  if (DEMO){                                 /* 리허설은 화면에서만 칠한다 */
+    const same = op.classList.contains("on");
+    row.querySelectorAll(".op.on").forEach(o => o.classList.remove("on"));
+    if (!same) op.classList.add("on");
+    paint();
+    return;
+  }
+  send("omrmark", {q, n});                   /* 내 답안은 서버가 쥔다 */
+});
+el("guess").addEventListener("change", () => {
+  const v = el("guess").value.replace(/[^0-9]/g, "");
+  if (!DEMO) send("omrbet", {v: v === "" ? null : parseInt(v, 10)});
+});
 el("hide").addEventListener("click", () => {
   flipped = !flipped;
   el("flip").classList.toggle("back", flipped);
   el("hide").textContent = flipped ? "보기" : "숨기기";
 });
 
-/* ── 리허설 — 서버에 붙이면 이 아래는 지운다 ────────────────── */
-let timer = null, rate = 60;
-const scrub = el("scrub");
-function tick(){ now = Math.min(LEN, now + rate / 4); scrub.value = now; paint();
-                 if (now >= LEN) stop(); }
-function stop(){ clearInterval(timer); timer = null; el("play").textContent = "▶";
-                 el("play").classList.remove("on"); }
-el("play").addEventListener("click", () => {
-  if (timer) return stop();
-  timer = setInterval(tick, 250); el("play").textContent = "❚❚"; el("play").classList.add("on");
-});
-el("rate").addEventListener("click", () => {
-  rate = rate === 60 ? 1 : rate === 1 ? 10 : 60;
-  el("rate").textContent = "×" + rate;
-});
-scrub.addEventListener("input", () => { now = +scrub.value; paint(); });
-el("teach").addEventListener("click", () => {
-  teach = !teach; el("teach").classList.toggle("on", teach); paint();
-});
-el("teach").classList.toggle("on", teach);
-paint();
+/* ── 고르기 단추 ──────────────────────────────────────────────────── */
+el("enter").addEventListener("click", enter);
+el("pin").addEventListener("keydown", e => { if (e.key === "Enter") enter(); });
+
+/* ── 리허설 — 서버 없이 ?demo=1 로 혼자 돌려 본다 ──────────────────── */
+let demo = 0, timer = null, rate = 60;
+function demoOpen(){
+  const t = demo - 36 * MIN;
+  return t < 0 ? 0 : Math.min(20, Math.floor(t / 5000) + 1);
+}
+const DEMOSAY = {
+  0:"준비령이 울렸습니다.\n자리에 앉아 기다립니다.",
+  1:"내 명제 — 6의 배수 문제는 답이 1도 아니고 4도 아니다.",
+  2:"본령이 울렸습니다.\n이제부터 자유롭게 이동하거나 대화해도 좋습니다.",
+  3:"홀수 번호 문제의 답은 홀수이다.", 4:"답이 5인 문제는 8개이다.",
+  5:"답이 4인 문제는 하나도 없다.",
+  6:"착석하기 바랍니다.\n이제부터 서로 대화할 수 없습니다.\n3분 간 OMR 카드에 답안 마킹이 가능합니다.",
+  7:"종료령이 울렸습니다.\n답안은 자동으로 제출되었습니다.",
+  8:"정답을 공개합니다.", 9:"채점이 끝났습니다."};
+function demoNotice(t){
+  let k = -1;
+  PLAN0.forEach((p, i) => { if (t >= p.m * MIN) k = i; });
+  if (k < 0) return null;
+  const gone = k === 1 || (k >= 3 && k <= 5), since = t - PLAN0[k].m * MIN;
+  if (gone && since >= MIN) return null;
+  return {t: PLAN0[k].t, head: gone ? PLAN0[k].t + " · 1분 후 사라집니다" : PLAN0[k].t,
+          say: DEMOSAY[k], gone, left: MIN - since};
+}
+const CROWD = [85,80,75,75,70,70,70,65,65,60,60,55,55,50,50,45,40,40,35,30];
+function demoResult(t, hits){
+  if (t < 38 * MIN) return null;
+  const score = hits * 5, all = CROWD.concat([score]);
+  const rank = 1 + CROWD.filter(s => s > score).length;
+  const pct = rank / all.length * 100;
+  const CUT = [10, 34, 66, 90];
+  let g = 5; for (let i = 0; i < CUT.length; i++) if (pct <= CUT[i]){ g = i + 1; break; }
+  return {score, rank, grade: g, avg: all.reduce((a, b) => a + b, 0) / all.length,
+          people: all.length};
+}
+if (DEMO){
+  el("pick").hidden = true; el("play").hidden = false;
+  el("rehearse").hidden = false;
+  el("who2").textContent = "우렁찬 비둘기";
+  const scrub = el("scrub");
+  const stop = () => { clearInterval(timer); timer = null;
+                       el("play2").textContent = "▶"; el("play2").classList.remove("on"); };
+  el("play2").addEventListener("click", () => {
+    if (timer) return stop();
+    timer = setInterval(() => {
+      demo = Math.min(40 * MIN, demo + rate * 250); scrub.value = demo / 1000; paint();
+      if (demo >= 40 * MIN) stop();
+    }, 250);
+    el("play2").textContent = "❚❚"; el("play2").classList.add("on");
+  });
+  el("rate").addEventListener("click", () => {
+    rate = rate === 60 ? 1 : rate === 1 ? 10 : 60;
+    el("rate").textContent = "×" + rate;
+  });
+  scrub.addEventListener("input", () => { demo = +scrub.value * 1000; paint(); });
+  paint();
+} else {
+  connect();
+  setInterval(() => { if (V && V.state !== "open") paint(); }, 250);
+}
 })();
 </script>

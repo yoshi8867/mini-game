@@ -25,6 +25,7 @@ const {Tourney, roundName, MAX_ENTRANTS} = require("./tourney.js");
 const {Quiz, MAX_ENTRANTS: QUIZ_MAX} = require("./quiz.js");
 const {Bid, MAX_ENTRANTS: BID_MAX} = require("./bid.js");
 const bidbots = require("./bidbots.js");
+const {Omr, MAX_ENTRANTS: OMR_MAX} = require("./omr.js");
 
 const PORT = process.env.PORT || 3000;
 
@@ -35,6 +36,7 @@ const cups  = new Map();                 // 대회. 이것도 메모리에만 �
                                          // 서버가 다시 뜨면 대회는 사라진다
 const MAX_CUPS = 20;
 const quizzes = new Map();               // 한글 퀴즈. 이것도 메모리에만 둔다
+const omrs    = new Map();                // 블라인드. 마찬가지다
 const bids    = new Map();               // 돌림판 비딩. 마찬가지다
 const EMPTY_TTL = 10 * 60 * 1000;        // 아무도 없는 대국은 10분 뒤 치운다
 const MAX_ROOMS = 200;
@@ -274,6 +276,78 @@ function onQuizSay(ws, msg){
   pushQuiz(quiz);                            // 점수가 바뀌었으니 다 다시 그린다
 }
 
+/* ─── 블라인드 ────────────────────────────────────────────────────────
+   퀴즈·비딩과 같은 창구다. 다른 것은 시계가 전부라는 것 — 관리자가 시작을
+   누른 순간부터 40분이 저절로 흐르고, 중간에 손댈 일이 없다. 심판은
+   omr.js 이고, 여기서는 알리는 일만 한다.
+
+   내 명제는 나에게만, 그것도 띄워 두는 1분 동안만 내려간다. 정답은 종료령
+   뒤에 하나씩 열린다. 남의 답안은 끝까지 안 내려간다. */
+function pushOmr(omr){
+  const now = Date.now();
+  for (const ws of wss.clients){
+    if (ws.readyState !== 1 || ws.omr !== omr.code) continue;
+    /* 교실 앞 화면은 구경만 한다 — 답안지도 내 명제도 안 내려간다 */
+    const v = ws.omrFan ? omr.watch(now)
+                        : (ws.person ? omr.view(ws.person.pid, now) : null);
+    if (v) send(ws, "omrme", v);
+  }
+}
+/* 학생이 고르는 목록 — 접수 중인 것이 위로 */
+function omrList(){
+  const out = [...omrs.values()].map(o => ({
+    code: o.code, title: o.title, state: o.state, people: o.people.size}));
+  out.sort((a, b) => (a.state === b.state ? 0 : a.state === "open" ? -1 : 1));
+  return out;
+}
+function onOmrJoin(ws, msg){
+  if (!ws.person) return send(ws, "error", {why: "nohello"});
+  const omr = omrs.get(String(msg.code || "").toUpperCase());
+  if (!omr) return send(ws, "error", {why: "noomr"});
+  /* 이미 들어온 사람은 비번 없이 돌아온다 — 새로고침했을 뿐이다 */
+  const back = omr.people.has(ws.person.pid);
+  if (!back){
+    if (omr.pin && msg.pin !== omr.pin) return send(ws, "error", {why: "badpin"});
+    const r = omr.join(ws.person);
+    if (r.err) return send(ws, "error", {why: r.err});
+  }
+  ws.omr = omr.code;
+  send(ws, "omrme", omr.view(ws.person.pid, Date.now()));
+  if (!back) pushOmr(omr);                   // 몇 명 들어왔는지가 바뀌었다
+}
+/* 교실 앞 화면. 비번은 받되 명단에는 안 들어간다 */
+function onOmrWatch(ws, msg){
+  const omr = omrs.get(String(msg.code || "").toUpperCase());
+  if (!omr) return send(ws, "error", {why: "noomr"});
+  if (omr.pin && msg.pin !== omr.pin) return send(ws, "error", {why: "badpin"});
+  ws.omr = omr.code; ws.omrFan = true;
+  send(ws, "omrme", omr.watch(Date.now()));
+}
+function onOmrLeave(ws){
+  const omr = ws.omr && omrs.get(ws.omr);
+  ws.omr = null;
+  if (ws.omrFan){ ws.omrFan = false; return send(ws, "omrme", null); }
+  send(ws, "omrme", null);
+  if (!omr || !ws.person) return;
+  /* 시작한 뒤에 빠져도 명단과 답안은 그대로 둔다 — 채점에 들어간다 */
+  if (omr.state === "open"){ omr.quit(ws.person.pid); pushOmr(omr); }
+}
+/* 마킹 하나. 남의 화면은 바뀔 것이 없으니 낸 사람에게만 되돌려 준다 */
+function onOmrMark(ws, msg){
+  const omr = ws.omr && omrs.get(ws.omr);
+  if (!omr || !ws.person) return send(ws, "error", {why: "noomr"});
+  const r = omr.mark(ws.person.pid, msg.q, msg.n, Date.now());
+  if (r.err) return send(ws, "error", {why: r.err});
+  send(ws, "omrme", omr.view(ws.person.pid, Date.now()));
+}
+function onOmrBet(ws, msg){
+  const omr = ws.omr && omrs.get(ws.omr);
+  if (!omr || !ws.person) return send(ws, "error", {why: "noomr"});
+  const r = omr.bet(ws.person.pid, msg.v, Date.now());
+  if (r.err) return send(ws, "error", {why: r.err});
+  send(ws, "omrme", omr.view(ws.person.pid, Date.now()));
+}
+
 /* ─── 돌림판 비딩 ─────────────────────────────────────────────────────
    퀴즈와 같은 창구다. 다른 것은 조마다 **대표 한 명만** 값을 부른다는 것.
    나머지는 관전이다. 심판은 bid.js 이고, 여기서는 알리는 일만 한다. */
@@ -339,6 +413,7 @@ function onAdmin(what, m, done, ip){
   const cup  = () => cups.get(String(m.code || "").toUpperCase());
   const quiz = () => quizzes.get(String(m.code || "").toUpperCase());
   const bid  = () => bids.get(String(m.code || "").toUpperCase());
+  const omr  = () => omrs.get(String(m.code || "").toUpperCase());
 
   switch (what){
     case "state": {
@@ -346,8 +421,10 @@ function onAdmin(what, m, done, ip){
       list.sort((a, b) => b.made - a.made);
       const qs = [...quizzes.values()].map(q => q.full());
       const bs = [...bids.values()].map(b => b.full());
+      const os = [...omrs.values()].map(o => o.full());
+      os.sort((a, b) => b.made - a.made);
       qs.sort((a, b) => b.made - a.made);
-      return done(200, {ok: true, cups: list, quizzes: qs, bids: bs, rooms: rooms.size,
+      return done(200, {ok: true, cups: list, quizzes: qs, bids: bs, omrs: os, rooms: rooms.size,
                         players: wss.clients.size});
     }
     case "open": {
@@ -442,6 +519,56 @@ function onAdmin(what, m, done, ip){
                            "-" + i + "-" + Math.random().toString(36).slice(2, 8)));
       return done(200, {ok: true, quiz: q.full()});
     }
+        /* ─── 블라인드 ─── */
+    case "omropen": {
+      if (omrs.size >= MAX_CUPS) return done(409, {ok: false, why: "busy"});
+      if (!okPin(m.pin)) return done(400, {ok: false, why: "badpin"});
+      const code = newCode(c => cups.has(c) || rooms.has(c) || quizzes.has(c) ||
+                                bids.has(c) || omrs.has(c));
+      const o = new Omr(code, {pin: m.pin, title: m.title, hints: m.hints});
+      omrs.set(code, o);
+      return done(200, {ok: true, omr: o.full()});
+    }
+    /* 누르는 순간 40분이 흐르기 시작한다. 멈춤도 되감기도 없다 */
+    case "omrstart": {
+      const o = omr();
+      if (!o) return done(404, {ok: false, why: "noomr"});
+      const r = o.start(Date.now());
+      if (r.err) return done(409, {ok: false, why: r.err});
+      pushOmr(o);
+      return done(200, {ok: true, omr: o.full(), people: r.people,
+                        props: r.props, short: r.short});
+    }
+    /* 시계를 당긴다 — 단위는 분이고, 음수면 되돌린다 */
+    case "omrwarp": {
+      const o = omr();
+      if (!o) return done(404, {ok: false, why: "noomr"});
+      const r = o.warp(Math.round((+m.m || 0) * 60000), Date.now());
+      if (r.err) return done(409, {ok: false, why: r.err});
+      pushOmr(o);
+      return done(200, {ok: true, omr: o.full()});
+    }
+    case "omrclose": {
+      const o = omr();
+      if (!o) return done(404, {ok: false, why: "noomr"});
+      for (const ws of wss.clients)
+        if (ws.omr === o.code){ ws.omr = null; send(ws, "omrgone", {}); }
+      omrs.delete(o.code);
+      return done(200, {ok: true});
+    }
+    /* 리허설용 — 수업 전에 명제가 어떻게 갈리는지 보려고 쓴다 */
+    case "omrmock": {
+      const o = omr();
+      if (!o) return done(404, {ok: false, why: "noomr"});
+      if (o.state !== "open") return done(409, {ok: false, why: "started"});
+      let n = m.n | 0;
+      if (n < 1) n = 1;
+      if (o.people.size + n > OMR_MAX) n = OMR_MAX - o.people.size;
+      for (let i = 0; i < n; i++)
+        o.join(players.get("mock-" + o.code + "-" + Date.now().toString(36) +
+                           "-" + i + "-" + Math.random().toString(36).slice(2, 8)));
+      return done(200, {ok: true, omr: o.full()});
+    }
     /* ─── 돌림판 비딩 ─── */
     case "bidopen": {
       if (bids.size >= MAX_CUPS) return done(409, {ok: false, why: "busy"});
@@ -514,7 +641,7 @@ const server = httpSide.create({
       if (r.ready && !r.over) playing++;
     }
     return {rooms: rooms.size, players: people, playing, cups: cups.size,
-            quizzes: quizzes.size, bids: bids.size};
+            quizzes: quizzes.size, bids: bids.size, omrs: omrs.size};
   },
   admin: (what, m, done, ip) => onAdmin(what, m, done, ip),
 });
@@ -522,7 +649,7 @@ const wss = new WebSocketServer({server, path: "/ws"});
 
 wss.on("connection", ws => {
   ws.alive = true; ws.room = null; ws.side = null; ws.person = null;
-  ws.cup = null; ws.fan = null; ws.quiz = null; ws.bid = null;
+  ws.cup = null; ws.fan = null; ws.quiz = null; ws.bid = null; ws.omr = null; ws.omrFan = false;
   ws.on("pong", () => { ws.alive = true; });
 
   ws.on("message", raw => {
@@ -543,6 +670,12 @@ wss.on("connection", ws => {
       case "quizjoin":return onQuizJoin(ws, msg);
       case "quizleave":return onQuizLeave(ws);
       case "quizsay": return onQuizSay(ws, msg);
+      case "omrs":    return send(ws, "omrs", {omrs: omrList()});
+      case "omrjoin": return onOmrJoin(ws, msg);
+      case "omrwatch":return onOmrWatch(ws, msg);
+      case "omrleave":return onOmrLeave(ws);
+      case "omrmark": return onOmrMark(ws, msg);
+      case "omrbet":  return onOmrBet(ws, msg);
       case "bids":    return send(ws, "bids", {bids: bidList()});
       case "bidjoin": return onBidJoin(ws, msg);
       case "bidleave":return onBidLeave(ws);
@@ -744,6 +877,8 @@ setInterval(() => {
   for (const q of quizzes.values()) if (q.tick(now)) pushQuiz(q);
   /* 비딩도 저절로 굴러간다 — 시간이 다하면 낙찰, 묶음이 차면 작전타임.
      연습 대표가 끼어 있으면 서버가 대신 값을 부른다. */
+  /* 블라인드는 단계가 바뀌거나 정답이 한 개 더 열릴 때만 알린다 */
+  for (const o of omrs.values()) if (o.tick(now)) pushOmr(o);
   for (const b of bids.values()){
     let shout = b.tick(now);
     if (bidbots.tick(b, now)) shout = true;
