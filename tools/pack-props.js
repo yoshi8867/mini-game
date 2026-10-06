@@ -63,5 +63,5 @@ if (how === "--check"){
   console.log("한 줄로 " + line.length + "자");
   process.exit(0);
 }
-if (how === "--env") console.log("OMR_PROPS=" + JSON.stringify(line));
+if (how === "--env") console.log("OMR_PROPS=" + line);
 else console.log(line);
