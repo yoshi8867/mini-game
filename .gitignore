@@ -8,3 +8,9 @@ node_modules/
 .env
 .env.*
 !.env.example
+
+# 대조표 — 정답과 명제를 모은 선생용 쪽. 로컬에만 둔다
+answers.html
+docs/design/answers.template.html
+docs/design/answers-data.js
+tools/answers.js

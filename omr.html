@@ -97,11 +97,25 @@ body.teach .nbody{font-size:26px}
 .paper{background:var(--paper);clip-path:var(--cut);padding:10px 10px 0}
 .omr.rear .paper{display:flex;align-items:center;justify-content:center;min-height:360px}
 
-.head{display:flex;border:1px solid var(--blue);border-bottom:none;font-size:12px}
-.head .k{width:84px;flex:none;background:var(--sky);border-right:1px solid var(--blue);
-  padding:6px 0;text-align:center;letter-spacing:.5em;text-indent:.5em;font-weight:700}
-.head .v{flex:1;padding:6px 10px;font-weight:700}
+/* 윗단은 두 쪽이다 — 왼쪽은 성명·과목명, 오른쪽은 연월일·예상점수 */
+.top{display:flex;border:1px solid var(--blue);border-bottom:none;font-size:12px}
+.side{flex:1;min-width:0;display:flex;flex-direction:column}
+.side+.side{border-left:1px solid var(--blue)}
+.head{display:flex;flex:1}
 .head+.head{border-top:1px solid var(--blue)}
+.head .k{width:5.6em;flex:none;background:var(--sky);border-right:1px solid var(--blue);
+  padding:6px 0;text-align:center;letter-spacing:.5em;text-indent:.5em;font-weight:700;
+  display:flex;align-items:center;justify-content:center}
+.head .k.wide{letter-spacing:.1em;text-indent:.1em}
+.head .v{flex:1;min-width:0;padding:6px 10px;font-weight:700;
+  display:flex;align-items:center}
+.head .v+.v{border-left:1px solid var(--blue)}
+.head .v.mid{justify-content:center}
+.head .v.real{flex:none;width:5em;justify-content:flex-end;
+  font:700 13px/1 'JetBrains Mono',monospace;color:var(--red)}
+.head input{width:100%;border:none;background:none;padding:0;
+  font:700 13px/1.4 'JetBrains Mono',monospace;color:var(--chalk)}
+.head input:focus{outline:none}
 
 .grid{display:flex;border:1px solid var(--blue);border-top:none}
 .blk{flex:1;min-width:0;border-right:1px solid var(--blue)}
@@ -135,15 +149,6 @@ body.teach .nbody{font-size:26px}
 .qr.hit .no::after{content:"○"}
 .qr.miss .no::after{content:"✕"}
 
-.foot{display:flex;border:1px solid var(--blue);border-top:none;font-size:12px}
-.foot .k{width:84px;flex:none;background:var(--sky);border-right:1px solid var(--blue);
-  padding:6px 0;text-align:center;font-weight:700}
-.foot .v{width:150px;border-right:1px solid var(--blue);padding:4px 8px}
-.foot .v:last-child{border-right:none;flex:1}
-.foot input{width:100%;border:none;background:none;font:700 13px/1.4 'JetBrains Mono',monospace;
-  color:var(--chalk);padding:0}
-.foot input:focus{outline:none}
-.foot .real{font:700 14px/1.4 'JetBrains Mono',monospace;color:var(--red)}
 /* 상단 바코드 — 굵은 막대가 서너 개씩 뭉쳐 있고 뭉치 사이는 넓다 */
 .code{display:flex;align-items:flex-end;height:26px;margin:0 2px 8px;gap:0}
 .code i{background:#1a1a1a;height:100%;flex:none}
@@ -269,14 +274,24 @@ body.teach .rankrow .pts{font-size:22px}
     <div class="fit" id="fit"><div class="zoom" id="zoom"><div class="flip" id="flip">
       <div class="omr"><div class="paper">
         <div class="code" id="code"></div>
-        <div class="head"><div class="k">성명</div><div class="v" id="who2"></div></div>
-        <div class="head"><div class="k">과목명</div><div class="v">블라인드</div></div>
-        <div class="grid" id="grid"></div>
-        <div class="foot">
-          <div class="k">예상점수</div>
-          <div class="v"><input id="guess" inputmode="numeric" maxlength="3" placeholder=""></div>
-          <div class="v real" id="real"></div>
+        <div class="top">
+          <div class="side">
+            <div class="head"><div class="k">성명</div><div class="v" id="who2"></div></div>
+            <div class="head"><div class="k">과목명</div><div class="v">블라인드</div></div>
+          </div>
+          <div class="side">
+            <div class="head">
+              <div class="v mid" id="when"></div>
+              <div class="v mid">2학기 중간고사</div>
+            </div>
+            <div class="head">
+              <div class="k wide">예상 점수</div>
+              <div class="v"><input id="guess" inputmode="numeric" maxlength="3"></div>
+              <div class="v real" id="real"></div>
+            </div>
+          </div>
         </div>
+        <div class="grid" id="grid"></div>
       </div></div>
       <div class="omr rear"><div class="paper">
         <div class="warn">
@@ -535,6 +550,7 @@ function paint(){
 function head(t, len){
   if (!V) return;
   el("code2").textContent = "(" + V.code + ")";
+  stamp(new Date(Date.now() - t));
   const DAY = ["일","월","화","수","목","금","토"];
   const hm = d => String(d.getHours()).padStart(2, "0") + ":" +
                   String(d.getMinutes()).padStart(2, "0");
@@ -546,6 +562,11 @@ function head(t, len){
   if (V.state !== "open") bits.push(hm(from) + "~" + hm(to));
   bits.push("응시 <b>" + V.people + "</b>명");
   el("sub").innerHTML = bits.join(" · ");
+}
+/* 답안지 오른쪽 윗칸의 연월일. 판이 열린 날이다 */
+function stamp(d){
+  el("when").textContent = d.getFullYear() + "년 " + (d.getMonth() + 1) +
+                           "월 " + d.getDate() + "일";
 }
 const cell = (k, v) => '<div class="cell"><small>' + k + "</small><b>" + v + "</b></div>";
 
@@ -650,6 +671,7 @@ if (DEMO){
   el("pick").hidden = true; el("play").hidden = false;
   el("rehearse").hidden = false;
   el("who2").textContent = "우렁찬 비둘기";
+  stamp(new Date());
   const scrub = el("scrub");
   const stop = () => { clearInterval(timer); timer = null;
                        el("play2").textContent = "▶"; el("play2").classList.remove("on"); };

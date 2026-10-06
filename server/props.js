@@ -21,35 +21,39 @@
    ══════════════════════════════════════════════════════════════════════ */
 "use strict";
 
+/* 닿는 칸 — 어느 문항을 주무르는 명제인가. 힌트를 고를 때 이걸 본다 */
+const R = (a, b) => Array.from({length: b - a + 1}, (_, i) => a + i);
+const ODD = R(1, 20).filter(q => q % 2);
+
 const KEY = [5,2,5,2,1, 5,3,2,5,5, 1,3,3,2,5, 3,3,2,5,5];
 
 /* 나눠 주는 명제. ☆ 는 사람이 모자랄 때 먼저 빠진다 */
 const PROPS = [
-  {id: "P01", star: false, text: "1번과 2번 답의 합은 7이다."},
-  {id: "P02", star: false, text: "1~5번 문제의 답에는 3번이 없다."},
-  {id: "P03", star: false, text: "3~5번 문제의 답은 내림차순이다."},
-  {id: "P04", star: false, text: "5의 배수 문제 중 답이 5번인 것이 3개이다."},
-  {id: "P05", star: false, text: "6~8번 문제의 답은 내림차순이다."},
-  {id: "P06", star: false, text: "6~10번 문제 답의 합은 20이다."},
-  {id: "P07", star: true,  text: "9번 문제 답은 5이다."},
-  {id: "P08", star: true,  text: "11~15번 문제 중 답이 3인 것은 2개이다."},
-  {id: "P09", star: false, text: "4의 배수 문제는 답이 4가 아니다."},
-  {id: "P11", star: false, text: "16~20번 문제의 답은 소수이다."},
-  {id: "P12", star: false, text: "15번과 16번 답의 합은 8이다."},
-  {id: "P13", star: false, text: "6의 배수 문제의 답은 내림차순이다."},
-  {id: "P14", star: true,  text: "17번 문제의 답은 3이다."},
-  {id: "P15", star: false, text: "7번, 12번, 17번 문제는 답이 같다."},
-  {id: "P16", star: false, text: "3번, 6번, 9번 문제는 답이 같다."},
-  {id: "P17", star: false, text: "11번 15번 문제의 답의 합은 6이다."},
-  {id: "P18", star: false, text: "12번과 13번 문제는 답이 같다."},
-  {id: "P19", star: true,  text: "13~15번 문제의 답은 모두 서로소이다."},
-  {id: "P20", star: false, text: "13~15번 문제 답의 합은 10이다."},
-  {id: "P21", star: false, text: "14번과 19번 답의 합은 7이다."},
+  {id: "P01", star: false, text: "1번과 2번 답의 합은 7이다.", cells: [1, 2]},
+  {id: "P02", star: false, text: "1~5번 문제의 답에는 3번이 없다.", cells: R(1, 5)},
+  {id: "P03", star: false, text: "3~5번 문제의 답은 내림차순이다.", cells: [3, 4, 5]},
+  {id: "P04", star: false, text: "5의 배수 문제 중 답이 5번인 것이 3개이다.", cells: [5, 10, 15, 20]},
+  {id: "P05", star: false, text: "6~8번 문제의 답은 내림차순이다.", cells: [6, 7, 8]},
+  {id: "P06", star: false, text: "6~10번 문제 답의 합은 20이다.", cells: R(6, 10)},
+  {id: "P07", star: true,  text: "9번 문제 답은 5이다.", cells: [9]},
+  {id: "P08", star: true,  text: "11~15번 문제 중 답이 3인 것은 2개이다.", cells: R(11, 15)},
+  {id: "P09", star: false, text: "4의 배수 문제는 답이 4가 아니다.", cells: [4, 8, 12, 16, 20]},
+  {id: "P11", star: false, text: "16~20번 문제의 답은 소수이다.", cells: R(16, 20)},
+  {id: "P12", star: false, text: "15번과 16번 답의 합은 8이다.", cells: [15, 16]},
+  {id: "P13", star: false, text: "6의 배수 문제의 답은 내림차순이다.", cells: [6, 12, 18]},
+  {id: "P14", star: true,  text: "17번 문제의 답은 3이다.", cells: [17]},
+  {id: "P15", star: false, text: "7번, 12번, 17번 문제는 답이 같다.", cells: [7, 12, 17]},
+  {id: "P16", star: false, text: "3번, 6번, 9번 문제는 답이 같다.", cells: [3, 6, 9]},
+  {id: "P17", star: false, text: "11번 15번 문제의 답의 합은 6이다.", cells: [11, 15]},
+  {id: "P18", star: false, text: "12번과 13번 문제는 답이 같다.", cells: [12, 13]},
+  {id: "P19", star: true,  text: "13~15번 문제의 답은 모두 서로소이다.", cells: [13, 14, 15]},
+  {id: "P20", star: false, text: "13~15번 문제 답의 합은 10이다.", cells: [13, 14, 15]},
+  {id: "P21", star: false, text: "14번과 19번 답의 합은 7이다.", cells: [14, 19]},
   /* 빈 번호를 메운다. P10 과 P23 은 공통 힌트로 갔으니 건드리지 않는다 */
-  {id: "P22", star: true,  text: "2번과 10번 답의 합은 7이다."},
-  {id: "P24", star: true,  text: "답이 1인 문제는 2개이다."},
+  {id: "P22", star: true,  text: "2번과 10번 답의 합은 7이다.", cells: [2, 10]},
+  {id: "P24", star: true,  text: "답이 1인 문제는 2개이다.", cells: R(1, 20)},
   /* P13 과 짝이다. 둘을 합치면 6·12·18번이 (5,3,2) 로 못 박힌다 */
-  {id: "P25", star: false, text: "6의 배수 문제는 답이 1도 아니고 4도 아니다."},
+  {id: "P25", star: false, text: "6의 배수 문제는 답이 1도 아니고 4도 아니다.", cells: [6, 12, 18]},
 ];
 
 /* 사람이 모자라면 앞에서부터 뺀다. 모두 ☆ 다 */
@@ -58,9 +62,9 @@ const DROP = ["P24", "P19", "P08", "P14", "P07", "P22"];
 /* 모두에게 띄우는 힌트. 15 · 20 · 25분 순서고, 번호를 따로 매겼다.
    was 는 나눠 주던 시절의 번호다 — omr-quiz/README.md 를 읽을 때 필요하다 */
 const COMMON = [
-  {id: "C1", was: "P10", text: "홀수 번호 문제의 답은 홀수이다."},
-  {id: "C2", was: null,  text: "답이 5인 문제는 8개이다."},
-  {id: "C3", was: "P23", text: "답이 4인 문제는 하나도 없다."},
+  {id: "C1", was: "P10", text: "홀수 번호 문제의 답은 홀수이다.", cells: ODD},
+  {id: "C2", was: null,  text: "답이 5인 문제는 8개이다.", cells: R(1, 20)},
+  {id: "C3", was: "P23", text: "답이 4인 문제는 하나도 없다.", cells: R(1, 20)},
 ];
 const HINTS = COMMON.map(c => c.text);
 
