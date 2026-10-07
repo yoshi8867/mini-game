@@ -45,6 +45,24 @@ class Tourney {
     this.seq = 0;
   }
 
+  /* ─── 맡기기 · 되살리기 ──────────────────────────────────────────── */
+  /* 대진표는 평범한 자료라 그대로 적는다. 사람 명단만 Map 이다.
+     진행 중인 대국 자체는 방(room.js)이 따로 맡긴다 — 대진표는 그 방 코드만 든다. */
+  snapshot(){
+    return {v: 1, code: this.code, pin: this.pin, title: this.title,
+            state: this.state, made: this.made, began: this.began, ended: this.ended,
+            people: [...this.people.values()], rounds: this.rounds,
+            champion: this.champion, seq: this.seq};
+  }
+  static revive(d){
+    const c = new Tourney(d.code, {pin: d.pin, title: d.title});
+    ["state", "made", "began", "ended", "rounds", "champion", "seq"].forEach(k => {
+      if (d[k] !== undefined) c[k] = d[k];
+    });
+    (d.people || []).forEach(p => c.people.set(p.pid, p));
+    return c;
+  }
+
   /* ─── 접수 ───────────────────────────────────────────────────────── */
   join(person){
     if (this.state !== "open") return {err: "closed"};

@@ -51,6 +51,60 @@ class Room {
     this.reset();
   }
 
+  /* ─── 맡기기 · 되살리기 ──────────────────────────────────────────── */
+  /* 대회 대국만 맡긴다. 판 · 차례 · 같은 국면 횟수 · 자리표를 적어 두고,
+     연결(소켓)과 시계는 적지 않는다 — 서버가 다시 뜨면 아무도 앉아 있지 않으니
+     시계는 서 있고, 둘이 다시 앉는 순간 그 수의 시간이 새로 흐른다. 서버가 넘어진
+     것은 두는 사람 잘못이 아니다. 연습 참가자 자리만 따로 표시해 두었다가
+     되살린 쪽에서 다시 앉힌다. */
+  snapshot(){
+    return {v: 1, code: this.code, open: this.open, pin: this.pin,
+            tokens: this.tokens, first: this.first, ply: this.ply,
+            /* 판은 Int8Array 다. JSON 에 그대로 넣으면 {"0":..} 객체가 되어
+               길이도 없고 Array.from 이 빈 배열을 낸다 — 배열로 풀어 둔다 */
+            pos: {b: Array.from(this.pos.b), turn: this.pos.turn,
+                  hand: this.pos.hand.map(h => Array.from(h))},
+            seen: [...this.seen], over: this.over, rematch: this.rematch,
+            startedAt: this.startedAt, saved: this.saved, cup: this.cup, only: this.only,
+            people: this.people.map(p => p && {pid: p.pid, name: p.name}),
+            bots: this.seats.map(ws => !!(ws && ws.bot))};
+  }
+  static revive(d){
+    const r = new Room(d.code, {open: d.open, pin: d.pin});
+    r.tokens = d.tokens || [null, null];
+    r.first = d.first; r.ply = d.ply;
+    const fresh = EG.fresh();                  // 판과 손패의 형은 엔진이 쓰는 그대로
+    r.pos = {b: fresh.b.constructor.from(d.pos.b), turn: d.pos.turn,
+             hand: d.pos.hand.map((h, i) => fresh.hand[i].constructor.from(h))};
+    r.seen = new Map(d.seen || []);
+    r.over = d.over || null; r.rematch = d.rematch || [false, false];
+    r.startedAt = d.startedAt; r.saved = !!d.saved;
+    r.cup = d.cup || null; r.only = d.only || null;
+    /* 이름은 대회에 들어갈 때 굳은 것을 그대로 쓴다 */
+    r.people = (d.people || [null, null]).map(p => {
+      if (!p) return null;
+      const rec = players.get(p.pid);
+      if (p.name) rec.name = p.name;
+      return rec;
+    });
+    r.bots = d.bots || [false, false];
+    return r;
+  }
+  /* 사람이 비운 자리를 잠시 붙들어 둔다. 돌아오지 않으면 끝낸다 —
+     연결이 끊겼을 때(drop)와 서버가 다시 떴을 때 같은 규칙을 쓴다. */
+  hold(s){
+    if (this.over || this.grace[s]) return;
+    this.grace[s] = setTimeout(() => {
+      this.grace[s] = null;
+      if (this.seats[s] || this.over) return;
+      if (this.cup) this.finish(1 - s, "gone");
+      else this.finish(null, "gone", s);
+      this.tokens[s] = null; this.people[s] = null;
+      if (this.onEvent) this.onEvent(this, "over");
+    }, GRACE_MS);
+    if (this.grace[s].unref) this.grace[s].unref();
+  }
+
   /* ─── 판 ─── */
   reset(){
     const p = EG.fresh();
@@ -127,6 +181,18 @@ class Room {
        먼저 들어온 순서로 정하면 무승부 보정(선공 승)이 운에 좌우된다. */
     const s = this.only ? this.only.indexOf(person.pid) : this.seats.indexOf(null);
     if (s < 0) return {err: "full"};
+    /* 대회 자리는 자리표가 아니라 사람(pid)에 묶여 있다. 끊겼다 돌아온 그 사람이면
+       자리표가 없어도 제자리다. 전에는 「끊긴 사람을 기다리는 중」이라며 바로 그
+       사람을 돌려보냈고, 기다림이 끝나면 몰수패가 났다. 서버가 옛 연결이 죽은
+       것을 아직 모르면(와이파이가 끊겼다 붙은 경우) 새 연결이 자리를 넘겨받는다. */
+    if (this.only){
+      const old = this.seats[s];
+      this.clearGrace(s);
+      this.seats[s] = ws; this.people[s] = person;
+      if (!this.tokens[s]) this.tokens[s] = newToken();
+      this.syncClock();
+      return {side: s, token: this.tokens[s], bumped: old && old !== ws ? old : null};
+    }
     if (this.seats[s] && this.seats[s] !== ws) return {err: "taken"};
     if (this.grace[s]) return {err: "held"};  // 끊긴 사람을 아직 기다리는 중이다
     this.seats[s]  = ws;
@@ -146,15 +212,7 @@ class Room {
     this.touched = Date.now();
     this.stopClock();
     if (!this.over && (this.ply > 0 || this.cup)){
-      this.grace[s] = setTimeout(() => {
-        this.grace[s] = null;
-        if (this.seats[s] || this.over) return;
-        if (this.cup) this.finish(1 - s, "gone");
-        else this.finish(null, "gone", s);
-        this.tokens[s] = null; this.people[s] = null;
-        if (this.onEvent) this.onEvent(this, "over");
-      }, GRACE_MS);
-      if (this.grace[s].unref) this.grace[s].unref();
+      this.hold(s);
     } else {
       this.tokens[s] = null; this.people[s] = null;
     }

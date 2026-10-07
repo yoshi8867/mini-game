@@ -45,6 +45,7 @@ const send = (ws, t, o) => {
   if (ws && ws.readyState === 1) ws.send(JSON.stringify(Object.assign({t: t}, o || {})));
 };
 function toRoom(room, t, o){
+  if (room.cup) keep("room", room);          // 대회 대국은 서버가 넘어져도 이어져야 한다
   for (const ws of room.seats) send(ws, t, o);
   if (room.fans) for (const ws of room.fans) send(ws, t, o);
 }
@@ -70,6 +71,7 @@ function pushList(){                     // 한 박자 모아서 한 번만 보�
 }
 
 function pushState(room){
+  if (room.cup) keep("room", room);
   const st = room.state();
   st.fans = room.fans ? room.fans.size : 0;
   for (const ws of room.seats)
@@ -178,6 +180,7 @@ function cupDone(room){
   if (room.fans){ for (const ws of room.fans) ws.fan = null; room.fans.clear(); }
   room.stopClock();
   rooms.delete(room.code);
+  unkeep("room", room.code);
 
   runCup(cup);                               // 다음 대국이 섰을 수도 있다
 }
@@ -205,6 +208,7 @@ function cupView(cup, pid){
   return out;
 }
 function pushCup(cup){
+  keep("cup", cup);
   for (const ws of wss.clients){
     if (ws.readyState !== 1 || ws.cup !== cup.code || !ws.person) continue;
     const v = cupView(cup, ws.person.pid);
@@ -294,25 +298,32 @@ const LIVE_TTL = 12 * 3600 * 1000;           // 이보다 오래된 짐은 버�
 const keeping = new Map();                   // code → 적기 예약
 let liveQ = Promise.resolve();
 const inLine = f => (liveQ = liveQ.then(f, f));
+/* 열쇠는 「종류:코드」다. 대국 방 코드는 대회 코드만 피해서 뽑으니 퀴즈나
+   블라인드 코드와 우연히 같을 수 있다 — 같은 칸에 적으면 서로 덮는다. */
 function keep(kind, obj){
-  if (!db.enabled() || keeping.has(obj.code)) return;
-  keeping.set(obj.code, setTimeout(() => {
-    keeping.delete(obj.code);
-    inLine(() => db.keepLive(obj.code, kind, obj.snapshot()));
+  const key = kind + ":" + obj.code;
+  if (!db.enabled() || keeping.has(key)) return;
+  keeping.set(key, setTimeout(() => {
+    keeping.delete(key);
+    inLine(() => db.keepLive(key, kind, obj.snapshot()));
   }, 400));
 }
-function unkeep(code){
-  const t = keeping.get(code);
-  if (t){ clearTimeout(t); keeping.delete(code); }
-  if (db.enabled()) inLine(() => db.dropLive(code));
+function unkeep(kind, code){
+  const key = kind + ":" + code;
+  const t = keeping.get(key);
+  if (t){ clearTimeout(t); keeping.delete(key); }
+  if (db.enabled()) inLine(() => db.dropLive(key));
 }
-/* 뜰 때 한 번. 학생 화면은 다시 붙으면서 들고 있던 코드로 돌아온다 */
-const KINDS = [["omr", "블라인드", () => Omr, () => omrs],
+/* 뜰 때 한 번. 학생 화면은 다시 붙으면서 들고 있던 코드로 돌아온다.
+   대회는 대진표를 먼저, 그 안의 대국 방을 나중에 되살린다. */
+const KINDS = [["cup", "대회", () => Tourney, () => cups],
+               ["omr", "블라인드", () => Omr, () => omrs],
                ["quiz", "퀴즈", () => Quiz, () => quizzes],
                ["bid", "비딩", () => Bid, () => bids]];
 async function revive(){
+  const all = await db.loadLive(LIVE_TTL);
   for (const [kind, name, cls, box] of KINDS){
-    const rows = await db.loadLive(kind, LIVE_TTL);
+    const rows = all.filter(x => x.kind === kind).map(x => x.data);
     let n = 0;
     for (const d of rows){
       try { const o = cls().revive(d); box().set(o.code, o); n++; }
@@ -320,6 +331,43 @@ async function revive(){
     }
     if (n) console.log("되살림  " + name + " " + n + "개");
   }
+  await reviveRooms(all.filter(x => x.kind === "room").map(x => x.data));
+}
+
+/* 대회 대국 방. 되살린 방에는 아무도 앉아 있지 않다 — 연습 참가자는 서버가
+   다시 앉히고, 사람 자리는 끊겼을 때와 똑같이 잠시 붙들어 둔다. 돌아오지
+   않으면 몰수패로 끝나 대진표가 멈추지 않는다. */
+async function reviveRooms(rows){
+  const done = [];
+  let n = 0;
+  for (const d of rows){
+    try {
+      if (!d.cup || !cups.has(d.cup.code)){ unkeep("room", d.code); continue; }  // 대회가 없다
+      const room = Room.revive(d);
+      room.onEvent = (r, what) => { if (what === "over") ended(r); };
+      rooms.set(room.code, room);
+      [0, 1].forEach(s => {
+        if (room.bots[s] && room.only)
+          room.seat({bot: true}, players.get(room.only[s]), room.tokens[s]);
+        else if (room.tokens[s] && !room.over) room.hold(s);
+      });
+      if (room.over) done.push(room);         // 끝났는데 대진표에 못 올리고 넘어졌다
+      n++;
+    } catch (e){ console.warn("되살림  대국 " + (d && d.code) + " 실패:", e.message); }
+  }
+  if (n) console.log("되살림  대회 대국 " + n + "개");
+
+  /* 대진표는 대국 중이라는데 방이 없다 — 방이 맡겨지기 전에 넘어졌다. 다시 세운다 */
+  for (const cup of cups.values()){
+    if (cup.state !== "running") continue;
+    for (const rd of cup.rounds) for (const m of rd)
+      if (m.state === "playing" && m.room && !rooms.has(m.room)){
+        m.room = null; m.state = "pending"; m.began = null;
+      }
+  }
+  done.forEach(room => cupDone(room));
+  for (const cup of cups.values()) if (cup.state === "running") runCup(cup);
+  for (const room of rooms.values()) if (room.cup) botTick(room);
 }
 
 function pushOmr(omr){
@@ -476,6 +524,7 @@ function onAdmin(what, m, done, ip){
       const code = newCode(c => cups.has(c) || rooms.has(c));
       const c = new Tourney(code, {pin: m.pin, title: m.title});
       cups.set(code, c);
+      keep("cup", c);
       pushList();
       return done(200, {ok: true, cup: c.full()});
     }
@@ -495,9 +544,11 @@ function onAdmin(what, m, done, ip){
         if (room.cup && room.cup.code === c.code){
           toRoom(room, "cupgone", {});
           room.stopClock(); rooms.delete(code);
+          unkeep("room", code);
         }
       for (const ws of wss.clients) if (ws.cup === c.code){ watchStop(ws); ws.cup = null; }
       cups.delete(c.code);
+      unkeep("cup", c.code);
       pushList();
       return done(200, {ok: true});
     }
@@ -513,6 +564,7 @@ function onAdmin(what, m, done, ip){
       for (let i = 0; i < n; i++)
         c.join(players.get("mock-" + c.code + "-" + Date.now().toString(36) +
                            "-" + i + "-" + Math.random().toString(36).slice(2, 8)));
+      keep("cup", c);
       return done(200, {ok: true, cup: c.full()});
     }
     /* ─── 한글 퀴즈 ─── */
@@ -548,7 +600,7 @@ function onAdmin(what, m, done, ip){
       for (const ws of wss.clients)
         if (ws.quiz === q.code){ ws.quiz = null; send(ws, "quizgone", {}); }
       quizzes.delete(q.code);
-      unkeep(q.code);
+      unkeep("quiz", q.code);
       return done(200, {ok: true});
     }
     /* 리허설용 — 수업 전에 팀이 어떻게 갈리는지 보려고 쓴다 */
@@ -601,7 +653,7 @@ function onAdmin(what, m, done, ip){
       for (const ws of wss.clients)
         if (ws.omr === o.code){ ws.omr = null; send(ws, "omrgone", {}); }
       omrs.delete(o.code);
-      unkeep(o.code);
+      unkeep("omr", o.code);
       return done(200, {ok: true});
     }
     /* 리허설용 — 수업 전에 명제가 어떻게 갈리는지 보려고 쓴다 */
@@ -660,7 +712,7 @@ function onAdmin(what, m, done, ip){
       for (const ws of wss.clients)
         if (ws.bid === b.code){ ws.bid = null; send(ws, "bidgone", {}); }
       bids.delete(b.code);
-      unkeep(b.code);
+      unkeep("bid", b.code);
       return done(200, {ok: true});
     }
     /* 리허설용 — 수업 전에 경매가 어떻게 돌아가는지 보려고 쓴다 */
@@ -852,6 +904,8 @@ function onJoin(ws, msg){
 function sit(ws, room, token){
   const got = room.seat(ws, ws.person, token);
   if (got.err) return send(ws, "error", {why: got.err});
+  /* 같은 사람이 새 연결로 자리를 넘겨받았다. 옛 연결은 이제 이 방과 상관없다 */
+  if (got.bumped && got.bumped.room === room){ got.bumped.room = null; got.bumped.side = null; }
   ws.room = room; ws.side = got.side;
   send(ws, "seated", {code: room.code, side: got.side, token: got.token,
                       limit: LIMIT_MS, open: room.open});

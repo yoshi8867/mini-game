@@ -276,4 +276,28 @@ const sockA = {id:"A"}, sockB = {id:"B"}, sockC = {id:"C"};
   console.log("again   양쪽 동의로 재대국 · 선공 교대 · 시계 재시작");
 }
 
+/* ─── 맡겼다 되살리기 — 대회 대국은 서버가 넘어져도 이어진다 ──────────── */
+{
+  const r = new Room("RVV1", {open: false});
+  r.only = ["pid-revive-a1", "pid-revive-b2"]; r.cup = {code: "CUPR", match: "m1"};
+  for (let i = 0; i < 8; i++){
+    const g = EG.gen(r.pos); if (!g.length) break;
+    EG.make(r.pos, g[(i * 7) % g.length]); r.ply++;
+    const h = EG.hash(r.pos); r.seen.set(h, (r.seen.get(h) || 0) + 1);
+  }
+  /* JSON 을 한 바퀴 돈다 — Neon 의 jsonb 에 들어갔다 나오는 것과 같다.
+     판은 Int8Array 라 그대로 넣으면 빈 객체가 된다. 그것을 잡는 검사다. */
+  const b = Room.revive(JSON.parse(JSON.stringify(r.snapshot())));
+  const x = r.state(), y = b.state();
+  assert.deepStrictEqual(y.b, x.b, "되살린 판이 다르다");
+  assert.strictEqual(y.b.length, 12, "되살린 판이 비었다 — Int8Array 를 풀지 않고 적었다");
+  assert.deepStrictEqual(y.hand, x.hand, "되살린 손패가 다르다");
+  assert.strictEqual(y.turn, x.turn, "되살린 차례가 다르다");
+  assert.strictEqual(b.ply, r.ply, "되살린 수 번호가 다르다");
+  assert.deepStrictEqual(EG.gen(b.pos), EG.gen(r.pos), "되살린 판에서 둘 수 있는 수가 다르다");
+  assert.deepStrictEqual([...b.seen], [...r.seen], "같은 국면 횟수를 잊었다 — 천일수 판정이 틀어진다");
+  assert.deepStrictEqual(b.only, r.only, "대회 대국의 두 사람을 잊었다");
+  console.log("revive  맡겼다 되살려도 판 · 손패 · 차례 · 같은 국면 횟수가 그대로");
+}
+
 console.log("\n전부 통과");

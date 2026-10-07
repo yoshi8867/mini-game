@@ -285,6 +285,42 @@ async function playOut(a, b, room){
     assert.strictEqual(gone.cups.length, 0, "닫았는데 대회가 남았다");
     console.log("close   대회를 닫으면 대국까지 함께 치운다");
 
+    /* ── 9. 끊겼다 돌아온다 ─────────────────────────────────────────── */
+    /* 대국 중 연결이 끊긴 사람이 같은 pid 로 돌아오면 제자리에 앉아야 한다.
+       대회 화면은 자리표 없이 cupjoin → join 으로 돌아오는데, 전에는 「끊긴
+       사람을 기다리는 중」이라며 바로 그 사람을 돌려보냈고 기다림이 끝나면
+       몰수패가 났다. 와이파이가 한 번 끊겨도 생기는 일이다. */
+    {
+      const {body: m3} = await admin("open", {token: T, pin: "5151", title: "복귀 대회"});
+      const CUP3 = m3.cup.code;
+      const x = await hello("pid-cup-back-x"), y = await hello("pid-cup-back-y");
+      for (const c of [x, y]){ c.send("cupjoin", {code: CUP3, pin: "5151"}); await c.next("cupme"); }
+      await admin("start", {token: T, code: CUP3});
+      const got = await x.next("cupme", 6000, v => v.match);
+      const room = got.match.room;
+      x.send("join", {code: room}); y.send("join", {code: room});
+      const sx = await x.next("seated");
+      await y.next("seated");
+      x.close();                                 /* x 의 연결이 끊긴다 */
+      await wait(150);
+      const x2 = await hello("pid-cup-back-x"); /* 같은 사람이 새 연결로 */
+      x2.send("cupjoin", {code: CUP3});
+      const back = await x2.next("cupme", 6000, v => v.match);
+      assert.strictEqual(back.match.room, room, "돌아온 사람에게 다른 대국을 알려 줬다");
+      x2.send("join", {code: back.match.room});  /* 대회 화면이 하는 그대로 — 자리표 없이 */
+      const sx2 = await Promise.race([x2.next("seated", 3000), x2.next("error", 3000)]);
+      assert.strictEqual(sx2.t, "seated", "돌아온 사람이 제자리에 못 앉았다 (" + (sx2.why || "") + ")");
+      assert.strictEqual(sx2.side, sx.side, "돌아온 사람이 다른 자리에 앉았다");
+      /* 기다림이 지나도 몰수패가 나지 않는다 — 이미 돌아왔으니까 */
+      await wait(1200);
+      const {body: st3} = await admin("state", {token: T});
+      const c3 = st3.cups.find(c => c.code === CUP3);
+      assert.strictEqual(c3.state, "running", "돌아왔는데 몰수패로 끝났다");
+      console.log("back    대국 중 끊겼다 돌아온 사람은 자리표 없이도 제자리 · 몰수패 없음");
+      [x2, y].forEach(c => c.close());
+      await admin("close", {token: T, code: CUP3});
+    }
+
     P.forEach(c => c.close());
     await wait(150);
     console.log("\n전부 통과");

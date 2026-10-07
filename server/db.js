@@ -155,16 +155,18 @@ async function dropLive(code){
   try { await pool.query("delete from live where code = $1", [code]); return true; }
   catch (e){ console.warn("db   판 지우기 실패:", e.message); return false; }
 }
-/* 너무 오래된 것은 되살리지 않고 버린다 — 수업은 반나절을 넘지 않는다 */
-async function loadLive(kind, maxAgeMs){
+/* 너무 오래된 것은 되살리지 않고 버린다 — 수업은 반나절을 넘지 않는다.
+   종류별로 따로 묻지 않고 한 번에 다 읽는다. 서버는 이것을 다 읽은 다음에야
+   문을 여니, 왕복 한 번이 곧 기동 시간이다. */
+async function loadLive(maxAgeMs){
   if (!pool || broken) return [];
   if (!(await init())) return [];
   try {
-    await pool.query(
-      "delete from live where saved_at < now() - ($1::bigint * interval '1 millisecond')",
-      [maxAgeMs]);
-    const r = await pool.query("select code, data from live where kind = $1", [kind]);
-    return r.rows.map(x => x.data);
+    const r = await pool.query(
+      `with gone as (delete from live
+                      where saved_at < now() - ($1::bigint * interval '1 millisecond'))
+       select kind, data from live`, [maxAgeMs]);
+    return r.rows;
   } catch (e){ console.warn("db   판 되살리기 실패:", e.message); return []; }
 }
 
