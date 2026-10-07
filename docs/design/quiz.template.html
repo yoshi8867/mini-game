@@ -214,7 +214,7 @@ const Q = new URLSearchParams(location.search);
 const SERVER = Q.get("server") || (
   /^(localhost|127\.|192\.168\.|10\.)/.test(location.hostname)
     ? "ws://" + (location.hostname || "127.0.0.1") + ":3000/ws"
-    : "wss://mini-shogi.onrender.com/ws");
+    : "wss://mini-game-y8ve.onrender.com/ws");
 
 const ERR = {badpin:"비밀번호가 맞지 않습니다", noquiz:"없는 퀴즈입니다",
              closed:"이미 시작한 퀴즈입니다", full:"자리가 다 찼습니다",

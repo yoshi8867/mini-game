@@ -1459,7 +1459,7 @@ const NETQ = new URLSearchParams(location.search);
 const SERVER = NETQ.get("server") || (
   /^(localhost|127\.|192\.168\.|10\.)/.test(location.hostname)
     ? "ws://" + (location.hostname || "127.0.0.1") + ":3000/ws"
-    : "wss://mini-shogi.onrender.com/ws");
+    : "wss://mini-game-y8ve.onrender.com/ws");
 const CUPWHY = {repeat: "무승부 · 선공 진출", gone: "연결이 끊겨 몰수패",
                 leave: "기권", time: "시간 초과"};
 const WHY = {catch:"캐치", try:"트라이", repeat:"같은 국면 3회", stuck:"둘 수가 없음",

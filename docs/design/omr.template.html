@@ -341,7 +341,7 @@ const DEMO  = Q.has("demo");              /* 서버 없이 혼자 돌려 보는 
 const SERVER = Q.get("server") || (
   /^(localhost|127\.|192\.168\.|10\.)/.test(location.hostname)
     ? "ws://" + (location.hostname || "127.0.0.1") + ":3000/ws"
-    : "wss://mini-shogi.onrender.com/ws");
+    : "wss://mini-game-y8ve.onrender.com/ws");
 
 const ERR = {badpin:"비밀번호가 맞지 않습니다", noomr:"없는 판입니다",
              closed:"이미 시작했습니다", full:"자리가 다 찼습니다",
