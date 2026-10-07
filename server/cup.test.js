@@ -8,6 +8,7 @@ const path = require("path");
 const WebSocket = require("ws");
 const EG = require("../shared/engine.js")();
 
+const PW   = "cup-test-pw";               // 검사용. 서버에 넣어 주고 쓴다
 const PORT = 3988;
 const BASE = `http://127.0.0.1:${PORT}`;
 const WSU  = `ws://127.0.0.1:${PORT}/ws`;
@@ -88,6 +89,7 @@ async function playOut(a, b, room){
 (async () => {
   const srv = spawn(process.execPath, [path.join(__dirname, "index.js")], {
     env: Object.assign({}, process.env, {PORT: String(PORT), DATABASE_URL: "",
+                                         ADMIN_PW: PW,
                                          MOVE_MS: "600000", GRACE_MS: "800",
                                          BOT_MS: "35"}),
     stdio: ["ignore", "pipe", "pipe"],
@@ -103,7 +105,7 @@ async function playOut(a, b, room){
 
     /* ── 1. 관리자 ─────────────────────────────────────────────────── */
     assert.strictEqual((await admin("login", {pw: "틀림"})).status, 401);
-    const {body: lg} = await admin("login", {pw: "comedu"});
+    const {body: lg} = await admin("login", {pw: PW});
     assert.ok(lg.token, "표를 못 받았다");
     const T = lg.token;
     assert.strictEqual((await admin("state", {token: "가짜"})).status, 401);

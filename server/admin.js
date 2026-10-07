@@ -1,42 +1,38 @@
 /* ══════════════════════════════════════════════════════════════════════
    관리자 열쇠.
 
-   레포가 공개라 비밀번호를 그대로 둘 수 없다. scrypt 로 한 번 굳혀서 박아
-   둔다 — 이 값에서 원래 비밀번호를 되돌릴 수는 없다.
+   비밀번호는 **환경변수 ADMIN_PW 에만** 있다. 저장소에는 해시조차 두지
+   않는다.
 
-   다만 솔직히 적어 둔다. 짧고 흔한 말이면, 이 해시를 들고 단어 목록을
-   하나씩 넣어 보는 식으로는 언젠가 맞힐 수 있다. scrypt 는 그 한 번을
-   0.2초로 늘려 놓았을 뿐이다(초당 다섯 번). 교실에서 학생이 대회를
-   닫아 버리는 것을 막는 데는 충분하고, 그 이상을 막는 물건은 아니다.
+   전에는 scrypt 해시를 박아 두고 ADMIN_PW 가 없으면 그것을 쓰게 했다.
+   해시는 되돌릴 수 없으니 괜찮다고 보았는데, 그 비밀번호가 검사 파일에
+   평문으로 같이 올라가 있었다(cup.test.js). 해시를 깨고 말고 할 것도
+   없이 읽으면 그만이었다. 비밀을 저장소에 두면 어디로든 샌다 —
+   한 군데를 막아도 다른 데로 나온다. 그래서 아예 두지 않기로 한다.
+
+   ADMIN_PW 가 없으면 **아무도 못 들어온다.** 반만 열린 문보다 잠긴
+   문이 낫다. 로컬에서는 server/.env 에, Render 에서는 대시보드에 넣는다.
 
    검사는 반드시 서버에서 한다. 페이지에서 하면 소스를 열어 건너뛴다.
    ══════════════════════════════════════════════════════════════════════ */
 "use strict";
 const crypto = require("crypto");
 
-const SALT = "567c8b72ff9e06af58121ceeb9cb940c";
-const KEY  = "201b7e8bea65e0201e73cc13f72fc12725b182b0e1f9ae4752613e8221b7dee9";
-const N = 1 << 15, R = 8, P = 1;
-
 /* 값이 다를 때 빨리 돌아가면 그 차이로 비밀번호를 더듬을 수 있다.
    timingSafeEqual 은 언제나 같은 시간을 쓴다. */
 function ok(pw){
   if (typeof pw !== "string" || !pw || pw.length > 128) return false;
-  /* 로커에서 여는 못 — ADMIN_PW 가 있으면 그것이 바로 뱄밀번호다.
-     장소에는 값이 없고, Render 대시보드에 넣지 않으면 박아 둔 해시가
-     그대로 쓰인다. 소켓 검사도 이 못으로 들어온다. */
-  const local = process.env.ADMIN_PW;
-  if (local){
-    const a = Buffer.from(pw), b = Buffer.from(local);
-    return a.length === b.length && crypto.timingSafeEqual(a, b);
-  }
-  let got;
-  try {
-    got = crypto.scryptSync(pw, SALT, 32, {N, r: R, p: P, maxmem: 128 * N * R * 2});
-  } catch (e){ return false; }
-  const want = Buffer.from(KEY, "hex");
-  return got.length === want.length && crypto.timingSafeEqual(got, want);
+  const want = process.env.ADMIN_PW;
+  if (!want) return false;               // 안 걸어 뒀으면 잠긴 것으로 친다
+  const a = Buffer.from(pw), b = Buffer.from(want);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
+
+/* 비밀번호를 안 걸어 두면 관리자 화면이 통째로 막힌다. 수업 직전에
+   알아차리면 늦으니 뜰 때 한 번 일러 준다. */
+if (!process.env.ADMIN_PW)
+  console.warn("관리자  ADMIN_PW 가 없다 — 관리자 창구가 잠긴다. " +
+               "server/.env 나 Render 대시보드에 넣어라.");
 
 /* 한 번 맞히면 표를 준다. 매 요청마다 scrypt 를 돌리면 0.2초씩 걸린다.
    서버가 다시 뜨면 표도 사라진다 — 그래도 되는 물건이다. */
