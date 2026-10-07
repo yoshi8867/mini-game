@@ -49,6 +49,7 @@ body.teach .marks,body.teach .marks.up{height:62px}
   align-items:center}
 .marks.up .mk{top:auto;bottom:0;justify-content:flex-end}
 .mk.lead{align-items:flex-start}        /* 맨 앞은 왼쪽 끝이라 밖으로 샌다 */
+.mk.lead i{margin-left:-5px}            /* 왼쪽에 붙여도 화살 끝은 눈금 위에 */
 /* 밀려난 라벨을 바에 잇는 가는 줄. 안 밀린 라벨은 높이가 0 이다 */
 .mk .stem{position:absolute;left:-.5px;top:0;width:1px;height:0;
   background:var(--wall-line);text-decoration:none}
@@ -276,7 +277,7 @@ body.teach .rankrow .pts{font-size:22px}
     </div>
     <div class="marks" id="marks"></div>
   </div>
-  <div class="clock"><b id="mmss">00:00</b><span id="phase">시작 전</span></div>
+  <div class="clock"><b id="mmss">--:--:--</b><span id="phase">시작 전</span></div>
 
   <section class="notice" id="notice" hidden>
     <div class="ntitle" id="ntitle"></div>
@@ -525,13 +526,21 @@ const hhmm = ms => {
   return String(d.getHours()).padStart(2, "0") + ":" +
          String(d.getMinutes()).padStart(2, "0");
 };
-/* 시작한 벽시계 시각. 흐른 시간을 지금에서 빼면 나온다 — 서버에 더 물을
-   것이 없고, 보는 사람 제 시계로 재니 시차가 섞이지도 않는다.
-   아직 시작 전이면 적을 시각이 없다. */
+/* 시작한 시각. 서버가 알려 준 것을 그대로 쓴다 — 서버는 그 분의 0초에
+   시작을 붙이므로 단계마다 정각 분에 떨어진다. 라벨도 큰 시계도 여기서
+   세니, 바늘이 화살표에 닿는 순간 큰 시계가 라벨과 같은 시각을 가리킨다.
+   보는 사람 기계의 시계가 틀려도 상관없다. 아직 시작 전이면 적을 시각이 없다. */
 function startWall(){
   if (DEMO || !V || V.state === "open") return null;
-  return Date.now() - spent();
+  return V.began != null ? V.began : Date.now() - spent();
 }
+/* 지금 시각 — 시작한 뒤로는 서버 시계를 따른다 */
+const nowWall = () => { const b = startWall(); return b == null ? Date.now() : b + spent(); };
+const hms = ms => {
+  const d = new Date(ms);
+  return [d.getHours(), d.getMinutes(), d.getSeconds()]
+    .map(n => String(n).padStart(2, "0")).join(":");
+};
 /* 위로 붙는 칸. 맨 앞(준비령)은 바 왼쪽 끝이라 위로 올리면 시계와 겹친다 */
 const upper = i => i % 2 === 0 && i > 0;
 
@@ -604,7 +613,7 @@ function paint(){
   const SIT = (V && V.sit) || 32 * MIN, END = (V && V.end) || 35 * MIN;
   el("fill").style.width = (t / len * 100) + "%";
   el("hand").style.left = Math.min(100, t / len * 100) + "%";
-  el("mmss").textContent = mmss(t);
+  el("mmss").textContent = hms(nowWall());     /* 흐른 시간이 아니라 지금 시각 */
   let k = -1;
   plan().forEach((p, i) => { if (t >= p.m * MIN) k = i; });
   el("phase").textContent = k < 0 ? "시작 전" : plan()[k].t;
@@ -619,7 +628,14 @@ function paint(){
     el("ntitle").textContent = n.head || n.t;
     el("nbody").textContent = n.say || "";
     el("ngone").hidden = !n.gone;
-    if (n.gone) el("ngone").textContent = Math.ceil(n.left / 1000) + "초 후 사라집니다";
+    if (n.gone){
+      /* 서버는 힌트가 뜰 때 한 번 남은 시간을 알려 줄 뿐이다. 그 뒤로는 화면이
+         센다 — 안 그러면 50 에 멈춰 있다. 0 이 되면 서버를 기다리지 않고
+         스스로 닫는다. 서버는 힌트가 사라지는 순간엔 따로 말하지 않는다. */
+      const left = DEMO ? n.left : n.left - (Date.now() - gotAt);
+      if (left <= 0) el("notice").hidden = true;
+      el("ngone").textContent = Math.max(0, Math.ceil(left / 1000)) + "초 후 사라집니다";
+    }
   }
 
   /* 교사용은 진행표, 학생용은 답안지 */
@@ -671,11 +687,13 @@ function paint(){
 function head(t, len){
   if (!V) return;
   el("code2").textContent = "(" + V.code + ")";
-  stamp(new Date(Date.now() - t));
+  const b0 = startWall();
+  stamp(new Date(b0 == null ? Date.now() - t : b0));
   const DAY = ["일","월","화","수","목","금","토"];
   const hm = d => String(d.getHours()).padStart(2, "0") + ":" +
                   String(d.getMinutes()).padStart(2, "0");
-  const from = new Date(Date.now() - t), to = new Date(from.getTime() + len);
+  const from = new Date(b0 == null ? Date.now() - t : b0),
+        to = new Date(from.getTime() + len);
   const bits = [];
   if (V.name) bits.push("<b>" + esc(V.name) + "</b>");
   bits.push((from.getMonth() + 1) + "/" + from.getDate() +

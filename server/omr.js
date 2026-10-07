@@ -132,7 +132,12 @@ class Omr {
     shuffle(list).forEach((p, i) => { p.prop = cards[i % cards.length]; });
 
     this.state = "running";
-    this.began = now || Date.now();
+    /* 시작을 그 분의 0초에 붙인다. 게이지 라벨은 「11:36」처럼 분까지만
+       적는데, 11:21:40 에 눌렀으면 바늘이 1차 힌트에 닿는 것은 11:36:40 이다.
+       라벨과 40초가 어긋난다. 0초로 당기면 모든 단계가 정각 분에 떨어진다 —
+       바늘이 화살표에 닿는 순간 시계가 그 분으로 넘어간다. 대가는 준비령이
+       많아야 59초 짧아지는 것뿐이고, 준비령은 앉아서 기다리는 참이다. */
+    this.began = Math.floor((now || Date.now()) / MIN) * MIN;
     this.last  = "";
     return {ok: true, people: list.length, props: cards.length,
             short: cards.length < list.length};
@@ -146,8 +151,11 @@ class Omr {
   warp(ms, now){
     if (this.state !== "running") return {err: "notrunning"};
     now = now || Date.now();
-    const t = Math.max(0, Math.min(LEN, this.spent(now) + (ms | 0)));
-    this.began = now - t;
+    /* 분 단위로만 옮긴다. 2.5분을 당기면 시작이 0초 자리를 벗어나 라벨과
+       바늘이 30초 어긋난다. 끝에 걸려 잘린 경우에도 0초 자리로 되붙인다. */
+    ms = Math.round((ms | 0) / MIN) * MIN;
+    const t = Math.max(0, Math.min(LEN, this.spent(now) + ms));
+    this.began = Math.floor((now - t) / MIN) * MIN;
     this.last = "";
     return {ok: true, t};
   }
@@ -220,6 +228,10 @@ class Omr {
     const t = this.spent(now);
     return {code: this.code, title: this.title, state: this.state,
             people: this.people.size,
+            /* 시작한 시각. 화면은 라벨과 큰 시계를 모두 이것에서 센다 —
+               보는 사람 기계의 시계가 몇 초 틀려도 모두가 같은 시각을 보고,
+               바늘이 화살표에 닿는 순간 큰 시계가 정확히 그 분을 가리킨다. */
+            began: this.began,
             spent: t, len: LEN, sit: SIT, end: END,
             open_at: OPEN, score_at: SCORE,
             printed: PRINTED, questions: QUESTIONS, per: PER,

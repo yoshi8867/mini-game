@@ -14,7 +14,9 @@ function filled(n){
   for (let i = 0; i < n; i++) o.join(who(i));
   return o;
 }
-const T0 = 1700000000000;
+/* 정각 분이다. 시작은 그 분의 0초에 붙으니, 분 중간을 T0 로 잡으면
+   아래의 「T0 + 몇 분」이 모두 그만큼 어긋난다. */
+const T0 = 1699999980000;
 
 /* ─── 명제 ─────────────────────────────────────────────────────────── */
 assert.strictEqual(PROPS.length, 23, "나눠 주는 명제가 스물셋이 아니다");
@@ -57,6 +59,13 @@ assert.strictEqual(r.ok, true, "시작이 안 됐다");
 assert.strictEqual(r.props, 21, "스물하나인데 명제가 " + r.props + "개다");
 assert.strictEqual(r.short, false, "스물하나까지는 1인 1명제다");
 assert.strictEqual(o.join(who(99)).err, "closed", "시작한 뒤에 들어와졌다");
+
+/* 분 중간에 눌러도 그 분의 0초에서 시작한다 — 라벨의 「11:36」과 바늘이 맞는다 */
+{
+  const mid = filled(5); mid.start(T0 + 40000);
+  assert.strictEqual(mid.began, T0, "40초에 눌렀는데 0초로 안 붙었다");
+  assert.strictEqual(mid.spent(T0 + 40000), 40000, "누른 순간 40초가 흘러 있어야 한다");
+}
 
 const given = [...o.people.values()].map(p => p.prop.id);
 assert.strictEqual(given.length, 21, "명제를 못 받은 사람이 있다");
