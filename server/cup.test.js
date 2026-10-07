@@ -16,14 +16,18 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 
 function client(){
   const ws = new WebSocket(WSU);
-  const box = [], waiters = [];
+  const box = [], waiters = [], seq = [];
   ws.on("message", raw => {
     const m = JSON.parse(raw);
+    /* 받은 순서. next 는 순서를 흩트리니 따로 적는다. cupme 는 어느 방에
+       앉으라는 것인지까지 적는다 — 남의 판이 끝날 때마다 오는 알림이라
+       그냥 세면 자리를 옮기라는 것과 구별이 안 된다 */
+    seq.push(m.t === "cupme" ? "cupme:" + ((m.match && m.match.room) || "-") : m.t);
     const i = waiters.findIndex(w => w.t === m.t && (!w.pred || w.pred(m)));
     if (i >= 0) waiters.splice(i, 1)[0].go(m); else box.push(m);
   });
   return {
-    ws,
+    ws, seq,
     open: () => new Promise(r => ws.on("open", r)),
     send: (t, o) => ws.send(JSON.stringify(Object.assign({t}, o || {}))),
     next(t, ms = 6000, pred = null){
@@ -38,7 +42,7 @@ function client(){
         }, ms);
       });
     },
-    drain(){ box.length = 0; },
+    drain(){ box.length = 0; seq.length = 0; },
     close: () => ws.close(),
   };
 }
@@ -196,6 +200,18 @@ async function playOut(a, b, room){
     assert.strictEqual(finalists.length, 2, "결승 진출자가 둘이 아니다");
     assert.ok(finalRoom, "결승 방이 안 섰다");
     console.log(`next    결승 ${finalRoom} · 진출 2명 · 탈락 2명 공동 3위`);
+
+    /* 끝 소식이 다음 자리 지시보다 먼저 와야 한다. 뒤바뀌면 화면이 지난 판의
+       승패를 새 판에 덮어쓴다 — 새 판이 시작부터 끝난 것이 되고, 아무도
+       손을 못 대는데 시계는 돌아 양쪽 다 시간패한다. */
+    for (const {c, m} of seats){
+      const o = c.seq.indexOf("over");
+      const n = c.seq.findIndex(x => x.startsWith("cupme:") && x !== "cupme:" + m.room);
+      assert.ok(o >= 0, "끝 소식이 안 왔다");
+      assert.ok(n >= 0, "다음 자리 지시가 안 왔다");
+      assert.ok(o < n, "다음 자리 지시가 끝 소식보다 먼저 왔다");
+    }
+    console.log("order   끝 소식 → 다음 자리 지시 순서 지킴");
 
     /* ── 6. 결승 ───────────────────────────────────────────────────── */
     finalists.forEach(c => c.drain());
