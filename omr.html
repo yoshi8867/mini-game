@@ -692,8 +692,11 @@ function head(t, len){
   const DAY = ["일","월","화","수","목","금","토"];
   const hm = d => String(d.getHours()).padStart(2, "0") + ":" +
                   String(d.getMinutes()).padStart(2, "0");
-  const from = new Date(b0 == null ? Date.now() - t : b0),
-        to = new Date(from.getTime() + len);
+  /* 시험 시간은 본령부터 종료령까지다. 준비령과 채점은 시험이 아니다 */
+  const base = b0 == null ? Date.now() - t : b0;
+  const bon = (plan().find(p => p.t === "본령") || {m: 5}).m * MIN;
+  const from = new Date(base + bon),
+        to = new Date(base + ((V && V.end) || 35 * MIN));
   const bits = [];
   if (V.name) bits.push("<b>" + esc(V.name) + "</b>");
   bits.push((from.getMonth() + 1) + "/" + from.getDate() +
@@ -792,7 +795,7 @@ function demoNotice(t){
   if (k < 0) return null;
   const gone = k === 1 || (k >= 3 && k <= 5), since = t - PLAN0[k].m * MIN;
   if (gone && since >= MIN) return null;
-  return {t: PLAN0[k].t, head: gone ? PLAN0[k].t + " · 1분 후 사라집니다" : PLAN0[k].t,
+  return {t: PLAN0[k].t, head: PLAN0[k].t,
           say: DEMOSAY[k], gone, left: MIN - since};
 }
 const CROWD = [85,80,75,75,70,70,70,65,65,60,60,55,55,50,50,45,40,40,35,30];
