@@ -1,0 +1,588 @@
+<!doctype html><html lang="ko"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<title>집계 실험실</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@400;700;800&family=Gowun+Batang:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* 비딩 화면과 같은 바탕·같은 표다. 여기서 맞춘 값이 그대로 교실로 간다 */
+:root{
+  color-scheme:light;
+  --wall:#ffffff; --wall-2:#f6f6f7; --wall-line:#dcdce1;
+  --chalk:#16171a; --chalk-dim:#63646b; --mark:#8a5a00; --gold:#f0c75e;
+  --win:#1f7a3d; --lose:#c62828; --wait:#2d5f9a;
+  --s1:4px; --s2:10px; --s3:16px; --s4:24px; --s5:36px;
+}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+html,body{margin:0;background:var(--wall);color:var(--chalk);
+  font:400 15px/1.6 'Gothic A1',system-ui,sans-serif;
+  -webkit-text-size-adjust:100%}
+body{padding:var(--s3) var(--s3) var(--s5)}
+.wrap{max-width:860px;margin:0 auto}
+h1{font-family:'Gowun Batang',serif;font-size:24px;margin:0 0 var(--s1)}
+.sub{color:var(--chalk-dim);font-size:13.5px;margin:0 0 var(--s3)}
+.card{background:var(--wall-2);border:1px solid var(--wall-line);border-radius:10px;
+  padding:var(--s3);margin-bottom:var(--s3)}
+button{font:700 14px/1 'Gothic A1',system-ui,sans-serif;cursor:pointer;
+  border-radius:999px;padding:12px 18px;border:1px solid var(--wall-line);
+  background:var(--wall);color:var(--chalk-dim);white-space:nowrap}
+button.go{background:var(--gold);color:#16171a;border-color:#d9ad38}
+button:disabled{opacity:.4;cursor:default}
+
+/* 손잡이 — 맨 위에 붙여 둔다. 돌려 보면서 바로 집어야 한다 */
+.bar{display:flex;gap:var(--s2);flex-wrap:wrap;align-items:center;
+  margin-bottom:var(--s3)}
+.bar .gap{flex:1}
+.knobs{display:grid;gap:var(--s2) var(--s3);
+  grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
+.knob label{display:block;font-size:12px;color:var(--chalk-dim);margin-bottom:4px}
+.knob label i{font-style:normal;color:var(--mark);font-weight:700}
+.knob input{width:100%;background:var(--wall);color:var(--chalk);
+  border:1px solid var(--wall-line);border-radius:6px;padding:9px 10px;
+  font:700 15px/1 'JetBrains Mono',monospace}
+.knob input:focus{outline:none;border-color:var(--mark)}
+.knob input[type=range]{padding:0;border:0;background:none}
+.knob.wide{grid-column:1/-1}
+.knob.wide input{font-size:13px;letter-spacing:.02em}
+.note{color:var(--chalk-dim);font-size:12.5px;margin:var(--s3) 0 0}
+.note b{color:var(--mark)}
+.msg{margin:var(--s2) 0 0;font-size:13px;min-height:1.3em;color:var(--win);
+  font-weight:700}
+
+/* 상태줄 — 지금 어느 참인지. 값을 재려면 이게 보여야 한다 */
+.state{display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap;
+  font:700 13.5px/1 'Gothic A1',sans-serif;color:var(--chalk-dim);
+  margin-bottom:var(--s2)}
+.state .ph{padding:6px 11px;border-radius:999px;border:1px solid var(--wall-line);
+  background:var(--wall)}
+.state .ph.on{color:#16171a;background:var(--gold);border-color:#d9ad38}
+.state .ms{font-family:'JetBrains Mono',monospace;margin-left:auto;
+  color:var(--mark);font-size:15px}
+
+/* 집계 표 — bid 화면에서 그대로 옮겼다. 고치면 양쪽을 같이 고쳐야 한다 */
+.wheel{flex:none;position:relative}
+.wheel svg{display:block;width:100%;height:100%}
+.wheel .spin{transform-origin:50% 50%}
+.wheel .seg{transition:fill .2s}
+.wheel .seg.hit{stroke:#16171a;stroke-width:2.5}
+.wheel .lab.hit{font-size:16px}
+.wheel .pin{position:absolute;left:50%;top:-3px;transform:translateX(-50%);
+  width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;
+  border-top:12px solid #16171a}
+.tbl{margin:0}
+.srow{display:flex;align-items:center;gap:var(--s2);padding:10px 4px;
+  border-bottom:1px solid var(--wall-line);will-change:transform}
+.srow:last-child{border-bottom:0}
+.srow.me .who{color:var(--mark)}
+.srow .no{font:700 15px/1 'JetBrains Mono',monospace;color:var(--chalk-dim);
+  width:2.3em;flex:none;text-align:right}
+.srow .who{font-weight:700;width:5.6em;flex:none;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap;font-size:13.5px}
+.srow .cells2{display:flex;gap:5px;flex:1;min-width:0}
+.srow .pt{font:700 20px/1 'JetBrains Mono',monospace;width:3.2em;flex:none;
+  text-align:right}
+.srow .pt.minus{color:var(--lose)}
+.cel{flex:0 0 62px;text-align:center}
+.cel .wheel{width:54px;height:54px;margin:0 auto}
+.cel .wheel .pin{border-left-width:5px;border-right-width:5px;border-top-width:9px;top:-2px}
+.cel .got{font:700 13px/1.3 'JetBrains Mono',monospace;color:var(--chalk-dim);
+  min-height:1.3em;margin-top:2px}
+.cel.yet{opacity:.3}
+.cel.past{opacity:.5}
+.cel.now .got{color:var(--win);font-size:15px}
+.cel.now .got.minus{color:var(--lose)}
+.cel.blank{flex:0 0 62px}
+.turnline{text-align:center;color:var(--chalk-dim);font-size:13.5px;
+  margin:0 0 var(--s2)}
+.turnline b{color:var(--mark)}
+</style>
+
+<div class="wrap">
+  <h1>집계 실험실</h1>
+  <p class="sub">룰렛을 나눠 가진 판을 만들어 <b>마지막 집계만</b> 돌려 본다.
+    교실에 쓸 값을 여기서 고르고, 마음에 들면 복사해 간다.</p>
+
+  <div class="bar">
+    <button class="go" id="deal">새로 섞기</button>
+    <button id="run">처음부터 돌리기</button>
+    <button id="step">한 차례만</button>
+    <button id="stop" disabled>멈춤</button>
+    <span class="gap"></span>
+    <button id="copy">설정 복사</button>
+  </div>
+
+  <div class="card">
+    <div class="knobs">
+      <div class="knob"><label>팀 수</label>
+        <input id="k_teams" type="number" min="2" max="10" step="1"></div>
+      <div class="knob"><label>품목 수 <i>경매에 나오는 룰렛</i></label>
+        <input id="k_lots" type="number" min="1" max="40" step="1"></div>
+      <div class="knob"><label>바퀴 수 <i>몇 바퀴 돌고 멎나</i></label>
+        <input id="k_turns" type="number" min="1" max="12" step="1"></div>
+      <div class="knob"><label>룰렛 도는 시간 <i>ms</i></label>
+        <input id="k_spin" type="number" min="200" max="20000" step="100"></div>
+      <div class="knob"><label>멎은 뒤 읽는 참 <i>ms</i></label>
+        <input id="k_read" type="number" min="0" max="20000" step="100"></div>
+      <div class="knob"><label>자리 바뀜 <i>ms</i></label>
+        <input id="k_move" type="number" min="0" max="5000" step="50"></div>
+      <div class="knob"><label>바뀐 뒤 보는 참 <i>ms</i></label>
+        <input id="k_watch" type="number" min="0" max="20000" step="100"></div>
+      <div class="knob wide"><label>도는 가속 곡선 <i>cubic-bezier</i></label>
+        <input id="k_ease" type="text"></div>
+      <div class="knob wide"><label>자리 바뀜 곡선 <i>cubic-bezier</i></label>
+        <input id="k_slide" type="text"></div>
+    </div>
+    <p class="note">한 차례는 <b>도는 시간 + 읽는 참 + 보는 참</b>이다.
+      자리 바뀜은 보는 참 안에서 일어나니, 보는 참을 자리 바뀜보다 넉넉히 둬야
+      바뀐 자리를 눈으로 좇을 참이 남는다.</p>
+    <p class="msg" id="msg"></p>
+  </div>
+
+  <div class="state">
+    <span class="ph" id="ph_roll">도는 중</span>
+    <span class="ph" id="ph_read">읽는 참</span>
+    <span class="ph" id="ph_move">자리 바뀜</span>
+    <span class="ph" id="ph_watch">보는 참</span>
+    <span class="ms" id="ms"></span>
+  </div>
+
+  <div class="card" id="stage"></div>
+  <p class="note" id="total"></p>
+</div>
+
+<script>
+"use strict";
+/* 룰렛 값은 서버 파일을 그대로 들여온다 — 값을 고치면 여기도 따라 바뀐다 */
+const module = {exports: {}};
+/* ══════════════════════════════════════════════════════════════════════
+   룰렛 스물넷.
+
+   칸은 셋, 확률은 고르다(각 1/3). 칸 값은 10단위다.
+
+   무작위로 뽑지 않고 손으로 짰다. 같은 기댓값에 분산만 다른 짝을 일부러
+   여럿 넣었다 — 13.33 이 셋, 10.00 이 둘, 30.00·50.00·70.00·100.00 이
+   각각 둘. 「어느 쪽이 비싼가」가 아니라 「같은 값인데 왜 느낌이 다른가」를
+   놓고 다투게 하려는 것이다. 그게 이 수업이다.
+
+   받기 싫은 것 다섯에도 짝을 두었다 — -10.00 둘, -40.00 둘.
+
+   앞의 열은 수업을 여는 사람이 직접 적어 준 것이다. 건드리지 않았다.
+   ══════════════════════════════════════════════════════════════════════ */
+"use strict";
+
+/* 적어 준 아홉 + 「받기 싫은 것」 하나 */
+const GIVEN = [
+  [ 10,  10,  20],      //  13.33
+  [-10,  20,  30],      //  13.33
+  [-20,  40,  40],      //  20.00
+  [-10, -10,  50],      //  10.00
+  [-30,  40,  40],      //  16.67
+  [ 20,  40,  60],      //  40.00
+  [ 10,  10,  10],      //  10.00
+  [ 20,  20,  20],      //  20.00
+  [-10, -10,  60],      //  13.33
+  [-10, -20, -30],      // -20.00  받기 싫은 것
+];
+
+/* 기댓값을 10~100 에 고루 깔되, 둘씩 짝을 지어 분산만 벌렸다 */
+const MADE = [
+  [ 10,  20,  40],      //  23.33
+  [-30,  30,  70],      //  23.33  같은 값인데 널뛴다
+  [ 30,  30,  30],      //  30.00  분산 0
+  [-50,  40, 100],      //  30.00
+  [ 50,  50,  50],      //  50.00
+  [-30,  50, 130],      //  50.00
+  [ 70,  70,  70],      //  70.00
+  [ 20,  70, 120],      //  70.00
+  [100, 100, 100],      // 100.00
+  [  0, 100, 200],      // 100.00
+];
+
+/* 받기 싫은 것 넷 더. 여기도 짝이 있다 */
+const BAD = [
+  [ -10, -10, -10],     // -10.00  분산 0
+  [ -30, -10,  10],     // -10.00  한 칸은 오히려 좋다
+  [ -40, -40, -40],     // -40.00
+  [-100, -20,   0],     // -40.00  꽝이 아주 깊다
+];
+
+const CELLS = GIVEN.concat(MADE, BAD);
+
+/* 기댓값. 소수 둘째 자리까지만 쓴다 */
+const ev = c => (c[0] + c[1] + c[2]) / 3;
+const round2 = v => Math.round(v * 100) / 100;
+
+const WHEELS = CELLS.map((cells, i) => ({
+  id: i + 1,
+  cells: cells.slice(),
+  ev: round2(ev(cells)),
+  bad: ev(cells) < 0,                   // 받기 싫은 것 — 탈출 경매로 돈다
+}));
+
+const byId = {};
+WHEELS.forEach(w => byId[w.id] = w);
+
+/* 한 번 돌린다. 칸 셋이 고르게 나온다 */
+function spin(wheel, rnd){
+  const k = Math.floor((rnd === undefined ? Math.random() : rnd) * 3) % 3;
+  return {at: k, got: wheel.cells[k]};
+}
+
+module.exports = {WHEELS, byId, spin, ev, round2};
+
+const POOL = module.exports.WHEELS;
+
+const el = id => document.getElementById(id);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c =>
+  ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const sgn = v => (v > 0 ? "+" : "") + v;
+const rnd = n => (Math.random() * n) | 0;
+
+/* ── 손잡이 ───────────────────────────────────────────────────────── */
+const DEF = {teams: 6, lots: 18, turns: 5, spin: 5000, read: 5000, move: 900,
+             watch: 5000, ease: ".17,.67,.23,1", slide: ".2,.8,.2,1"};
+const KEYS = Object.keys(DEF);
+const cfg = Object.assign({}, DEF);
+
+function readKnobs(){
+  KEYS.forEach(k => {
+    const n = el("k_" + k);
+    if (!n) return;
+    cfg[k] = n.type === "number" ? (+n.value || DEF[k]) : (n.value.trim() || DEF[k]);
+  });
+}
+function writeKnobs(){
+  KEYS.forEach(k => { const n = el("k_" + k); if (n) n.value = cfg[k]; });
+}
+KEYS.forEach(k => {
+  const n = el("k_" + k);
+  if (n) n.addEventListener("change", () => { readKnobs(); writeKnobs(); totalLine(); });
+});
+
+function totalLine(){
+  const one = cfg.spin + cfg.read + cfg.watch;
+  const rounds = V ? V.spin.rounds : 0;
+  el("total").innerHTML =
+    "한 차례 <b>" + (one / 1000).toFixed(1) + "초</b>" +
+    (rounds ? " · " + rounds + "차례면 <b>" + (one * rounds / 1000).toFixed(0) +
+              "초</b> (" + Math.round(one * rounds / 60000) + "분쯤)" : "") +
+    (cfg.watch < cfg.move
+      ? " · <b>보는 참이 자리 바뀜보다 짧다</b> — 미끄러지는 중에 다음 차례가 온다"
+      : "");
+}
+
+/* ── 판 짜기 ──────────────────────────────────────────────────────── */
+const NAMES = ["종달새", "왜가리", "딱따구리", "물총새", "동고비", "박새",
+               "쇠오리", "뜸부기", "뻐꾸기", "할미새"];
+let V = null;
+
+function deal(){
+  stop();
+  readKnobs();
+  const n = Math.max(2, Math.min(10, cfg.teams | 0));
+  const lots = Math.max(1, Math.min(POOL.length, cfg.lots | 0));
+  /* 스물넷에서 품목 수만큼 뽑는다. 경매와 같은 뽑기다 */
+  const bag = POOL.slice();
+  for (let i = bag.length - 1; i > 0; i--){
+    const j = rnd(i + 1); const t = bag[i]; bag[i] = bag[j]; bag[j] = t;
+  }
+  const teams = [];
+  for (let i = 0; i < n; i++)
+    teams.push({id: i, name: NAMES[i % NAMES.length], score: 0, won: [],
+                tokens: rnd(16)});
+  bag.slice(0, lots).forEach(w => teams[rnd(n)].won.push(w));
+
+  /* 차례 수는 가장 많이 가진 팀의 룰렛 수다. 빈 칸은 그대로 비워 둔다 */
+  const rounds = teams.reduce((m, t) => Math.max(m, t.won.length), 0);
+  const plan = [];
+  for (let k = 0; k < rounds; k++)
+    plan.push(teams.filter(t => t.won[k]).map(t => {
+      const at = rnd(3);
+      return {team: t.id, at, got: t.won[k].cells[at]};
+    }));
+
+  /* 눈은 미리 정해 두되 보여 주지는 않는다. rolls 에는 지나간 차례만 담는다 —
+     서버도 그 차례가 와야 spins[round] 를 채운다. 안 그러면 아직 안 돈 칸에
+     값이 먼저 비친다. */
+  V = {teams, plan, rolls: [], me: {team: 0}, board: [],
+       spin: {round: 1, rounds, phase: "roll", left: cfg.spin}};
+  seats = {};
+  rank();
+  el("stage").innerHTML = "";
+  delete el("stage").dataset.turn;
+  paint();
+  phase(null);
+  say(lots + "개를 " + n + "팀에 나눴다 · 가장 많은 팀이 " + rounds + "개");
+  totalLine();
+}
+
+/* 점수 → 남은 토큰 → 룰렛 수. bid.js 의 lineup/ranks 와 같은 갈음이다 */
+function rank(){
+  const sorted = V.teams.slice().sort((a, b) =>
+    (b.score - a.score) || (b.tokens - a.tokens) ||
+    (b.won.length - a.won.length) || (a.id - b.id));
+  const same = (a, b) => a.score === b.score && a.tokens === b.tokens &&
+                         a.won.length === b.won.length;
+  let r = 0, prev = null;
+  sorted.forEach((t, i) => {
+    if (!prev || !same(prev, t)){ r = i + 1; prev = t; }
+    t.rank = r;
+  });
+  V.board = sorted;
+}
+
+/* ── 그리기 — bid 화면의 wheelSVG / tableHTML / slide 그대로 ────────── */
+function wheelSVG(cells, turn, mark){
+  const R = 48, C = 50;
+  const arc = (a0, a1) => {
+    const p = a => [C + R * Math.cos((a - 90) * Math.PI / 180),
+                    C + R * Math.sin((a - 90) * Math.PI / 180)];
+    const [x0, y0] = p(a0), [x1, y1] = p(a1);
+    return "M" + C + "," + C + " L" + x0.toFixed(2) + "," + y0.toFixed(2) + " " +
+           "A" + R + "," + R + " 0 0 1 " + x1.toFixed(2) + "," + y1.toFixed(2) + " Z";
+  };
+  const tint = v => v > 0 ? "#f3faf5" : v < 0 ? "#fdf3f3" : "#f6f6f7";
+  const ink  = v => v > 0 ? "#1f7a3d" : v < 0 ? "#c62828" : "#63646b";
+  let g = "";
+  cells.forEach((v, k) => {
+    const a0 = k * 120, mid = a0 + 60;
+    const tx = C + 28 * Math.cos((mid - 90) * Math.PI / 180);
+    const ty = C + 28 * Math.sin((mid - 90) * Math.PI / 180);
+    const hit = k === mark ? " hit" : "";
+    g += '<path class="seg s' + k + hit + '" d="' + arc(a0, a0 + 120) +
+         '" fill="' + tint(v) + '" stroke="#dcdce1" stroke-width="1"/>';
+    g += '<text class="lab l' + k + hit + '" x="' + tx.toFixed(1) + '" y="' +
+         (ty + 4).toFixed(1) + '" text-anchor="middle" ' +
+         'font-family="JetBrains Mono,monospace" ' +
+         'font-size="13" font-weight="700" fill="' + ink(v) + '">' + v + '</text>';
+  });
+  return '<div class="wheel"><svg viewBox="0 0 100 100">' +
+         '<g class="spin" style="transform:rotate(' + (turn || 0) + 'deg)">' + g +
+         '</g><circle cx="50" cy="50" r="48" fill="none" stroke="#16171a" ' +
+         'stroke-width="1.5"/></svg><i class="pin"></i></div>';
+}
+/* k 번 조각을 바늘 아래로. 돌린 티가 나게 몇 바퀴 더 돈다 */
+const landing = k => 360 * cfg.turns - (k * 120 + 60);
+
+function tableHTML(cur, ph){
+  const rows = V.board || [];
+  const all = V.rolls || [];
+  const cols = rows.reduce((m, t) => Math.max(m, t.won.length), 1);
+  const mine = V.me ? V.me.team : -1;
+  return '<div class="tbl">' + rows.map(t => {
+    let cs = "";
+    for (let k = 0; k < cols; k++){
+      const w = t.won[k];
+      if (!w){ cs += '<div class="cel blank"></div>'; continue; }
+      const got = (all[k] || []).find(x => x.team === t.id);
+      const live = k === cur;
+      const open = got && (!live || ph !== "roll");
+      const cls = live ? "now" : (k < cur || cur < 0 ? "past" : "yet");
+      cs += '<div class="cel ' + cls + '"' +
+            (got ? ' data-at="' + got.at + '" data-got="' + got.got + '"' : "") + '>' +
+            wheelSVG(w.cells, open ? landing(got.at) % 360 : 0, open ? got.at : -1) +
+            '<div class="got' + (open && got.got < 0 ? " minus" : "") + '">' +
+            (open ? sgn(got.got) : "") + '</div></div>';
+    }
+    return '<div class="srow' + (t.id === mine ? " me" : "") +
+      '" data-team="' + t.id + '">' +
+      '<span class="no">' + t.rank + '위</span>' +
+      '<span class="who">' + esc(t.name) + '</span>' +
+      '<span class="cells2">' + cs + '</span>' +
+      '<span class="pt' + (t.score < 0 ? " minus" : "") + '">' + t.score + '</span>' +
+      '</div>';
+  }).join("") + '</div>';
+}
+
+let seats = {};
+function slide(box){
+  const now = {};
+  box.querySelectorAll(".srow").forEach(n => {
+    now[n.dataset.team] = n.getBoundingClientRect().top;
+  });
+  box.querySelectorAll(".srow").forEach(n => {
+    const was = seats[n.dataset.team];
+    if (was === undefined) return;
+    const dy = was - now[n.dataset.team];
+    if (!dy) return;
+    n.style.transition = "none";
+    n.style.transform = "translateY(" + dy + "px)";
+    requestAnimationFrame(() => {
+      n.style.transition = "transform " + cfg.move + "ms cubic-bezier(" +
+                           cfg.slide + ")";
+      n.style.transform = "translateY(0)";
+    });
+  });
+  seats = now;
+}
+
+function paint(){
+  const box = el("stage");
+  const S = V.spin;
+  const key = S.round + ":" + S.phase;
+  if (box.dataset.turn === key) return;
+  box.dataset.turn = key;
+  const done = S.round > S.rounds;
+  box.innerHTML = done
+    ? '<p class="turnline">다 돌렸습니다 · <b>' +
+      ((V.board[0] && V.board[0].name) || "") + ' 우승</b></p>' +
+      tableHTML(-1, "done")
+    : '<p class="turnline"><b>' + S.round + '번째</b> 룰렛 · 모두 함께 돌립니다 (' +
+      S.round + ' / ' + S.rounds + ')</p>' + tableHTML(S.round - 1, S.phase);
+  slide(box);
+  if (done || S.phase !== "roll") return;
+  /* 바퀴를 돌린다. 멎으면 그 자리에서 값을 켠다 */
+  const ms = Math.max(200, cfg.spin);
+  requestAnimationFrame(() => {
+    box.querySelectorAll(".cel.now").forEach(cel => {
+      const g = cel.querySelector(".spin");
+      const at = +cel.dataset.at;
+      if (!g || !(at >= 0)) return;
+      g.style.transition = "transform " + ms + "ms cubic-bezier(" + cfg.ease + ")";
+      g.style.transform = "rotate(" + landing(at) + "deg)";
+    });
+    timer(() => {
+      box.querySelectorAll(".cel.now").forEach(cel => {
+        const n = cel.querySelector(".got");
+        if (!n || !cel.dataset.got) return;
+        n.textContent = sgn(+cel.dataset.got);
+        n.className = "got" + (+cel.dataset.got < 0 ? " minus" : "");
+        const seg = cel.querySelector(".s" + cel.dataset.at);
+        const lab = cel.querySelector(".l" + cel.dataset.at);
+        if (seg) seg.classList.add("hit");
+        if (lab) lab.classList.add("hit");
+      });
+    }, ms);
+  });
+}
+
+/* ── 참 ───────────────────────────────────────────────────────────── */
+let jobs = [], ticker = null, until = 0, running = false;
+function timer(fn, ms){ jobs.push(setTimeout(fn, ms)); }
+function stop(){
+  jobs.forEach(clearTimeout); jobs = [];
+  if (ticker) clearInterval(ticker);
+  ticker = null; running = false; until = 0;
+  el("stop").disabled = true; el("ms").textContent = "";
+  ["roll", "read", "move", "watch"].forEach(p =>
+    el("ph_" + p).classList.remove("on"));
+}
+function phase(name, ms){
+  ["roll", "read", "move", "watch"].forEach(p =>
+    el("ph_" + p).classList.toggle("on", p === name));
+  until = ms ? Date.now() + ms : 0;
+  if (!until){
+    if (ticker){ clearInterval(ticker); ticker = null; }
+    el("ms").textContent = "";
+    return;
+  }
+  if (!ticker) ticker = setInterval(() => {
+    el("ms").textContent = Math.max(0, (until - Date.now()) / 1000).toFixed(1) + "초";
+  }, 50);
+}
+
+/* 한 차례 = 돌고 → 읽고 → 점수를 올려 자리를 바꾸고 → 바뀐 자리를 보고 */
+function turn(then){
+  if (!V || V.spin.round > V.spin.rounds){ stop(); return; }
+  const S = V.spin;
+  S.phase = "roll";
+  V.rolls[S.round - 1] = V.plan[S.round - 1] || [];   /* 이 차례부터 눈을 쥔다 */
+  phase("roll", cfg.spin);
+  paint();                                   /* paint 가 cfg.spin 뒤 read 로 넘긴다 */
+  timer(() => phase("read", cfg.read), cfg.spin);
+  timer(() => {
+    (V.rolls[S.round - 1] || []).forEach(s => V.teams[s.team].score += s.got);
+    rank();
+    S.phase = "move";
+    phase("move", cfg.move);
+    paint();
+    timer(() => phase("watch", Math.max(0, cfg.watch - cfg.move)),
+          Math.min(cfg.move, cfg.watch));
+    timer(() => {
+      S.round++; S.phase = "roll";
+      if (S.round > S.rounds){ paint(); stop(); say("끝"); return; }
+      if (then) turn(then); else { phase(null); el("stop").disabled = true; }
+    }, cfg.watch);
+  }, cfg.spin + cfg.read);
+}
+
+function say(s){ el("msg").textContent = s || ""; }
+
+el("deal").addEventListener("click", deal);
+el("run").addEventListener("click", () => {
+  if (!V) return;
+  stop(); readKnobs();
+  V.teams.forEach(t => t.score = 0);
+  V.spin.round = 1; V.spin.phase = "roll";
+  V.rolls = [];
+  rank(); seats = {};
+  delete el("stage").dataset.turn;
+  running = true; el("stop").disabled = false;
+  say(""); totalLine();
+  turn(true);
+});
+el("step").addEventListener("click", () => {
+  if (!V || running) return;
+  stop(); readKnobs();
+  el("stop").disabled = false;
+  turn(false);
+});
+el("stop").addEventListener("click", () => { stop(); say("멈췄다"); });
+
+/* ── 설정 복사 — 어디를 고쳐야 하는지까지 적어 준다 ────────────────── */
+el("copy").addEventListener("click", async () => {
+  readKnobs();
+  const same = cfg.read === cfg.watch;
+  const L = [];
+  L.push("/* 집계 실험실에서 고른 값 */");
+  L.push("");
+  L.push("server/bid.js");
+  L.push("  const SPIN   = " + cfg.spin + ";" +
+         "".padEnd(Math.max(1, 6 - String(cfg.spin).length)) +
+         "// 룰렛 한 바퀴");
+  if (same){
+    L.push("  const HOLD   = " + cfg.read + ";" +
+           "".padEnd(Math.max(1, 6 - String(cfg.read).length)) +
+           "// 읽는 참, 그리고 자리를 바꾼 뒤 보는 참");
+  } else {
+    L.push("  const READ   = " + cfg.read + ";    // 멎은 뒤 읽는 참");
+    L.push("  const WATCH  = " + cfg.watch + ";    // 자리를 바꾼 뒤 보는 참");
+    L.push("  ※ 지금 bid.js 는 HOLD 하나로 둘을 겸한다. 둘로 나눠야 한다 —");
+    L.push("    tick() 의 SPIN + HOLD 를 SPIN + READ 로, shown + HOLD 를");
+    L.push("    shown + WATCH 로 바꾸고 view() 의 hold 도 함께 고친다.");
+  }
+  L.push("");
+  L.push("docs/design/bid.template.html");
+  L.push("  const landing = k => 360 * " + cfg.turns + " - (k * 120 + 60);");
+  L.push("  spinView() 안:  cubic-bezier(" + cfg.ease + ")");
+  L.push("  slide() 안:     transform " + cfg.move +
+         "ms cubic-bezier(" + cfg.slide + ")");
+  L.push("");
+  L.push("한 차례 " + ((cfg.spin + cfg.read + cfg.watch) / 1000).toFixed(1) + "초" +
+         (V ? " · " + V.spin.rounds + "차례 " +
+              ((cfg.spin + cfg.read + cfg.watch) * V.spin.rounds / 1000).toFixed(0) +
+              "초" : ""));
+  const text = L.join("\n");
+  try {
+    await navigator.clipboard.writeText(text);
+    say("복사했다 — 붙여 넣으면 어디를 고칠지까지 적혀 있다");
+  } catch (e) {
+    /* file:// 에서는 클립보드가 막힐 수 있다. 그때는 골라 둔다 */
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.cssText = "position:fixed;left:0;top:0;width:100%;height:220px;z-index:9";
+    document.body.appendChild(ta); ta.select();
+    say("클립보드가 막혔다 — 위 칸의 글을 손으로 복사해라 (Esc 로 닫는다)");
+    const off = e2 => {
+      if (e2.key !== "Escape") return;
+      removeEventListener("keydown", off); ta.remove(); say("");
+    };
+    addEventListener("keydown", off);
+  }
+});
+
+writeKnobs();
+deal();
+</script>
