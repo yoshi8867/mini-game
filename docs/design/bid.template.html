@@ -186,7 +186,7 @@ button:disabled{opacity:.4;cursor:default}
 /* 경매 현황 */
 .scrim{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:40}
 .sheet{position:fixed;z-index:41;left:50%;top:50%;transform:translate(-50%,-50%);
-  width:min(760px,calc(100vw - 20px));max-height:88vh;display:flex;
+  width:min(760px,calc(100vw - 20px));max-height:min(94vh,calc(100vh - 14px));display:flex;
   flex-direction:column;background:var(--wall);border:1px solid var(--wall-line);
   border-radius:12px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)}
 .sheet-head{flex:none;display:flex;align-items:center;justify-content:space-between;
@@ -196,27 +196,36 @@ button:disabled{opacity:.4;cursor:default}
   border-bottom:1px solid var(--wall-line);font-size:13.5px;color:var(--chalk-dim)}
 .nowline b{color:var(--mark)} .nowline.bad b{color:var(--lose)}
 /* 두 칸으로 나눈다 — 우리 팀이 가져간 것과, 아직 안 나온 것.
-   번호는 안 매긴다. 어느 것이 언제 나올지는 몰라야 한다. */
-.sheet-body{overflow:auto;padding:var(--s3)}
-.blk{margin:0 0 var(--s4)}
+   번호는 안 매긴다. 어느 것이 언제 나올지는 몰라야 한다.
+   둘은 늘 한 화면에 들어와야 한다. 넘치면 fitSheet 가 --w 를 줄인다 —
+   룰렛 크기 하나만 줄이면 칸 수도 줄 간격도 글자도 함께 따라 줄어든다. */
+.sheet-body{overflow:auto;--w:92px;padding:max(6px,calc(var(--w) * .13))}
+.blk{margin:0 0 calc(6px + var(--w) * .16)}
 .blk:last-child{margin-bottom:0}
-.blk h4{font:700 13px/1.4 'Gothic A1',system-ui,sans-serif;color:var(--chalk-dim);
-  margin:0 0 9px;letter-spacing:.03em}
+.blk h4{font-weight:700;font-size:max(10.5px,calc(var(--w) * .141));line-height:1.35;
+  font-family:'Gothic A1',system-ui,sans-serif;color:var(--chalk-dim);
+  margin:0 0 max(4px,calc(var(--w) * .1));letter-spacing:.03em}
 .blk h4 b{color:var(--mark)}
-.blk.mineblk h4 b{color:var(--mark)}
-.wgrid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(112px,1fr))}
+.wgrid{display:grid;gap:max(5px,calc(var(--w) * .1));
+  grid-template-columns:repeat(auto-fill,minmax(calc(var(--w) + 20px),1fr))}
 .item.own{border-color:var(--mark);background:#fdf5e2}
-.item{border:1px solid var(--wall-line);border-radius:10px;padding:10px 8px 8px;
-  background:#fff;display:flex;flex-direction:column;align-items:center;gap:5px}
+.item{border:1px solid var(--wall-line);border-radius:10px;
+  padding:max(4px,calc(var(--w) * .1)) 6px max(3px,calc(var(--w) * .08));
+  background:#fff;display:flex;flex-direction:column;align-items:center;
+  gap:max(2px,calc(var(--w) * .055))}
 .item.now{border-color:var(--mark);background:#fdf5e2;box-shadow:0 0 0 2px #f0c75e55}
 /* 현황에서는 돌지 않으니 바늘은 지운다. 모양만 보면 된다 */
-.item .wheel{flex:none;width:92px;height:92px}
+.item .wheel{flex:none;width:var(--w);height:var(--w)}
 .item .wheel .pin{display:none}
-.item .e{font:700 12.5px/1 'JetBrains Mono',monospace;color:var(--chalk-dim)}
+.item .e{font-weight:700;font-size:max(9px,calc(var(--w) * .135));line-height:1;
+  font-family:'JetBrains Mono',monospace;color:var(--chalk-dim)}
 .item.minus .e{color:var(--lose)}
-.item .st{font:700 10.5px/1 'Gothic A1',sans-serif;color:var(--mark)}
+.item .st{font-weight:700;font-size:max(8px,calc(var(--w) * .115));line-height:1;
+  font-family:'Gothic A1',sans-serif;color:var(--mark)}
 .sheet-none{margin:0;padding:var(--s5) var(--s3);text-align:center;
   color:var(--chalk-dim);font-size:14px}
+.blk .sheet-none{padding:max(3px,calc(var(--w) * .07)) 0;
+  font-size:max(11px,calc(var(--w) * .152))}
 .fab{position:fixed;right:14px;bottom:14px;z-index:30;background:var(--chalk);
   color:#fff;border-color:var(--chalk);box-shadow:0 6px 18px rgba(0,0,0,.25)}
 </style>
@@ -314,7 +323,7 @@ const Q = new URLSearchParams(location.search);
 const SERVER = Q.get("server") || (
   /^(localhost|127\.|192\.168\.|10\.)/.test(location.hostname)
     ? "ws://" + (location.hostname || "127.0.0.1") + ":3000/ws"
-    : "wss://mini-shogi.onrender.com/ws");
+    : "wss://mini-game-y8ve.onrender.com/ws");
 
 const ERR = {badpin:"비밀번호가 맞지 않습니다", nobid:"없는 비딩입니다",
              closed:"이미 시작한 비딩입니다", full:"자리가 다 찼습니다",
@@ -800,16 +809,29 @@ function paintSheet(){
                      '</b>' : "") + '</h4>' +
       (mine.length
         ? '<div class="wgrid">' + mine.map(w => wheelCard(w, "own")).join("") + '</div>'
-        : '<p class="sheet-none" style="padding:var(--s3) 0">아직 가져간 룰렛이 없습니다.</p>') +
+        : '<p class="sheet-none">아직 가져간 룰렛이 없습니다.</p>') +
       '</section>';
   }
   out += '<section class="blk"><h4>아직 안 나온 룰렛 <b>' + left.length + '개</b></h4>' +
     (left.length
       ? '<div class="wgrid">' + left.map(w => wheelCard(w, w.at)).join("") + '</div>'
-      : '<p class="sheet-none" style="padding:var(--s3) 0">남은 룰렛이 없습니다.</p>') +
+      : '<p class="sheet-none">남은 룰렛이 없습니다.</p>') +
     '</section>';
   el("sheetBody").innerHTML = out;
+  fitSheet();
 }
+/* 두 칸을 한 화면에 담는다. 넘겨 보게 하면 가진 것과 남은 것을 견주지 못하니,
+   룰렛을 줄여서라도 담는다. 재는 편이 셈하는 편보다 틀릴 데가 없다 —
+   줄여 보고, 넘치지 않으면 거기서 멈춘다. */
+function fitSheet(){
+  if (el("sheet").hidden) return;
+  const body = el("sheetBody");
+  for (let w = 92; w >= 20; w -= 4){
+    body.style.setProperty("--w", w + "px");
+    if (body.scrollHeight <= body.clientHeight + 1) return;
+  }
+}
+addEventListener("resize", () => { if (!el("sheet").hidden) fitSheet(); });
 /* 모달이 본 화면을 덮으니, 지금 걸린 품목의 값을 여기에도 적는다 */
 function nowLine(){
   const n = el("sheetNow");

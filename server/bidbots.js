@@ -12,6 +12,9 @@
    ══════════════════════════════════════════════════════════════════════ */
 "use strict";
 
+const {WHEELS} = require("./wheels.js");
+const {TOKENS, LOTS} = require("./bid.js");
+
 const isBot = pid => typeof pid === "string" && pid.slice(0, 5) === "mock-";
 
 const MEM = new WeakMap();              // lot → Map(teamId → 머릿속)
@@ -23,10 +26,23 @@ function memo(lot){
   return m;
 }
 
-/* 좋은 룰렛에 얼마까지 낼 배짱인가. 기댓값의 1/6 언저리 */
-const nerve = ev => Math.max(1, Math.round(ev / 6) + rnd(3) - 1);
-/* 받기 싫은 룰렛을 피하려고 얼마를 적을까. 깊을수록 많이 적는다 */
-const fear  = ev => Math.max(1, Math.round(Math.abs(ev) / 9) + rnd(3));
+/* 1점은 토큰 몇 개인가.
+
+   고정된 숫자를 적어 두면 토큰 수를 고치거나 룰렛 값을 손볼 때마다 연습
+   대표가 혼자 헐값을 부른다. 그래서 판에서 끌어낸다 — 풀린 토큰을 경매에
+   나올 양수 룰렛의 기댓값 합으로 나눈 값이 곧 시장가다. 0.7 은 음수 경매가
+   태워 없앨 몫을 어림한 것이다. */
+function rate(bid){
+  const pool = WHEELS.filter(w => w.ev > 0).reduce((n, w) => n + w.ev, 0) *
+               LOTS / WHEELS.length;
+  if (!pool) return .2;
+  return TOKENS * Math.max(2, bid.teams.length) * .7 / pool;
+}
+/* 좋은 룰렛에 얼마까지 낼 배짱인가. 시장가 언저리에서 한 뼘씩 어긋난다 */
+const nerve = (ev, r) => Math.max(1, Math.round(ev * r) + rnd(3) - 1);
+/* 받기 싫은 룰렛을 피하려고 얼마를 적을까. 깊을수록 많이 적는다.
+   값을 적고도 못 피하면 그냥 태우는 것이니 시장가의 절반까지만 건다 */
+const fear  = (ev, r) => Math.max(1, Math.round(Math.abs(ev) * r / 2) + rnd(3));
 
 /* 바뀐 것이 있으면 true. 부르는 쪽에서 다시 그린다 */
 function tick(bid, now){
@@ -34,6 +50,7 @@ function tick(bid, now){
   const lot = bid.lot;
   if (!lot || lot.done) return false;
   const m = memo(lot);
+  const r = rate(bid);
   let moved = false;
 
   for (const t of bid.teams){
@@ -43,7 +60,7 @@ function tick(bid, now){
       /* 품목이 뜨자마자 다 같이 달려들면 사람이 따라 볼 수가 없다 */
       s = lot.bad
         ? {when: lot.at + 2000 + rnd(13000), sent: false}
-        : {when: lot.at + 1000 + rnd(4000), cap: nerve(lot.wheel.ev)};
+        : {when: lot.at + 1000 + rnd(4000), cap: nerve(lot.wheel.ev, r)};
       m.set(t.id, s);
     }
     if (now < s.when) continue;
@@ -52,7 +69,8 @@ function tick(bid, now){
       if (s.sent) continue;
       s.sent = true;                               // 한 번만 적어 낸다
       if (t.tokens < 1) continue;                  // 빈털터리는 못 낸다
-      if (bid.seal(t.pid, Math.min(t.tokens, fear(lot.wheel.ev)), now).ok) moved = true;
+      if (bid.seal(t.pid, Math.min(t.tokens, fear(lot.wheel.ev, r)), now).ok)
+        moved = true;
     } else {
       if (lot.who === t.id) continue;              // 자기 값엔 자기가 못 올린다
       const n = lot.price + 1;

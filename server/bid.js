@@ -57,7 +57,7 @@ const {okPin} = require("./room.js");        // 비번 모양은 대국과 같�
 const {TAIL} = require("./players.js");      // 팀 이름은 여기서 꾼다
 
 const MAX_ENTRANTS = 48;
-const TOKENS = 30;                 // 팀마다 처음 쥐는 토큰
+const TOKENS = 50;                 // 팀마다 처음 쥐는 토큰
 const LOTS   = 18;                 // 스물넷 중 경매에 나오는 수
 const BLOCK  = 6;                  // 작전타임 한 번에 경매 몇 개
 const PLAN   = 180000;             // 작전타임 (3분)
