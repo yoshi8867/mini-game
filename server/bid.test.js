@@ -403,4 +403,36 @@ function open(n, opt){
   console.log("tie     점수 → 남은 토큰 → 룰렛 수 · 경매 중에는 점수만 본다");
 }
 
+/* ─── 맡겼다 되살리기 — 서버가 다시 떠도 경매가 이어진다 ──────────────── */
+{
+  let t = 1700000000000;
+  const a = open(4); a.start(t);
+  /* 좋은 품목에 값이 붙고, 받기 싫은 품목에 비밀 입찰이 들어간 때까지 굴린다 */
+  let sawBid = false, sawSeal = false, snap = null;
+  for (let i = 0; i < 4000 && !(sawBid && sawSeal); i++){
+    t += 250; a.tick(t);
+    const L = a.lot;
+    if (!L || L.done) continue;
+    if (!L.bad && !sawBid && L.price === 0){ a.bid("pid-0", 3, t); sawBid = true;
+      const b = Bid.revive(JSON.parse(JSON.stringify(a.snapshot())));
+      assert.deepStrictEqual(b.full(t), a.full(t), "값이 붙은 품목을 되살리니 달라졌다");
+      assert.deepStrictEqual(b.view("pid-1", t), a.view("pid-1", t), "남의 화면이 달라졌다");
+      assert.strictEqual(b.bid("pid-0", 4, t).err, a.bid("pid-0", 4, t).err,
+                         "되살린 품목이 누가 최고가인지 잊었다");
+    }
+    if (L.bad && !sawSeal){ a.seal("pid-2", 2, t); sawSeal = true;
+      snap = JSON.parse(JSON.stringify(a.snapshot()));
+      const b = Bid.revive(snap);
+      assert.ok(b.lot.seals instanceof Map && b.lot.seals.size === a.lot.seals.size,
+                "비밀 입찰이 되살아나지 않았다");
+      assert.deepStrictEqual(b.view("pid-2", t), a.view("pid-2", t), "비밀 입찰 화면이 달라졌다");
+      /* 그대로 끝까지 굴리면 둘이 같은 데 닿는다 */
+      for (let k = 0; k < 400; k++){ t += 250; a.tick(t); b.tick(t); }
+      assert.deepStrictEqual(b.full(t).board, a.full(t).board, "되살린 경매가 다른 데로 갔다");
+    }
+  }
+  assert.ok(sawBid && sawSeal, "값 붙은 품목과 비밀 입찰 품목을 다 못 봤다");
+  console.log("revive  맡겼다 되살려도 호가 · 비밀 입찰 · 토큰이 그대로");
+}
+
 console.log("\n전부 통과");

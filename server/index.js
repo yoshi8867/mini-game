@@ -227,6 +227,7 @@ function cupList(){
    낱장은 **지금 보여 줄 한 장만** 내려간다. 셋을 한꺼번에 주면 소스를 열어
    겹치면 그만이다. 답도 맞히기 전까지는 아예 나가지 않는다. */
 function pushQuiz(quiz){
+  keep("quiz", quiz);
   const now = Date.now();
   for (const ws of wss.clients){
     if (ws.readyState !== 1 || ws.quiz !== quiz.code || !ws.person) continue;
@@ -306,13 +307,19 @@ function unkeep(code){
   if (db.enabled()) inLine(() => db.dropLive(code));
 }
 /* 뜰 때 한 번. 학생 화면은 다시 붙으면서 들고 있던 코드로 돌아온다 */
+const KINDS = [["omr", "블라인드", () => Omr, () => omrs],
+               ["quiz", "퀴즈", () => Quiz, () => quizzes],
+               ["bid", "비딩", () => Bid, () => bids]];
 async function revive(){
-  const rows = await db.loadLive("omr", LIVE_TTL);
-  for (const d of rows){
-    try { const o = Omr.revive(d); omrs.set(o.code, o); }
-    catch (e){ console.warn("되살림  블라인드 " + (d && d.code) + " 실패:", e.message); }
+  for (const [kind, name, cls, box] of KINDS){
+    const rows = await db.loadLive(kind, LIVE_TTL);
+    let n = 0;
+    for (const d of rows){
+      try { const o = cls().revive(d); box().set(o.code, o); n++; }
+      catch (e){ console.warn("되살림  " + name + " " + (d && d.code) + " 실패:", e.message); }
+    }
+    if (n) console.log("되살림  " + name + " " + n + "개");
   }
-  if (rows.length) console.log("되살림  블라인드 " + rows.length + "개");
 }
 
 function pushOmr(omr){
@@ -387,6 +394,7 @@ function onOmrBet(ws, msg){
    퀴즈와 같은 창구다. 다른 것은 조마다 **대표 한 명만** 값을 부른다는 것.
    나머지는 관전이다. 심판은 bid.js 이고, 여기서는 알리는 일만 한다. */
 function pushBid(bid){
+  keep("bid", bid);
   const now = Date.now();
   for (const ws of wss.clients){
     if (ws.readyState !== 1 || ws.bid !== bid.code || !ws.person) continue;
@@ -514,6 +522,7 @@ function onAdmin(what, m, done, ip){
       const code = newCode(c => cups.has(c) || rooms.has(c) || quizzes.has(c));
       const q = new Quiz(code, {pin: m.pin, title: m.title});
       quizzes.set(code, q);
+      keep("quiz", q);
       return done(200, {ok: true, quiz: q.full()});
     }
     case "quizstart": {
@@ -539,6 +548,7 @@ function onAdmin(what, m, done, ip){
       for (const ws of wss.clients)
         if (ws.quiz === q.code){ ws.quiz = null; send(ws, "quizgone", {}); }
       quizzes.delete(q.code);
+      unkeep(q.code);
       return done(200, {ok: true});
     }
     /* 리허설용 — 수업 전에 팀이 어떻게 갈리는지 보려고 쓴다 */
@@ -552,6 +562,7 @@ function onAdmin(what, m, done, ip){
       for (let i = 0; i < n; i++)
         q.join(players.get("mock-" + q.code + "-" + Date.now().toString(36) +
                            "-" + i + "-" + Math.random().toString(36).slice(2, 8)));
+      keep("quiz", q);
       return done(200, {ok: true, quiz: q.full()});
     }
         /* ─── 블라인드 ─── */
@@ -614,6 +625,7 @@ function onAdmin(what, m, done, ip){
       const code = newCode(c => cups.has(c) || rooms.has(c) || quizzes.has(c) || bids.has(c));
       const b = new Bid(code, {pin: m.pin, title: m.title, secs: m.secs, plan: m.plan});
       bids.set(code, b);
+      keep("bid", b);
       return done(200, {ok: true, bid: b.full()});
     }
     case "bidstart": {
@@ -648,6 +660,7 @@ function onAdmin(what, m, done, ip){
       for (const ws of wss.clients)
         if (ws.bid === b.code){ ws.bid = null; send(ws, "bidgone", {}); }
       bids.delete(b.code);
+      unkeep(b.code);
       return done(200, {ok: true});
     }
     /* 리허설용 — 수업 전에 경매가 어떻게 돌아가는지 보려고 쓴다 */
@@ -661,6 +674,7 @@ function onAdmin(what, m, done, ip){
       for (let i = 0; i < n; i++)
         b.join(players.get("mock-" + b.code + "-" + Date.now().toString(36) +
                            "-" + i + "-" + Math.random().toString(36).slice(2, 8)), true);
+      keep("bid", b);
       return done(200, {ok: true, bid: b.full()});
     }
     default:

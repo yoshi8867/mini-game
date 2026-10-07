@@ -84,6 +84,33 @@ class Quiz {
     this.reveal = null;                       // {at, word, by, got, from, to}
   }
 
+  /* ─── 맡기기 · 되살리기 ──────────────────────────────────────────── */
+  /* 서버가 다시 떠도 퀴즈가 이어지게 통째로 적어 둘 모습. 낱장은 낱말과 씨앗
+     에서 그대로 다시 잘라 낼 수 있으니 적지 않는다. 팀마다 이미 낸 오답은
+     Map 과 Set 이라 배열로 풀어 둔다. */
+  snapshot(){
+    const a = this.ask;
+    return {v: 1, code: this.code, pin: this.pin, title: this.title,
+            state: this.state, made: this.made, began: this.began, ended: this.ended,
+            people: [...this.people.values()], teams: this.teams,
+            order: this.order, nth: this.nth, reveal: this.reveal,
+            ask: a && {word: a.word, seed: a.seed, at: a.at, page: a.page,
+                       said: [...a.said].map(([k, set]) => [k, [...set]])}};
+  }
+  static revive(d){
+    const q = new Quiz(d.code, {pin: d.pin, title: d.title});
+    q.state = d.state; q.made = d.made; q.began = d.began; q.ended = d.ended;
+    (d.people || []).forEach(p => q.people.set(p.pid, p));
+    q.teams = d.teams || [];
+    q.order = d.order || D.WORDS;
+    q.nth = d.nth; q.reveal = d.reveal || null;
+    const a = d.ask;
+    q.ask = a ? {word: a.word, seed: a.seed, sheets: D.cut(a.word, a.seed),
+                 at: a.at, page: a.page,
+                 said: new Map((a.said || []).map(([k, v]) => [k, new Set(v)]))} : null;
+    return q;
+  }
+
   /* ─── 접수 ───────────────────────────────────────────────────────── */
   join(person){
     if (this.state !== "open") return {err: "closed"};

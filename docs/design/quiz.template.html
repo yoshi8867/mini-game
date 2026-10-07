@@ -224,11 +224,31 @@ const ERR = {badpin:"비밀번호가 맞지 않습니다", noquiz:"없는 퀴즈
 const STATE = {open:"접수 중", running:"진행 중", done:"끝남"};
 
 let sock = null, me = null, rows = [], chose = null;
-let joined = null;                    /* 들어간 퀴즈 코드 — 끊기면 이걸로 돌아온다 */
+/* 들어간 퀴즈. 메모리에만 두면 소켓이 끊겼다 붙는 것은 견뎌도 새로고침은 못
+   견딘다. 서버는 이미 들어온 pid 를 비번 없이 받아 주니 코드만 들고 있으면 된다. */
+const SEAT = "quiz-seat";
+const seat = {
+  get(){ try { return localStorage.getItem(SEAT) || null; } catch (e) { return null; } },
+  set(v){ try { v ? localStorage.setItem(SEAT, v) : localStorage.removeItem(SEAT); } catch (e) {} },
+};
+let joined = seat.get();                    /* 들어간 퀴즈 코드 — 끊기면 이걸로 돌아온다 */
 let V = null;                         /* 마지막으로 받은 내 모습 */
 let gotAt = 0;                        /* 그것을 받은 때 — 경과를 여기서 센다 */
 
 /* ── 소켓 ─────────────────────────────────────────────────────────── */
+/* 끊긴 동안은 판 위에 알린다. 서버가 다시 뜨는 1~2분 동안 화면은 멀쩡해 보여서,
+   알리지 않으면 보낸 것이 소리 없이 버려진다. 답과 호가는 시간에 묶인 값이라
+   모았다가 나중에 보내지 않는다 — 막고, 다시 내 달라고 한다. */
+const online = () => !!sock && sock.readyState === 1;
+function offline(on){
+  if (el("play").hidden && el("lobby").hidden) return;
+  say("playMsg", on ? "연결이 끊겼습니다 — 다시 붙는 중입니다." : "", on ? "bad" : "");
+}
+function act(t, o){
+  if (online()){ send(t, o); return true; }
+  say("playMsg", "연결이 끊겨 보내지 못했습니다 — 다시 붙으면 다시 내 주세요.", "bad");
+  return false;
+}
 const send = (t, o) => {
   if (sock && sock.readyState === 1) sock.send(JSON.stringify(Object.assign({t}, o || {})));
 };
@@ -244,13 +264,22 @@ function connect(){
     if (m.t === "me"){ me = m; el("myname").textContent = m.name;
                        el("lobbyName").textContent = m.name; }
     else if (m.t === "quizzes"){ rows = m.quizzes; paintList(); }
-    else if (m.t === "quizme"){ take(m.code ? m : null); }
+    else if (m.t === "quizme"){ take(m.code ? m : null); if (m.code) offline(false); }
     else if (m.t === "quizgone"){ joined = null; take(null);
                                   say("pickMsg", "퀴즈가 닫혔습니다.", "bad"); }
     else if (m.t === "quizmiss"){ miss(m); }
-    else if (m.t === "error"){ oops(m.why); }
+    else if (m.t === "error"){
+      /* 들고 있던 퀴즈가 서버에 없다 — 서버가 다시 떴거나 닫혔다. 죽은 화면을
+         붙들고 있게 두지 않는다 */
+      if (m.why === "noquiz" && joined){
+        joined = null; seat.set(null); take(null);
+        say("pickMsg", "퀴즈가 사라졌습니다. 서버가 다시 시작됐을 수 있습니다 — 선생님께 알려 주세요.", "bad");
+        return;
+      }
+      oops(m.why);
+    }
   };
-  sock.onclose = () => { sock = null; setTimeout(connect, 2000); };
+  sock.onclose = () => { sock = null; offline(true); setTimeout(connect, 2000); };
   sock.onerror = () => {};
 }
 /* 목록을 가끔 다시 받는다. 선생님이 퀴즈를 열면 저절로 뜬다 */
@@ -294,9 +323,9 @@ el("out").addEventListener("click", () => { joined = null; send("quizleave", {})
 function submit(){
   const text = el("text").value.trim();
   if (!text) return;
+  if (!act("quizsay", {text})) return;   /* 끊겼으면 쓴 답을 지우지 않고 둔다 */
   el("text").value = "";
   el("text").focus();                 /* 자판을 붙잡아 둔다 — 다음 답이 급하다 */
-  send("quizsay", {text});
 }
 el("send").addEventListener("click", submit);
 el("text").addEventListener("keydown", e => {
@@ -313,6 +342,7 @@ function miss(m){
 /* ── ② ③ 들어온 뒤 ───────────────────────────────────────────────── */
 function take(v){
   V = v; gotAt = Date.now();
+  seat.set(v ? v.code : null);
   if (!v){
     joined = null;
     el("pick").hidden = false; el("lobby").hidden = true; el("play").hidden = true;

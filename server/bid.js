@@ -106,6 +106,33 @@ class Bid {
     this.shown = null;                 // 점수를 올린 때. 그 뒤로 HOLD 만큼 더 둔다
   }
 
+  /* ─── 맡기기 · 되살리기 ──────────────────────────────────────────── */
+  /* 서버가 다시 떠도 경매가 이어지게 통째로 적어 둘 모습. 시각은 모두 절대
+     시각이라, 되살린 품목은 꺼져 있던 동안 흐른 시간까지 따라잡는다 — 그사이
+     마감이 지났으면 다음 tick 에 낙찰된다. 비밀 입찰만 Map 이라 풀어 둔다.
+     연습 대표의 머릿속은 품목에 붙어 있지 않으니 되살린 뒤 새로 시작한다. */
+  snapshot(){
+    const L = this.lot;
+    return {v: 1, code: this.code, pin: this.pin, title: this.title,
+            secs: this.secs, plan: this.plan, state: this.state, made: this.made,
+            began: this.began, ended: this.ended,
+            people: [...this.people.values()], teams: this.teams,
+            order: this.order, sold: this.sold, paid: this.paid, nth: this.nth,
+            lot: L && Object.assign({}, L, {seals: [...L.seals]}),
+            planAt: this.planAt, round: this.round, spins: this.spins,
+            spinAt: this.spinAt, shown: this.shown};
+  }
+  static revive(d){
+    const b = new Bid(d.code, {pin: d.pin, title: d.title, secs: d.secs, plan: d.plan});
+    ["state", "made", "began", "ended", "teams", "order", "sold", "paid", "nth",
+     "planAt", "round", "spins", "spinAt", "shown"].forEach(k => {
+      if (d[k] !== undefined) b[k] = d[k];
+    });
+    (d.people || []).forEach(p => b.people.set(p.pid, p));
+    b.lot = d.lot ? Object.assign({}, d.lot, {seals: new Map(d.lot.seals || [])}) : null;
+    return b;
+  }
+
   /* ─── 접수 ───────────────────────────────────────────────────────── */
   /* rep 이면 팀을 하나 차지한다. 아니면 구경만 한다 */
   join(person, rep){

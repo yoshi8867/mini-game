@@ -158,5 +158,23 @@ if (require.main === module){
   for (const b of board)
     console.log("  " + b.rank + "위 " + b.name + "  " + b.score + "초  " +
                 b.mates.join(", "));
-  console.log("전부 통과");
+  /* ─── 맡겼다 되살리기 — 서버가 다시 떠도 퀴즈가 이어진다 ──────────────── */
+{
+  const T = 1700000000000;
+  const a = filled(9); a.start(T);
+  for (let t = T; t < T + 3000; t += 250) a.tick(t);
+  const pids = [...a.people.keys()];
+  a.say(pids[0], "틀린말", T + 3000);             // 오답 하나 — said 가 차야 한다
+  const b = Quiz.revive(JSON.parse(JSON.stringify(a.snapshot())));
+  const at = T + 3500;
+  pids.forEach(p => assert.deepStrictEqual(b.view(p, at), a.view(p, at), "되살린 퀴즈의 모습이 다르다"));
+  assert.deepStrictEqual(b.full(at), a.full(at), "되살린 퀴즈의 관리자 모습이 다르다");
+  assert.deepStrictEqual(b.ask.sheets, a.ask.sheets, "낱장을 다시 잘라 낸 것이 다르다");
+  /* 같은 오답을 또 내면 되살린 판도 알아본다 */
+  assert.deepStrictEqual(b.say(pids[0], "틀린말", at), a.say(pids[0], "틀린말", at),
+                         "되살린 퀴즈가 이미 낸 오답을 잊었다");
+  console.log("revive  맡겼다 되살려도 팀 · 문제 · 낱장 · 낸 오답이 그대로");
+}
+
+console.log("전부 통과");
 }
