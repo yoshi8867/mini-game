@@ -278,6 +278,7 @@ body.teach .rankrow .pts{font-size:22px}
     <div class="marks" id="marks"></div>
   </div>
   <div class="clock"><b id="mmss">--:--:--</b><span id="phase">시작 전</span></div>
+  <p class="msg" id="playMsg"></p>
 
   <section class="notice" id="notice" hidden>
     <div class="ntitle" id="ntitle"></div>
@@ -435,11 +436,26 @@ function connect(){
     else if (m.t === "omrgone"){ joined = null; seat.set(null); take(null);
                                  say("pickMsg", "판이 닫혔습니다.", "bad"); }
     else if (m.t === "error"){
-      /* 들고 있던 코드가 이제 없다. 돌아갈 자리가 아니라 지울 자리다 */
-      if ((m.why === "noomr" || m.why === "badpin") && joined && !chose){
-        joined = null; seat.set(null); take(null); return;   /* 들고 있던 코드가 썩었다 */
+      /* 들고 있던 판이 서버에 없다 — 서버가 다시 떴거나 판이 닫혔다. 그대로 두면
+         칠해도 아무 데도 안 가는 답안지를 붙들고 있게 된다. 바늘은 화면이
+         혼자 세니 멀쩡히 흐르는 것처럼 보여서 더 나쁘다. 고르기로 내보내고
+         까닭을 말해 준다. */
+      if ((m.why === "noomr" || m.why === "badpin") && joined){
+        const was = !el("play").hidden || !el("lobby").hidden;
+        joined = null; seat.set(null); take(null);
+        if (m.why === "noomr") chose = null;
+        say("pickMsg", m.why === "noomr" && was
+          ? "판이 사라졌습니다. 서버가 다시 시작됐을 수 있습니다 — 선생님께 알려 주세요."
+          : ERR[m.why] || m.why, "bad");
+        return;
       }
-      say("pickMsg", ERR[m.why] || m.why, "bad");
+      /* 판 안에서 난 오류는 판 위에 적는다. 숨은 고르기 화면에 적으면 아무도 못 본다 */
+      const box = el("play").hidden ? "pickMsg" : "playMsg";
+      say(box, ERR[m.why] || m.why, "bad");
+      if (box === "playMsg"){
+        clearTimeout(say.t);
+        say.t = setTimeout(() => say("playMsg", ""), 4000);
+      }
     }
   };
   sock.onclose = () => { sock = null; setTimeout(connect, 2000); };
