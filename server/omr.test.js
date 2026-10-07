@@ -198,5 +198,22 @@ if (require.main === module){
               "개 · " + (LEN / 60000) + "분");
   console.log("  21명 → 명제 " + r.props + "개 배부, " +
               "만점 " + QUESTIONS * PER + "점, 평균 " + tal.avg.toFixed(1) + "점");
-  console.log("전부 통과");
+  /* ─── 맡겼다 되살리기 — 서버가 다시 떠도 판이 이어진다 ──────────────── */
+{
+  const a = filled(6); a.start(T0);
+  const p0 = [...a.people.keys()][0];
+  a.mark(p0, 3, 2, T0 + 33 * 60000);
+  a.bet(p0, 70, T0 + 33 * 60000);
+  /* JSON 을 한 바퀴 돈다 — Neon 의 jsonb 에 들어갔다 나오는 것과 같다 */
+  const b = Omr.revive(JSON.parse(JSON.stringify(a.snapshot())));
+  const at = T0 + 33 * 60000 + 5000;
+  assert.deepStrictEqual(b.view(p0, at), a.view(p0, at), "되살린 판의 내 모습이 다르다");
+  assert.deepStrictEqual(b.watch(at), a.watch(at), "되살린 판의 교실 앞 모습이 다르다");
+  assert.strictEqual(b.mark(p0, 4, 1, at).ok, true, "되살린 판에서 칠이 안 된다");
+  /* 꺼져 있던 동안 흐른 시간도 따라잡는다 — 시작 시각을 절대 시각으로 들고 있다 */
+  assert.strictEqual(b.spent(T0 + 36 * 60000), 36 * 60000, "되살린 판의 시계가 멈춰 있었다");
+  console.log("revive  맡겼다 되살려도 모습 · 답안 · 시계가 그대로");
+}
+
+console.log("전부 통과");
 }

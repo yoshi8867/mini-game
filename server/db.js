@@ -49,6 +49,15 @@ alter table games drop column if exists moves;   -- 기보는 안 남기기로 �
 alter table games add column if not exists mode    text not null default 'online';
 alter table games add column if not exists ai_side smallint;   -- ai 판에서 기계가 앉은 자리
 create index if not exists games_mode_idx on games (mode);
+
+-- 살아 있는 판. 서버가 다시 떠도 판이 이어지게 바뀔 때마다 통째로 적어 둔다.
+-- 끝나거나 닫히면 지운다. 기록이 아니라 잠깐 맡겨 둔 짐이다.
+create table if not exists live (
+  code     text        primary key,
+  kind     text        not null,           -- omr | cup | quiz | bid
+  data     jsonb       not null,
+  saved_at timestamptz not null default now()
+);
 `;
 
 /* 처음 쓸 때 한 번만 스키마를 맞춘다. 실패하면 이후로는 조용히 꺼진다. */
@@ -127,6 +136,38 @@ async function count(){
   } catch { return null; }
 }
 
+/* ─── 살아 있는 판 ─────────────────────────────────────────────────── */
+/* 쓰기가 실패해도 판은 계속 돈다. 다음 변화 때 다시 적힌다 */
+async function keepLive(code, kind, data){
+  if (!pool || broken) return false;
+  if (!(await init())) return false;
+  try {
+    await pool.query(
+      `insert into live (code, kind, data, saved_at) values ($1, $2, $3, now())
+       on conflict (code) do update set kind = $2, data = $3, saved_at = now()`,
+      [code, kind, JSON.stringify(data)]);
+    return true;
+  } catch (e){ console.warn("db   판 맡기기 실패:", e.message); return false; }
+}
+async function dropLive(code){
+  if (!pool || broken) return false;
+  if (!(await init())) return false;
+  try { await pool.query("delete from live where code = $1", [code]); return true; }
+  catch (e){ console.warn("db   판 지우기 실패:", e.message); return false; }
+}
+/* 너무 오래된 것은 되살리지 않고 버린다 — 수업은 반나절을 넘지 않는다 */
+async function loadLive(kind, maxAgeMs){
+  if (!pool || broken) return [];
+  if (!(await init())) return [];
+  try {
+    await pool.query(
+      "delete from live where saved_at < now() - ($1::bigint * interval '1 millisecond')",
+      [maxAgeMs]);
+    const r = await pool.query("select code, data from live where kind = $1", [kind]);
+    return r.rows.map(x => x.data);
+  } catch (e){ console.warn("db   판 되살리기 실패:", e.message); return []; }
+}
+
 const enabled = () => !!pool && !broken;
 
-module.exports = {init, saveGame, count, stats, enabled};
+module.exports = {init, saveGame, count, stats, enabled, keepLive, dropLive, loadLive};

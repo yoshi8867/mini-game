@@ -283,7 +283,40 @@ function onQuizSay(ws, msg){
 
    내 명제는 나에게만, 그것도 띄워 두는 1분 동안만 내려간다. 정답은 종료령
    뒤에 하나씩 열린다. 남의 답안은 끝까지 안 내려간다. */
+/* ─── 살아 있는 판 맡기기 ───────────────────────────────────────────
+   판은 메모리에 산다. 서버가 다시 뜨면 — 배포든, Render 가 옮기든 — 통째로
+   사라지고 40분짜리 수업이 날아간다. 그래서 바뀔 때마다 Neon 에 적어 두고,
+   뜰 때 되살린다. 마킹 연타처럼 몰리는 변화는 0.4초 모아 한 번에 적는다.
+   쓰기는 한 줄로 세운다 — 닫기(지우기)가 늦게 도착한 적기에 덮이면 안 된다.
+   DB 가 꺼져 있으면 아무것도 안 한다. 판은 DB 를 몰라도 돈다. */
+const LIVE_TTL = 12 * 3600 * 1000;           // 이보다 오래된 짐은 버린다
+const keeping = new Map();                   // code → 적기 예약
+let liveQ = Promise.resolve();
+const inLine = f => (liveQ = liveQ.then(f, f));
+function keep(kind, obj){
+  if (!db.enabled() || keeping.has(obj.code)) return;
+  keeping.set(obj.code, setTimeout(() => {
+    keeping.delete(obj.code);
+    inLine(() => db.keepLive(obj.code, kind, obj.snapshot()));
+  }, 400));
+}
+function unkeep(code){
+  const t = keeping.get(code);
+  if (t){ clearTimeout(t); keeping.delete(code); }
+  if (db.enabled()) inLine(() => db.dropLive(code));
+}
+/* 뜰 때 한 번. 학생 화면은 다시 붙으면서 들고 있던 코드로 돌아온다 */
+async function revive(){
+  const rows = await db.loadLive("omr", LIVE_TTL);
+  for (const d of rows){
+    try { const o = Omr.revive(d); omrs.set(o.code, o); }
+    catch (e){ console.warn("되살림  블라인드 " + (d && d.code) + " 실패:", e.message); }
+  }
+  if (rows.length) console.log("되살림  블라인드 " + rows.length + "개");
+}
+
 function pushOmr(omr){
+  keep("omr", omr);                          // 화면에 알릴 만큼 바뀌었으면 적어 둘 만큼 바뀐 것이다
   const now = Date.now();
   for (const ws of wss.clients){
     if (ws.readyState !== 1 || ws.omr !== omr.code) continue;
@@ -338,6 +371,7 @@ function onOmrMark(ws, msg){
   if (!omr || !ws.person) return send(ws, "error", {why: "noomr"});
   const r = omr.mark(ws.person.pid, msg.q, msg.n, Date.now());
   if (r.err) return send(ws, "error", {why: r.err});
+  keep("omr", omr);
   send(ws, "omrme", omr.view(ws.person.pid, Date.now()));
 }
 function onOmrBet(ws, msg){
@@ -345,6 +379,7 @@ function onOmrBet(ws, msg){
   if (!omr || !ws.person) return send(ws, "error", {why: "noomr"});
   const r = omr.bet(ws.person.pid, msg.v, Date.now());
   if (r.err) return send(ws, "error", {why: r.err});
+  keep("omr", omr);
   send(ws, "omrme", omr.view(ws.person.pid, Date.now()));
 }
 
@@ -527,6 +562,7 @@ function onAdmin(what, m, done, ip){
                                 bids.has(c) || omrs.has(c));
       const o = new Omr(code, {pin: m.pin, title: m.title, hints: m.hints});
       omrs.set(code, o);
+      keep("omr", o);
       return done(200, {ok: true, omr: o.full()});
     }
     /* 누르는 순간 40분이 흐르기 시작한다. 멈춤도 되감기도 없다 */
@@ -554,6 +590,7 @@ function onAdmin(what, m, done, ip){
       for (const ws of wss.clients)
         if (ws.omr === o.code){ ws.omr = null; send(ws, "omrgone", {}); }
       omrs.delete(o.code);
+      unkeep(o.code);
       return done(200, {ok: true});
     }
     /* 리허설용 — 수업 전에 명제가 어떻게 갈리는지 보려고 쓴다 */
@@ -567,6 +604,7 @@ function onAdmin(what, m, done, ip){
       for (let i = 0; i < n; i++)
         o.join(players.get("mock-" + o.code + "-" + Date.now().toString(36) +
                            "-" + i + "-" + Math.random().toString(36).slice(2, 8)));
+      keep("omr", o);
       return done(200, {ok: true, omr: o.full()});
     }
     /* ─── 돌림판 비딩 ─── */
@@ -888,6 +926,11 @@ setInterval(() => {
 
 db.init().catch(() => {});               // 첫 손님이 오기 전에 미리 깨워둔다
 
-server.listen(PORT, () => {
-  console.log(`미니쇼기 서버 :${PORT}  (healthz → /healthz, 대국 → /ws)`);
-});
+/* 맡겨 둔 판을 되살린 다음에 문을 연다. 먼저 열면 다시 붙는 학생이 「없는
+   판」을 받고 튕긴다. 다만 잠든 DB 를 하염없이 기다리지는 않는다 — 15초가
+   넘으면 빈손으로 연다. */
+Promise.race([revive(), new Promise(r => setTimeout(r, 15000))])
+  .catch(e => console.warn("되살림  실패:", e.message))
+  .then(() => server.listen(PORT, () => {
+    console.log(`미니쇼기 서버 :${PORT}  (healthz → /healthz, 대국 → /ws)`);
+  }));

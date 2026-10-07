@@ -107,6 +107,26 @@ class Omr {
     this.last   = "";                        // 마지막으로 알린 모습
   }
 
+  /* ─── 맡기기 · 되살리기 ──────────────────────────────────────────── */
+  /* 서버가 다시 떠도 판이 이어지게 통째로 적어 둘 모습. 시작 시각을 절대
+     시각으로 들고 있으니, 되살린 판은 꺼져 있던 동안 흐른 시간까지 그대로
+     따라잡는다. 명제는 글까지 통째로 둔다 — 그사이 OMR_PROPS 가 바뀌어도
+     이미 나눠 준 패는 그대로여야 한다. */
+  snapshot(){
+    return {v: 1, code: this.code, pin: this.pin, title: this.title,
+            hints: this.hints, state: this.state, made: this.made,
+            began: this.began, ended: this.ended,
+            people: [...this.people.values()]};
+  }
+  static revive(d){
+    const o = new Omr(d.code, {pin: d.pin, title: d.title, hints: d.hints});
+    o.state = d.state; o.made = d.made; o.began = d.began; o.ended = d.ended;
+    (d.people || []).forEach(p => o.people.set(p.pid, {
+      pid: p.pid, name: p.name, prop: p.prop || null,
+      marks: p.marks || {}, guess: p.guess === undefined ? null : p.guess}));
+    return o;
+  }
+
   /* ─── 접수 ───────────────────────────────────────────────────────── */
   join(person){
     if (this.state !== "open") return {err: "closed"};
