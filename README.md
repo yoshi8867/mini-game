@@ -1,4 +1,32 @@
-# 미니쇼기 (Mini Shōgi)
+# mini-game
+
+수업에서 쓰는 게임들. **쇼기 하나로 시작했으나 지금은 넷이 산다.**
+그래서 레포 이름을 `mini-shogi` 에서 `mini-game` 으로 바꿨다.
+
+| 화면 | 게임 | 서버 |
+|---|---|---|
+| [`index.html`](https://yoshi8867.github.io/mini-game/) | 동물 쇼기 | WS · 대회 |
+| [`bid.html`](https://yoshi8867.github.io/mini-game/bid.html) | 룰렛 경매 | WS |
+| [`quiz.html`](https://yoshi8867.github.io/mini-game/quiz.html) | 단어 맞히기 | WS |
+| [`omr.html`](https://yoshi8867.github.io/mini-game/omr.html) | 블라인드 중간고사 | WS |
+| [`admin.html`](https://yoshi8867.github.io/mini-game/admin.html) | 운영 — 대회를 열고 닫는다 | HTTP |
+
+넷 다 운영자가 돌리는 **대회 게임**이다. 화면은 깃헙 페이지스, 판정은
+`server/`(Node) 가 Render 에서, 기록은 Neon 에 남는다.
+
+### acorn/ — 도토리 게임
+
+[`acorn/`](https://yoshi8867.github.io/mini-game/acorn/) 에는 **다람쥐 파티
+게임**의 구운 한 장짜리들이 산다. 그쪽은 서버를 안 쓴다 — 규칙이 페이지
+안에서 돈다. 원본과 설계는 비공개 레포 `treasure-hunter` 에 있고 여기엔
+구운 것만 올라온다. 올리는 것은 그쪽의 `올리기.py` 다.
+
+**`acorn/` 과 위의 넷은 아무것도 공유하지 않는다.** 부품도 서버도 따로다.
+한 레포에 둔 까닭은 공개 주소를 한 군데로 모으려는 것뿐이다.
+
+아래는 **쇼기**에 대한 기록이다.
+
+---
 
 3×4 판에서 두는 일본 **동물 쇼기**를 HTML5로 만드는 프로젝트.
 한 기기를 가운데 놓고 두 사람이 마주 앉아 둔다.
