@@ -1,0 +1,716 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#12100d">
+<title>미로 실험실</title>
+<style>
+/* ─────────────────────────────────────────────────────────────────
+   여의주 규격을 그대로 가져왔다 (server/static/ys.css).
+   여기는 혼자 도는 한 장짜리라 필요한 것만 옮겨 적는다.
+   ───────────────────────────────────────────────────────────── */
+:root{
+  --ink-900:#12100d; --ink-800:#1b1815; --ink-700:#221e1a;
+  --line:#332e28; --line-2:#4a433a;
+  --text:#ece7de; --dim:#8b8275; --faint:#463f37;
+  --gold:#e8b339; --green:#3fb950; --red:#e5534b;
+  --font:"Pretendard Variable",Pretendard,-apple-system,"Malgun Gothic",
+    "맑은 고딕",system-ui,sans-serif;
+  --s-1:4px; --s-2:8px; --s-3:12px; --s-4:16px; --s-6:24px;
+  --r-sm:6px; --r-md:10px; --r-lg:14px;
+  /* 미로는 두 가지 색뿐이다 — 벽은 검정, 다닐 수 있는 데는 흰색 */
+  --wall:#0c0c0c; --way:#f4f4f2; --seen:#c3cbd3;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;min-height:100%}
+body{
+  background:var(--ink-900);color:var(--text);
+  font:15px/1.6 var(--font);
+  display:flex;flex-direction:column;overscroll-behavior:none;
+}
+
+header{
+  flex:none;display:flex;align-items:center;gap:var(--s-3);
+  padding:max(10px,env(safe-area-inset-top)) var(--s-4) 10px;
+  border-bottom:1px solid var(--line);background:var(--ink-800);
+  position:sticky;top:0;z-index:10;
+}
+header h1{font-size:16px;margin:0;font-weight:600}
+header .sub{color:var(--dim);font-size:12px;font-weight:400;margin-left:6px}
+
+main{flex:1;padding:var(--s-4) var(--s-4) calc(40px + env(safe-area-inset-bottom))}
+
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+.btn{background:var(--ink-700);border:1px solid var(--line);
+  border-radius:var(--r-sm);padding:9px 13px;font-size:14px;color:var(--text)}
+.btn:active{background:var(--line)}
+.btn.gold{border-color:var(--gold);color:var(--gold)}
+.btn.on{background:var(--text);color:var(--ink-900);border-color:var(--text);
+  font-weight:700}
+.hide{display:none}
+
+.bar{display:flex;gap:var(--s-3);align-items:center;flex-wrap:wrap;
+  margin-bottom:var(--s-4)}
+.bar .seg{display:flex;gap:0}
+.bar .seg .btn{border-radius:0}
+.bar .seg .btn:first-child{border-radius:var(--r-sm) 0 0 var(--r-sm)}
+.bar .seg .btn:last-child{border-radius:0 var(--r-sm) var(--r-sm) 0;
+  border-left:none}
+label{color:var(--dim);font-size:13px;display:flex;align-items:center;gap:6px}
+select{font:inherit;color:var(--text);background:var(--ink-700);
+  border:1px solid var(--line);border-radius:var(--r-sm);padding:7px 9px}
+input[type=checkbox]{accent-color:var(--gold);width:16px;height:16px;margin:0}
+
+h2{font-size:12px;color:var(--dim);font-weight:600;letter-spacing:.06em;
+  margin:0 0 var(--s-2);padding-bottom:5px;border-bottom:1px solid var(--line)}
+.note{color:var(--faint);font-size:12px;line-height:1.7;margin:var(--s-2) 0 0}
+.note b{color:var(--dim)}
+.note.lit{color:var(--green)}
+.note.bad{color:var(--red)}
+
+.wrap{display:flex;gap:var(--s-4);flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 300px;min-width:250px;max-width:460px}
+
+/* ── 미로 판 ──────────────────────────────────────────────────────
+   칸은 저마다 정사각형이 되어야 한다. 판에 aspect-ratio 를 걸면 기기에
+   따라 칸이 늘어나므로, 칸마다 `::before{padding-top:100%}` 로 **제 폭만큼
+   높이를 띄운다** — 퍼센트 세로 여백은 어디서나 제 폭을 기준으로 잡힌다 */
+.board{display:grid;gap:1px;background:var(--line);
+  border:1px solid var(--line-2);border-radius:var(--r-md);
+  padding:1px;overflow:hidden;touch-action:manipulation}
+.board .px{background:var(--wall);position:relative;min-width:0}
+.board .px::before{content:"";display:block;padding-top:100%}
+.board .px.way{background:var(--way);cursor:pointer}
+.board .px.seen{background:var(--seen)}
+/* 맞은 자리는 녹색, 틀린 자리는 적색이다 */
+.board .px.right{background:var(--green)}
+.board .px.wrong{background:var(--red)}
+.board .px svg{position:absolute;inset:0;width:100%;height:100%;display:block}
+.board .px svg polygon{fill:var(--gold)}
+.board.cool .px.way{cursor:default}
+
+/* ── 보이는 모습 ─────────────────────────────────────────────────
+   천장과 바닥은 하얗고 벽면은 검정이다. 바탕을 흰색으로 깔고 벽만 얹는다 */
+.view{position:relative;background:var(--way);
+  border:1px solid var(--line-2);border-radius:var(--r-md);overflow:hidden}
+.view::before{content:"";display:block;padding-top:100%}
+.view svg{position:absolute;inset:0;width:100%;height:100%;display:block}
+.view svg polygon,.view svg rect.wall{fill:var(--wall)}
+.view svg rect.ring{fill:none;stroke:#9aa0a6;stroke-width:.006}
+
+/* ── 담은 문제 ─────────────────────────────────────────────────── */
+.kept{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:var(--s-3)}
+.kept .btn{padding:5px 9px;font-size:13px}
+.kept .btn.now{border-color:var(--gold);color:var(--gold)}
+textarea{width:100%;height:140px;font:12px/1.5 ui-monospace,Consolas,monospace;
+  color:var(--dim);background:var(--ink-800);border:1px solid var(--line);
+  border-radius:var(--r-sm);padding:var(--s-2);resize:vertical;
+  -webkit-user-select:text;user-select:text}
+</style>
+</head>
+<body>
+
+<header><h1>미로 실험실<span class="sub">서 · 북 · 동 · 남</span></h1></header>
+
+<main>
+  <div class="bar">
+    <span class="seg">
+      <button class="btn on" id="mLook">살펴보기</button>
+      <button class="btn" id="mQuiz">퀴즈</button>
+      <button class="btn" id="mMake">출제</button>
+    </span>
+    <label>가로 <select id="w"></select></label>
+    <label>세로 <select id="h"></select></label>
+    <label>싸이클 <select id="cyc"></select></label>
+    <button class="btn" id="fresh">새 미로</button>
+    <button class="btn gold hide" id="again">새 문제</button>
+    <button class="btn gold hide" id="tell">좋은 자리 추천</button>
+    <button class="btn hide" id="keep">담기</button>
+    <label class="only hide"><input type="checkbox" id="one"> 답이 한 곳인 문제만</label>
+    <label class="deep hide">보이는 칸 <select id="cap"></select> 이하</label>
+    <label><input type="checkbox" id="mark"> 보이는 칸</label>
+    <label><input type="checkbox" id="rings"> 깊이 선</label>
+  </div>
+
+  <div class="wrap">
+    <div class="col">
+      <h2>미로</h2>
+      <div class="board" id="board"></div>
+      <p class="note" id="tip"></p>
+    </div>
+    <div class="col">
+      <h2>보이는 모습</h2>
+      <div class="view" id="view"></div>
+      <p class="note" id="what">아직 선 자리가 없다.</p>
+    </div>
+    <div class="col book hide">
+      <h2>담은 문제</h2>
+      <div class="kept" id="kept"></div>
+      <textarea id="json" readonly></textarea>
+      <div class="bar" style="margin-top:var(--s-2)">
+        <button class="btn gold" id="copy">복사</button>
+        <button class="btn" id="save">내려받기</button>
+        <button class="btn" id="wipe">비우기</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  /* 서 · 북 · 동 · 남. 다시 탭할 때마다 이 차례로 넘어간다 */
+  var DIRS = [
+    {name: "서", dr: 0, dc: -1},
+    {name: "북", dr: -1, dc: 0},
+    {name: "동", dr: 0, dc: 1},
+    {name: "남", dr: 1, dc: 0}
+  ];
+  /* 화면 기준 오른손 쪽. 서를 볼 때 오른쪽은 북이다 */
+  function right(d) { return {dr: d.dc, dc: -d.dr}; }
+  function left(d) { return {dr: -d.dc, dc: d.dr}; }
+
+  var VW = 1.5;     /* 화면이 담는 폭 — 선 칸의 좌우 벽까지 보이게 넓힌다 */
+  var DEEP = 16;    /* 판이 13칸을 안 넘으니 이만하면 늘 벽에 막힌다 */
+
+  var board = document.getElementById("board");
+  var view = document.getElementById("view");
+  var what = document.getElementById("what");
+  var tip = document.getElementById("tip");
+  var selW = document.getElementById("w");
+  var selH = document.getElementById("h");
+  var selCyc = document.getElementById("cyc");
+  var mark = document.getElementById("mark");
+  var rings = document.getElementById("rings");
+  var one = document.getElementById("one");
+  var onlyBox = document.querySelector(".only");
+  var mLook = document.getElementById("mLook");
+  var mQuiz = document.getElementById("mQuiz");
+  var mMake = document.getElementById("mMake");
+  var again = document.getElementById("again");
+  var cap = document.getElementById("cap");
+  var deepBox = document.querySelector(".deep");
+  var bookBox = document.querySelector(".book");
+  var keptBox = document.getElementById("kept");
+  var jsonBox = document.getElementById("json");
+  var tell = document.getElementById("tell");
+  var keep = document.getElementById("keep");
+
+  var W = 9, H = 9;
+  var grid = [];          /* 1 이면 벽, 0 이면 길 */
+  var mode = "look";      /* look 살펴보기 · quiz 퀴즈 */
+
+  var at = null;          /* 살펴보기 — 선 자리 [행, 열] */
+  var dir = 0;
+  var seen = [];          /* 지금 보고 있는 칸들 */
+
+  var ask = null;         /* 퀴즈 — {r, c, dir, sign, same:[[행,열]…]} */
+  var shot = null;        /* 고른 자리 */
+
+  /* 출제 — 담은 문제집. 판마다 여러 문제를 담는다.
+     {maps:[{w,h,rows:["####",…],asks:[{r,c,d}]}]} 꼴로 나간다 */
+  var BAG = "maze.book";
+  var book = {maps: []};
+  try { book = JSON.parse(localStorage.getItem(BAG)) || book; } catch (e) {}
+
+  /* ── 미로 뽑기 ────────────────────────────────────────────────
+     홀수 자리만 방으로 쓰고 그 사이 벽을 허문다. 이렇게 하면 길의 폭은
+     반드시 한 칸이고, 흰 칸이 2×2 로 뭉치는 일도 생기지 않는다.
+     테두리는 손대지 않으므로 사방이 막힌 채로 남는다 */
+  function dig(w, h) {
+    var g = [], r, c;
+    for (r = 0; r < h; r++) {
+      g.push([]);
+      for (c = 0; c < w; c++) { g[r].push(1); }
+    }
+    g[1][1] = 0;
+    var stack = [[1, 1]];
+    var STEP = [[-2, 0], [2, 0], [0, -2], [0, 2]];
+    while (stack.length) {
+      var cur = stack[stack.length - 1];
+      var open = [];
+      STEP.forEach(function (s) {
+        var nr = cur[0] + s[0], nc = cur[1] + s[1];
+        if (nr > 0 && nc > 0 && nr < h - 1 && nc < w - 1 && g[nr][nc] === 1) {
+          open.push([nr, nc, cur[0] + s[0] / 2, cur[1] + s[1] / 2]);
+        }
+      });
+      if (!open.length) { stack.pop(); continue; }
+      var p = open[Math.floor(Math.random() * open.length)];
+      g[p[0]][p[1]] = 0;
+      g[p[2]][p[3]] = 0;
+      stack.push([p[0], p[1]]);
+    }
+    return g;
+  }
+
+  /* ── 싸이클 ──────────────────────────────────────────────────
+     되짚어 파는 방식은 나무만 만든다 — 어느 두 칸 사이에도 길이 하나뿐이라
+     한 바퀴 도는 데가 없다. 그래서 **사이 벽**을 골라 더 허문다.
+
+     사이 벽이란 방과 방 사이에 놓인 벽 한 칸이다. 그 벽의 나머지 두
+     이웃은 모서리 자리라 언제나 벽이므로, 허물어도 길의 폭은 한 칸
+     그대로고 흰 칸이 2×2 로 뭉치는 일도 없다. 이미 이어진 두 방을 다시
+     이으므로 하나를 허물 때마다 싸이클이 정확히 하나 는다 */
+  function joints(g, w, h) {
+    var list = [], r, c;
+    for (r = 1; r < h - 1; r++) {
+      for (c = 1; c < w - 1; c++) {
+        if (g[r][c] !== 1) { continue; }
+        var side = (r % 2 === 1 && c % 2 === 0 &&
+                    g[r][c - 1] === 0 && g[r][c + 1] === 0);
+        var updn = (r % 2 === 0 && c % 2 === 1 &&
+                    g[r - 1][c] === 0 && g[r + 1][c] === 0);
+        if (side || updn) { list.push([r, c]); }
+      }
+    }
+    return list;
+  }
+
+  function tear(g, list, n) {
+    for (var i = list.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = list[i]; list[i] = list[j]; list[j] = t;
+    }
+    for (var k = 0; k < n && k < list.length; k++) {
+      g[list[k][0]][list[k][1]] = 0;
+    }
+  }
+
+  function wall(r, c) {
+    return r < 0 || c < 0 || r >= H || c >= W || grid[r][c] === 1;
+  }
+
+  function ways() {
+    var list = [], r, c;
+    for (r = 0; r < H; r++) {
+      for (c = 0; c < W; c++) { if (!wall(r, c)) { list.push([r, c]); } }
+    }
+    return list;
+  }
+
+  /* ── 걸어가며 보기 ───────────────────────────────────────────
+     한 자리에서 한 방향을 보면, 깊이마다 「왼쪽이 막혔나 · 오른쪽이
+     막혔나」가 정해지고 어디서 앞이 막히는지도 정해진다. 그림은 이것만으로
+     다 그려지므로, **이 차례가 같으면 그림도 같다** */
+  function walk(r, c, d) {
+    var f = DIRS[d], lf = left(f), rt = right(f);
+    var cells = [], steps = [], k;
+    for (k = 0; k < DEEP; k++) {
+      cells.push([r, c]);
+      var step = {
+        left: wall(r + lf.dr, c + lf.dc),
+        right: wall(r + rt.dr, c + rt.dc),
+        end: false
+      };
+      var nr = r + f.dr, nc = c + f.dc;
+      if (wall(nr, nc)) { step.end = true; steps.push(step); break; }
+      steps.push(step);
+      r = nr; c = nc;
+    }
+    return {cells: cells, steps: steps};
+  }
+
+  function sign(w) {
+    return w.steps.map(function (s) {
+      return (s.left ? "1" : "0") + (s.right ? "1" : "0");
+    }).join("");
+  }
+
+  /* 그림마다 「그렇게 보이는 (자리, 방향)」과 「그 자리들」을 모아 둔다.
+     방향은 묻지 않으므로 답은 **자리**의 모음이고, 한 자리는 네 방향 중
+     하나만 맞으면 답이 된다.
+
+     한 그림이 여러 자리에서 보이는 일은 흔하다 — 막다른 데를 마주 본
+     모습은 미로 곳곳에서 똑같이 보인다. 그래서 답이 한 곳뿐인 문제만
+     고르는 스위치를 따로 둔다 */
+  function table() {
+    var map = {};
+    ways().forEach(function (p) {
+      for (var d = 0; d < 4; d++) {
+        var s = sign(walk(p[0], p[1], d));
+        var got = map[s] || (map[s] = {from: [], same: []});
+        got.from.push([p[0], p[1], d]);
+        if (!has(got.same, p[0], p[1])) { got.same.push([p[0], p[1]]); }
+      }
+    });
+    return map;
+  }
+
+  function has(list, r, c) {
+    return list.some(function (p) { return p[0] === r && p[1] === c; });
+  }
+
+  /* ── 그림 ────────────────────────────────────────────────────
+     눈은 선 칸 한가운데에 있다. 칸 k 의 **뒷면**까지 거리는 k + 0.5 이고
+     통로의 반폭이 0.5 이므로, 화면에 비친 그 자리의 반폭은
+     0.5 / (k + 0.5) = 1 / (2k + 1) 이다.
+
+     그러니 칸 k 의 옆벽은 |X| 가 far(k-1) 에서 far(k) 로 좁아지는
+     사다리꼴이고, 그 네 귀퉁이는 모두 |Y| = |X| 위에 앉는다. 선 칸(k=0)의
+     옆벽은 화면 끝에서 시작한다.
+
+     옆이 뚫려 있으면 그 자리로 **꺾인 통로의 건너편 벽**이 보인다. 그 벽은
+     far(k) 거리에 서 있으므로 |Y| ≤ far(k) 인 띠만 검고, 위아래로 남는
+     몫은 그 통로의 천장과 바닥이라 희다 */
+  function far(k) { return 1 / (2 * k + 1); }
+
+  function slab(sign_, a, b, blocked) {
+    if (blocked) {
+      return '<polygon points="' +
+        (sign_ * a) + "," + a + " " + (sign_ * b) + "," + b + " " +
+        (sign_ * b) + "," + (-b) + " " + (sign_ * a) + "," + (-a) + '"/>';
+    }
+    var x = sign_ < 0 ? -a : b;
+    return '<rect class="wall" x="' + x + '" y="' + (-b) +
+           '" width="' + (a - b) + '" height="' + (2 * b) + '"/>';
+  }
+
+  function box(cls, b) {
+    return '<rect class="' + cls + '" x="' + (-b) + '" y="' + (-b) +
+           '" width="' + (2 * b) + '" height="' + (2 * b) + '"/>';
+  }
+
+  function paint(w) {
+    var out = "";
+    w.steps.forEach(function (s, k) {
+      var a = k === 0 ? VW : far(k - 1);
+      var b = far(k);
+      out += slab(-1, a, b, s.left);
+      out += slab(1, a, b, s.right);
+      if (rings.checked) { out += box("ring", b); }
+      /* 앞이 막혔다 — 그 벽이 소실점 자리를 덮는다 */
+      if (s.end) { out += box("wall", b); }
+    });
+    view.innerHTML =
+      '<svg viewBox="' + (-VW) + " " + (-VW) + " " + (2 * VW) + " " +
+      (2 * VW) + '" preserveAspectRatio="xMidYMid meet">' + out + "</svg>";
+  }
+
+  /* ── 판 그리기 ───────────────────────────────────────────────── */
+  var ARROW = {
+    "서": "2,5 7,1.5 7,8.5",
+    "북": "5,2 1.5,7 8.5,7",
+    "동": "8,5 3,1.5 3,8.5",
+    "남": "5,8 1.5,3 8.5,3"
+  };
+
+  function drawBoard() {
+    board.style.gridTemplateColumns = "repeat(" + W + ",1fr)";
+    /* 화살표는 살펴보기에서는 선 자리에, 퀴즈에서는 답을 밝힌 뒤
+       출제한 자리에 선다 */
+    var arrow = null;
+    if (mode !== "quiz" && at) { arrow = {r: at[0], c: at[1], d: dir}; }
+    if (mode === "quiz" && ask && shot) {
+      arrow = {r: ask.r, c: ask.c, d: ask.dir};
+    }
+    var html = "", r, c;
+    for (r = 0; r < H; r++) {
+      for (c = 0; c < W; c++) {
+        var cls = "px" + (grid[r][c] === 0 ? " way" : "");
+        var body = "";
+        if (arrow && arrow.r === r && arrow.c === c) {
+          body = '<svg viewBox="0 0 10 10"><polygon points="' +
+                 ARROW[DIRS[arrow.d].name] + '"/></svg>';
+        }
+        html += '<div class="' + cls + '" data-r="' + r + '" data-c="' + c +
+                '">' + body + "</div>";
+      }
+    }
+    board.innerHTML = html;
+    board.classList.toggle("cool", mode === "quiz" && !!shot);
+
+    function tint(list, cls) {
+      list.forEach(function (p) {
+        var px = board.children[p[0] * W + p[1]];
+        if (px) { px.classList.add(cls); }
+      });
+    }
+    if (mode !== "quiz" && mark.checked) { tint(seen, "seen"); }
+    if (mode === "quiz" && shot) {
+      tint(ask.same, "right");                  /* 맞는 자리는 모두 녹색 */
+      if (!has(ask.same, shot[0], shot[1])) {
+        tint([shot], "wrong");                  /* 틀리게 고른 자리는 적색 */
+      }
+    }
+  }
+
+  /* ── 살펴보기 ────────────────────────────────────────────────── */
+  function drawLook() {
+    seen = [];
+    if (!at) {
+      view.innerHTML = "";
+      what.textContent = "아직 선 자리가 없다.";
+      what.className = "note";
+      return;
+    }
+    var w = walk(at[0], at[1], dir);
+    seen = w.cells;
+    paint(w);
+    what.className = "note";
+    what.textContent = "(" + at[0] + ", " + at[1] + ") 에 서서 " +
+      DIRS[dir].name + "쪽 — " + w.cells.length + "칸이 보인다.";
+    /* 출제할 때는 이 그림의 답이 몇 곳인지까지 봐야 고를 수 있다 */
+    if (mode === "make") {
+      var n = table()[sign(w)].same.length;
+      what.className = "note " + (n === 1 ? "lit" : "");
+      what.textContent += " 이 그림으로 보이는 자리는 " + n + "곳.";
+    }
+  }
+
+  /* ── 퀴즈 ────────────────────────────────────────────────────
+     그림만 내놓고 어느 칸에서 본 것인지 묻는다. 방향은 묻지 않으므로
+     네 방향 중 하나만 맞으면 그 자리는 답이다 */
+  function newAsk() {
+    var map = table();
+    var keys = Object.keys(map);
+    var pick = keys, tight = true;
+    if (one.checked) {
+      var solo = keys.filter(function (s) { return map[s].same.length === 1; });
+      if (solo.length) { pick = solo; } else { tight = false; }
+    }
+    var s = pick[Math.floor(Math.random() * pick.length)];
+    var spot = map[s].from[Math.floor(Math.random() * map[s].from.length)];
+    ask = {r: spot[0], c: spot[1], dir: spot[2], sign: s, same: map[s].same};
+    shot = null;
+    paint(walk(ask.r, ask.c, ask.dir));
+    what.className = "note";
+    what.textContent = tight ? "어느 칸에서 본 모습인가?"
+      : "어느 칸에서 본 모습인가? (답이 한 곳뿐인 문제가 이 미로엔 없다)";
+    drawBoard();
+  }
+
+  function answer(r, c) {
+    shot = [r, c];
+    var ok = has(ask.same, r, c);
+    what.className = "note " + (ok ? "lit" : "bad");
+    what.textContent = (ok ? "맞다." : "틀렸다.") +
+      " 이 그림으로 보이는 자리는 " + ask.same.length + "곳이다 — " +
+      "출제한 자리는 (" + ask.r + ", " + ask.c + ") 에서 " +
+      DIRS[ask.dir].name + "쪽.";
+    drawBoard();
+  }
+
+  /* ── 출제 ────────────────────────────────────────────────────
+     한 판에서 여러 문제를 뽑아 담는다. 담은 것은 이 기계에 남고,
+     글상자의 JSON 을 게임 쪽 charts/cctv.json 에 넣으면 그대로 나온다 */
+  function rowsOf() {
+    return grid.map(function (row) {
+      return row.map(function (v) { return v ? "#" : "_"; }).join("");
+    });
+  }
+
+  function stash() {
+    try { localStorage.setItem(BAG, JSON.stringify(book)); } catch (e) {}
+  }
+
+  function entry(make) {
+    var rows = rowsOf(), key = rows.join("|"), got = null;
+    book.maps.forEach(function (m) { if (m.rows.join("|") === key) got = m; });
+    if (!got && make) { got = {w: W, h: H, rows: rows, asks: []}; book.maps.push(got); }
+    return got;
+  }
+
+  function asked() {
+    var m = entry(false);
+    if (!m || !at) { return -1; }
+    for (var i = 0; i < m.asks.length; i++) {
+      var a = m.asks[i];
+      if (a.r === at[0] && a.c === at[1] && a.d === dir) { return i; }
+    }
+    return -1;
+  }
+
+  /* 옵션을 다 지키는 (자리, 방향)들 — 답이 한 곳인지, 몇 칸까지 보이는지 */
+  function good() {
+    var map = table(), out = [], lim = +cap.value || 0;
+    ways().forEach(function (p) {
+      for (var d = 0; d < 4; d++) {
+        var w = walk(p[0], p[1], d);
+        if (lim && w.cells.length > lim) { continue; }
+        var same = map[sign(w)].same;
+        if (one.checked && same.length !== 1) { continue; }
+        out.push({r: p[0], c: p[1], d: d});
+      }
+    });
+    return out;
+  }
+
+  function suggest() {
+    var list = good();
+    if (!list.length) {
+      tip.innerHTML = "그 조건에 맞는 자리가 <b>이 미로엔 없다</b>. " +
+        "조건을 늦추거나 새 미로를 뽑는다.";
+      return;
+    }
+    var p = list[Math.floor(Math.random() * list.length)];
+    at = [p.r, p.c]; dir = p.d;
+    drawLook(); drawBoard(); showBook();
+    tip.innerHTML = "맞는 자리가 <b>" + list.length + "</b>곳 있다. " +
+      "다시 누르면 딴 자리를 보여 준다.";
+  }
+
+  function stow() {
+    if (!at) { return; }
+    var k = asked();
+    if (k >= 0) { entry(false).asks.splice(k, 1); }
+    else { entry(true).asks.push({r: at[0], c: at[1], d: dir}); }
+    stash(); showBook();
+  }
+
+  function showBook() {
+    if (mode !== "make") { return; }
+    keep.textContent = asked() >= 0 ? "빼기" : "담기";
+    keep.classList.toggle("gold", asked() < 0 && !!at);
+    var m = entry(false), asks = m ? m.asks : [];
+    keptBox.innerHTML = "";
+    asks.forEach(function (a) {
+      var b = document.createElement("button");
+      b.className = "btn" + (at && at[0] === a.r && at[1] === a.c &&
+                             dir === a.d ? " now" : "");
+      b.textContent = "(" + a.r + "," + a.c + ") " + DIRS[a.d].name;
+      b.addEventListener("click", function () {
+        at = [a.r, a.c]; dir = a.d;
+        drawLook(); drawBoard(); showBook();
+      });
+      keptBox.appendChild(b);
+    });
+    var out = {maps: book.maps.filter(function (x) { return x.asks.length; })};
+    jsonBox.value = JSON.stringify(out, null, 1);
+  }
+
+  /* ── 손이 닿는 데 ────────────────────────────────────────────── */
+  board.addEventListener("click", function (e) {
+    var px = e.target.closest(".px");
+    if (!px || !px.classList.contains("way")) { return; }
+    var r = +px.dataset.r, c = +px.dataset.c;
+    if (mode === "quiz") {
+      if (!ask || shot) { return; }             /* 한 문제에 한 번만 */
+      answer(r, c);
+      return;
+    }
+    if (at && at[0] === r && at[1] === c) {
+      dir = (dir + 1) % 4;              /* 같은 칸을 다시 탭하면 90도 돈다 */
+    } else {
+      at = [r, c];
+      dir = 0;                          /* 새로 서면 서쪽부터 */
+    }
+    drawLook();
+    drawBoard();
+    showBook();
+  });
+
+  var TIPS = {
+    look: "흰 칸을 탭하면 그 자리에 선다. 같은 칸을 다시 탭하면 " +
+      "<b>서 → 북 → 동 → 남</b> 으로 90도씩 돈다.",
+    quiz: "오른쪽 그림이 어느 칸에서 본 모습인지 흰 칸을 탭해 고른다. " +
+      "<b>방향은 고르지 않는다</b> — 네 방향 중 하나라도 그 그림이면 맞다.",
+    make: "자리와 방향을 정하고 <b>담기</b>. 한 판에서 여러 문제를 담는다. " +
+      "어디가 좋을지 모르겠으면 <b>좋은 자리 추천</b>."
+  };
+
+  function setMode(next) {
+    mode = next;
+    mLook.classList.toggle("on", mode === "look");
+    mQuiz.classList.toggle("on", mode === "quiz");
+    mMake.classList.toggle("on", mode === "make");
+    again.classList.toggle("hide", mode !== "quiz");
+    onlyBox.classList.toggle("hide", mode === "look");
+    deepBox.classList.toggle("hide", mode !== "make");
+    bookBox.classList.toggle("hide", mode !== "make");
+    tell.classList.toggle("hide", mode !== "make");
+    keep.classList.toggle("hide", mode !== "make");
+    tip.innerHTML = TIPS[mode];
+    if (mode === "quiz") { newAsk(); }
+    else { ask = null; shot = null; drawLook(); drawBoard(); showBook(); }
+  }
+
+  function fresh() {
+    W = +selW.value; H = +selH.value;
+    grid = dig(W, H);
+    /* 허물 수 있는 사이 벽의 수는 판 크기가 정하므로, 고를 수 있는
+       싸이클 수도 거기서 따라 나온다 */
+    var able = joints(grid, W, H);
+    fillCyc(able.length);
+    tear(grid, able, +selCyc.value);
+    at = null; dir = 0; ask = null; shot = null;
+    if (mode === "quiz") { newAsk(); }
+    else { drawLook(); drawBoard(); showBook(); }
+  }
+
+  tell.addEventListener("click", suggest);
+  keep.addEventListener("click", stow);
+  document.getElementById("copy").addEventListener("click", function () {
+    jsonBox.select();
+    try { navigator.clipboard.writeText(jsonBox.value); } catch (e) {}
+    try { document.execCommand("copy"); } catch (e) {}
+  });
+  document.getElementById("save").addEventListener("click", function () {
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([jsonBox.value],
+      {type: "application/json"}));
+    a.download = "cctv.json";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+  document.getElementById("wipe").addEventListener("click", function () {
+    book = {maps: []}; stash(); showBook();
+  });
+
+  document.getElementById("fresh").addEventListener("click", fresh);
+  again.addEventListener("click", newAsk);
+  one.addEventListener("change", function () {
+    if (mode === "quiz") { newAsk(); }
+  });
+  mLook.addEventListener("click", function () { setMode("look"); });
+  mQuiz.addEventListener("click", function () { setMode("quiz"); });
+  mMake.addEventListener("click", function () { setMode("make"); });
+  selW.addEventListener("change", fresh);
+  selH.addEventListener("change", fresh);
+  selCyc.addEventListener("change", fresh);
+  mark.addEventListener("change", drawBoard);
+  rings.addEventListener("change", function () {
+    if (mode === "quiz") { if (ask) { paint(walk(ask.r, ask.c, ask.dir)); } }
+    else { drawLook(); }
+  });
+
+  /* 가로·세로는 각각 최대 13 이다 */
+  [selW, selH].forEach(function (sel) {
+    var html = "";
+    for (var n = 3; n <= 13; n++) {
+      html += '<option value="' + n + '"' + (n === 9 ? " selected" : "") +
+              ">" + n + "</option>";
+    }
+    sel.innerHTML = html;
+  });
+
+  /* 보이는 칸을 몇 칸까지 허락할까 — 너무 길면 끝이 안 보여 못 맞힌다 */
+  (function () {
+    var html = '<option value="0">제한 없음</option>';
+    for (var n = 2; n <= 13; n++) {
+      html += '<option value="' + n + '"' + (n === 6 ? " selected" : "") +
+              ">" + n + "</option>";
+    }
+    cap.innerHTML = html;
+  })();
+
+  /* 고를 수 있는 싸이클 수는 판이 품은 사이 벽의 수까지다 */
+  function fillCyc(max) {
+    var want = Math.min(+selCyc.value || 0, max);
+    var html = "";
+    for (var n = 0; n <= max; n++) {
+      html += '<option value="' + n + '"' + (n === want ? " selected" : "") +
+              ">" + n + "</option>";
+    }
+    selCyc.innerHTML = html;
+  }
+
+  grid = dig(W, H);
+  fillCyc(joints(grid, W, H).length);
+  setMode("look");
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,756 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>도토리 — 양팔 저울 실험실</title>
+<style>
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css");
+
+  /* 혼자 서는 한 장이다 — ys.css 를 걸지 않고 **쓰는 값만 베껴 둔다.**
+     ys.css 가 바뀌면 이 토막도 손으로 맞춘다 */
+  :root{
+    --ink-900:#12100d; --ink-800:#1b1815; --ink-700:#221e1a;
+    --line:#332e28;    --line-2:#4a433a;
+    --text:#ece7de;    --dim:#8b8275;
+    --gold:#e8b339;    --gold-lit:#ffd873;
+    --green:#3fb950;   --red:#e5534b;    --on-gold:var(--gold-lit);
+    --t-xs:11.5px; --t-sm:12.5px; --t-md:14.5px;
+    --s-2:8px; --s-3:12px; --s-4:16px; --s-6:24px;
+    --r-sm:5px; --r-md:10px;
+    --m-state:180ms ease;
+    --font:"Pretendard Variable",Pretendard,-apple-system,"Malgun Gothic",
+      "맑은 고딕",system-ui,sans-serif;
+
+    /* 그림자놀이의 흰 판 — 저울과 추는 여기 비치는 **먹빛 실루엣**이다.
+       ys.css 의 --paper(누런 종이)·--cast(먹) 와 같은 자리에 서는 색이되,
+       저울 판은 누런 기 없이 흰 것으로 한다 */
+    --sheet:#ffffff;
+    --cast:#12100d;
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none !important}
+  body{margin:0;background:var(--ink-900);color:var(--text);
+    font:var(--t-md)/1.6 var(--font);-webkit-tap-highlight-color:transparent;
+    touch-action:manipulation;
+    display:grid;grid-template-columns:1fr 330px;min-height:100vh}
+  @media (max-width:1100px){body{grid-template-columns:1fr}}
+
+  .stage{padding:var(--s-4);display:flex;flex-direction:column;
+    gap:var(--s-4);align-items:center}
+  .panel{border-left:1px solid var(--line);background:var(--ink-800);
+    padding:var(--s-4);display:flex;flex-direction:column;gap:var(--s-2);
+    overflow:auto;max-height:100vh;position:sticky;top:0}
+  @media (max-width:1100px){.panel{position:static;max-height:none;
+    border-left:0;border-top:1px solid var(--line)}}
+
+  h2{font-size:var(--t-sm);color:var(--dim);margin:var(--s-3) 0 0;
+    letter-spacing:.08em;text-transform:uppercase;font-weight:600}
+  .row{display:flex;align-items:center;gap:var(--s-2)}
+  .row label{flex:0 0 92px;font-size:var(--t-sm);color:var(--dim)}
+  .row input[type=range]{flex:1;accent-color:var(--gold);min-width:0}
+  .row output{flex:0 0 46px;text-align:right;font-size:var(--t-sm);
+    font-variant-numeric:tabular-nums}
+  select,button.plain{background:var(--ink-700);color:var(--text);
+    border:1px solid var(--line-2);border-radius:var(--r-sm);
+    padding:6px 10px;font:var(--t-sm) var(--font);cursor:pointer}
+  button.plain:hover{border-color:var(--gold)}
+  textarea{width:100%;height:110px;background:var(--ink-900);color:var(--dim);
+    border:1px solid var(--line);border-radius:var(--r-sm);padding:var(--s-2);
+    font:11px/1.5 ui-monospace,Consolas,monospace;resize:vertical}
+  .hint{font-size:var(--t-xs);color:var(--dim);line-height:1.6}
+
+  /* ── 1행 — 정답 칸과 제출 ──────────────────────────────────────
+     슬롯을 오르내리는 것은 ys.css 의 .ys-tri — 「수를 올리고 내리는
+     자리」가 세모 버튼이 서는 두 자리 중 하나다. 제출은 .ys-btn */
+  .top{display:flex;align-items:center;gap:var(--s-6);flex-wrap:wrap;
+    justify-content:center}
+  .answers{display:flex;flex-direction:column;gap:var(--s-3)}
+  .ans{display:flex;align-items:center;gap:var(--s-3)}
+  /* 「그릇 = 슬롯」 — 통째로 흰 판 위에 올라간다 */
+  .eqrow{background:var(--sheet);border-radius:var(--r-md);
+    padding:12px 16px;display:flex;align-items:center;gap:14px}
+  .eqrow img{display:block}
+  /* 슬롯 — 들창(.win) 하나만 보이고 띠(.strip)가 위아래로 흐른다.
+     칸과 칸 사이에는 가로 칸막이가 있어, 넘어가는 동안 줄이 지나간다 */
+  .win{background:var(--sheet);border-radius:var(--r-sm);overflow:hidden;
+    border:2px solid var(--cast);position:relative}
+  .strip{will-change:transform}
+  .cell{border-bottom:2px solid var(--cast);display:flex;
+    align-items:center;justify-content:center}
+  .lift{display:flex;flex-direction:column;gap:2px}
+
+  .ys-tri{padding:0;border:none;background:none;color:var(--gold);
+    cursor:pointer;display:block;
+    transition:transform 80ms,color var(--m-state)}
+  .ys-tri svg{display:block;width:100%;height:100%;overflow:visible;
+    transition:transform var(--m-state)}
+  .ys-tri polygon{fill:color-mix(in srgb,var(--gold) 9%,var(--ink-900));
+    stroke:currentColor;stroke-width:2;stroke-linejoin:round;
+    vector-effect:non-scaling-stroke;transition:fill var(--m-state)}
+  .ys-tri:active{transform:scale(.94);color:var(--on-gold)}
+  .ys-tri:active polygon{fill:color-mix(in srgb,var(--gold) 28%,var(--ink-800))}
+  .ys-tri.down svg{transform:rotate(180deg)}
+
+  .ys-btn{width:132px;height:132px;border-radius:50%;
+    border:2px solid var(--gold);color:var(--gold);cursor:pointer;
+    background:radial-gradient(circle at 50% 38%,
+      color-mix(in srgb,var(--gold) 13%,var(--ink-800)),
+      color-mix(in srgb,var(--gold) 5%,var(--ink-900)));
+    display:flex;align-items:center;justify-content:center;
+    transition:transform 80ms,border-color var(--m-state),
+      background var(--m-state),color var(--m-state)}
+  .ys-btn:active{transform:scale(.955)}
+  .ys-btn.cool{border-color:var(--line);color:var(--dim);cursor:default;
+    background:radial-gradient(circle at 50% 38%,
+      color-mix(in srgb,var(--ink-800) 70%,var(--line)),var(--ink-800))}
+  .ys-btn.done{border-color:var(--green);color:var(--green)}
+  .ys-btn.bad{border-color:var(--red);color:var(--red)}
+
+  /* ── 2행 — 저울. **흰 판에 검은 실루엣** ────────────────────── */
+  svg.scale{display:block;width:min(100%,900px);height:auto}
+  .beam,.sling{transition:transform var(--sway,760ms) cubic-bezier(.22,1.5,.36,1)}
+  .wt{cursor:pointer}
+  .wt.locked{cursor:default;opacity:.45}
+  .wt.sel>.body{stroke:var(--gold);stroke-width:4}
+  @keyframes drop{from{transform:translateY(-70px);opacity:0}}
+  @keyframes rise{to{transform:translateY(-70px);opacity:0}}
+  .drop{animation:drop 420ms cubic-bezier(.3,1.3,.5,1)}
+  .rise{animation:rise 360ms ease-in forwards}
+  .go{cursor:pointer}
+  .go:hover>path{fill:var(--gold-lit)}
+
+  /* ── 3행 — 개별 공간. 추가 검은 실루엣이니 바탕도 흰 판이다 ─── */
+  .spaces{display:flex;gap:var(--s-4);flex-wrap:wrap;justify-content:center}
+  .me{display:flex;flex-direction:column;align-items:center;gap:6px}
+  .space{border:3px solid transparent;border-radius:14px;
+    background:var(--sheet);display:flex;align-items:center;
+    justify-content:center;gap:6px;padding:8px;position:relative}
+  .space.mine{border-color:var(--gold)}        /* 내 칸 — 내가 손대는 곳 */
+
+  /* 프사 — ys.css 의 .ys-mug 를 그대로 베꼈다. 도트 그림이라 뭉개면
+     안 되고, **내 다람쥐만 녹색 테두리**다 (녹색 = 여기 있다 · 나) */
+  .pfp{border-radius:50%;flex:none;border:2px solid var(--line);
+    background:var(--ink-800) center/cover no-repeat;image-rendering:pixelated}
+  .pfp.me{border-color:var(--green);
+    box-shadow:0 0 9px color-mix(in srgb,var(--green) 45%,transparent)}
+
+  .chk{font-size:var(--t-xs);line-height:1.75}
+  .pass{color:var(--green)} .fail{color:var(--red)}
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <div class="top">
+    <div class="answers" id="answers"></div>
+    <button class="ys-btn" id="submit"></button>
+  </div>
+  <div id="board"></div>
+  <div class="spaces" id="spaces"></div>
+</div>
+
+<div class="panel">
+  <h2>판</h2>
+  <div class="row">
+    <label>다람쥐</label>
+    <select id="n"><option>2</option><option>3</option><option selected>4</option></select>
+    <label style="flex:0 0 40px">나는</label>
+    <select id="me"></select>
+  </div>
+  <div class="row">
+    <label>손대기</label>
+    <select id="god">
+      <option value="1">다 만진다 (혼자 풀어 보기)</option>
+      <option value="0">제 추만</option>
+    </select>
+  </div>
+  <div class="row">
+    <button class="plain" id="again">새 문제</button>
+    <button class="plain" id="peek">답 보기</button>
+    <span class="hint" id="answer"></span>
+  </div>
+
+  <h2>저울</h2>
+  <div id="k1"></div>
+  <h2>추 · 칸</h2>
+  <div id="k2"></div>
+
+  <h2>삼진법 값</h2>
+  <div class="hint">고르는 판에서 낸 JSON 을 붙여 넣는다</div>
+  <textarea id="glyph"></textarea>
+  <div class="row"><button class="plain" id="apply">먹인다</button>
+    <button class="plain" id="dump">지금 값</button></div>
+
+  <h2>검산</h2>
+  <div class="chk" id="chk"></div>
+</div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const rnd = n => Math.floor(Math.random() * n);
+const pick = a => a[rnd(a.length)];
+const SHEET = "#ffffff", CAST = "#12100d";     /* 흰 판 · 먹빛 실루엣 */
+
+/* ══ 삼진법 표기 — 고르는 판(/lab/ternary)에서 가져왔다 ═══════════ */
+const G = { w:38, t:3, gap:5, dotD:14, dotG:9,
+            waveN:3, waveA:4, snailD:26, turns:2,
+            triW:24, triH:14,
+            ink:"#ece7de", fill:false, cap:"round", big:"snail" };
+const MAX = 40;
+const tri = n => { const d=[]; for(let i=0,m=n;i<4;i++,m=Math.floor(m/3)) d.push(m%3); return d; };
+const rowsOf = n => { const d=tri(n), o=[];
+  if (d[0]) o.push({k:"dot", n:d[0]});
+  for (let i=0;i<d[1];i++) o.push({k:"bar"});
+  for (let i=0;i<d[2];i++) o.push({k:"wave"});
+  if (d[3]) o.push({k:"tri", n:d[3]});
+  return o; };
+const bigW = () => G.big === "snail" ? G.snailD : G.triW;
+const bigH = () => G.big === "snail" ? G.snailD : G.triH;
+const rowH = r => r.k==="dot" ? G.dotD : r.k==="bar" ? G.t
+                : r.k==="wave" ? G.waveA*2+G.t : bigH();
+const rowW = r => r.k==="dot" ? r.n*G.dotD+(r.n-1)*G.dotG
+                : r.k==="tri" ? r.n*bigW()+(r.n-1)*G.dotG : G.w;
+function snail(cx, cy, R, turns){
+  const end = turns*2*Math.PI, n = Math.ceil(turns*48);
+  let d = "";
+  for (let i=0;i<=n;i++){ const th=end*i/n, r=(R-G.t/2)*th/end;
+    d += (i?" L ":"M ")+(cx+r*Math.cos(th)).toFixed(2)+" "+(cy+r*Math.sin(th)).toFixed(2); }
+  return d;
+}
+function drawRow(r, cx, y, ink){
+  const s = `stroke="${ink}" stroke-width="${G.t}" fill="none" stroke-linecap="${G.cap}"`;
+  if (r.k === "dot"){
+    const w = rowW(r), R = G.dotD/2, g = [];
+    for (let i=0;i<r.n;i++){ const x = cx-w/2+R+i*(G.dotD+G.dotG);
+      g.push(G.fill ? `<circle cx="${x}" cy="${y+R}" r="${R}" fill="${ink}"/>`
+                    : `<circle cx="${x}" cy="${y+R}" r="${R-G.t/2}" ${s}/>`); }
+    return g.join("");
+  }
+  if (r.k === "bar"){ const y0 = y+G.t/2;
+    return `<line x1="${cx-G.w/2}" y1="${y0}" x2="${cx+G.w/2}" y2="${y0}" ${s}/>`; }
+  if (r.k === "wave"){
+    const half = G.w/(2*G.waveN), y0 = y+rowH(r)/2;
+    let p = `M ${cx-G.w/2} ${y0}`;
+    for (let i=0;i<G.waveN*2;i++) p += ` q ${half/2} ${(i%2?2:-2)*G.waveA} ${half} 0`;
+    return `<path d="${p}" ${s}/>`;
+  }
+  const w = rowW(r), bw = bigW(), g = [];
+  for (let i=0;i<r.n;i++){ const x = cx-w/2+i*(bw+G.dotG);
+    g.push(G.big === "snail"
+      ? `<path d="${snail(x+bw/2, y+bw/2, bw/2, G.turns)}" ${s}/>`
+      : `<polygon points="${x},${y} ${x+bw},${y} ${x+bw/2},${y+G.triH}" fill="${ink}"/>`); }
+  return g.join("");
+}
+/* 글리프 한 벌. 칠할 빛깔은 **얹히는 바탕**이 정한다 —
+   검은 추 위에서는 희게, 흰 슬롯 안에서는 먹빛으로 */
+function glyph(n, ink){
+  const rows = rowsOf(n);
+  if (!rows.length) return { w: G.w, h: G.dotD, body: "" };
+  const w = Math.max(...rows.map(rowW));
+  const h = rows.reduce((a,r)=>a+rowH(r),0) + (rows.length-1)*G.gap;
+  let y = 0, body = "";
+  for (const r of rows){ body += drawRow(r, w/2, y, ink); y += rowH(r)+G.gap; }
+  return { w, h, body };
+}
+function glyphBox(){
+  let w = 0, h = 0;
+  for (let n=0;n<=MAX;n++){ const g = glyph(n, CAST); w = Math.max(w,g.w); h = Math.max(h,g.h); }
+  return { w, h };
+}
+
+/* ══ 문제 ════════════════════════════════════════════════════════ */
+const UNITS = [1, 3, 9, 27];
+const SUMS = (() => { const s = new Set([0]);
+  for (const u of UNITS) for (const x of [...s]) s.add(x+u);
+  return s; })();
+const POOL = Array.from({length:30}, (_,i)=>i+11).filter(n => !SUMS.has(n));
+function newQuiz(){ return [pick(POOL)]; }    /* 맞힐 것은 하나다 */
+
+/* ══ 나눠 주기 ═══════════════════════════════════════════════════ */
+function deal(n){
+  let own;
+  for (;;){
+    own = Array.from({length:n}, () => []);
+    for (const u of UNITS) own[rnd(n)].push(u);
+    if (own.every(a => a.length)) break;
+  }
+  /* 퀴즈 추는 **추가 하나뿐인 다람쥐**가 든다. 그런 다람쥐가 없으면
+     (두 마리가 둘씩 나눠 가진 때) 아무나 든다 */
+  const thin = own.map((a,i)=>[a.length,i]).filter(([c])=>c===1).map(([,i])=>i);
+  return { own, quizOwner: [thin.length ? pick(thin) : rnd(n)] };
+}
+
+/* ══ 판의 상태 ═══════════════════════════════════════════════════ */
+const S = {
+  n: 4, me: 0, god: true, quiz: newQuiz(), cup: 0, deal: null,
+  at: {}, slot: [0], sel: null, verdict: ""
+};
+const ALL = () => [...UNITS.map(u=>"u"+u), "q0"];
+const massOf = k => k[0]==="u" ? +k.slice(1) : S.quiz[+k[1]];
+/* 실험실에서는 혼자 풀어 봐야 하니 넷의 추를 다 만지게 열어 둔다.
+   참말 게임에서는 제 추만 제가 옮긴다 */
+const canTouch = k => S.god || ownerOf(k) === S.me;
+const ownerOf = k => k[0]==="u"
+  ? S.deal.own.findIndex(a => a.includes(+k.slice(1)))
+  : S.deal.quizOwner[+k[1]];
+function reset(keepQuiz){
+  S.deal = deal(S.n);
+  if (!keepQuiz){ S.quiz = newQuiz(); S.cup = rnd(CUPS.length); }
+  S.at = {}; for (const k of ALL()) S.at[k] = "home";
+  S.slot = [0]; S.sel = null; S.verdict = "";
+  if (S.me >= S.n) S.me = 0;
+}
+
+/* ══ 손잡이 ══════════════════════════════════════════════════════ */
+const K1 = [
+  ["beam",  "들보 길이", 240, 700, 520, "px"],
+  ["col",   "기둥 키",    90, 300, 190, "px"],
+  ["finial","꼭대기 장식", 30, 120, 62, "px"],
+  ["shaft", "기둥 굵기",  12,  56, 26, "px"],
+  ["base",  "받침 너비",  40, 180, 96, "px"],
+  ["chain", "사슬 길이",  40, 200,  96, "px"],
+  ["link",  "사슬 고리",   5,  18,   9, "px"],
+  ["pan",   "접시 너비",  60, 220, 130, "px"],
+  ["panD",  "접시 깊이",   4,  60,  18, "px"],
+  ["panT",  "접시 테",     2,  10,   3, "px"],
+  ["tilt0", "최소 기울기", 2,  14,   6, "°"],
+  ["tilt1", "최대 기울기", 6,  26,  15, "°"],
+  ["span",  "다 기우는 차", 4, 60,  20, ""],
+  ["sway",  "흔들림",    200, 1600, 760, "ms"],
+];
+const K2 = [
+  ["wtW",   "추 너비",    28, 110, 62, "px"],
+  ["wtH",   "추 키",      28, 120, 64, "px"],
+  ["arrow", "화살표",     24, 130, 76, "px"],
+  ["slotW", "슬롯 너비",  40, 180, 92, "px"],
+  ["cupH",  "그릇 크기",  30, 140, 72, "px"],
+  ["eq",    "같음표",     14,  70, 34, "px"],
+  ["spin",  "슬롯 넘김",  80, 600,220, "ms"],
+  ["pfp",   "프사",       24,  72, 40, "px"],
+  ["spaceW","개별 공간",  90, 320,170, "px"],
+];
+const V = {};
+const mkKnobs = (el, list) => el.innerHTML = list.map(([k,name,lo,hi,def,unit]) =>
+  `<div class="row"><label>${name}</label>
+   <input type="range" id="k_${k}" min="${lo}" max="${hi}" value="${def}">
+   <output id="o_${k}">${def}${unit}</output></div>`).join("");
+mkKnobs($("k1"), K1); mkKnobs($("k2"), K2);
+function readKnobs(){
+  for (const [k,,,,,unit] of [...K1, ...K2]){
+    V[k] = +$("k_"+k).value; $("o_"+k).textContent = V[k]+unit;
+  }
+  if (V.tilt1 < V.tilt0) V.tilt1 = V.tilt0;
+  document.documentElement.style.setProperty("--sway", V.sway+"ms");
+}
+
+/* ══ 추 하나 — 옆에서 본 사다리꼴. **검은 실루엣**이다 ══════════ */
+function weightSVG(k, cls){
+  const W = V.wtW, H = V.wtH, lip = W*0.17, m = massOf(k);
+  let inner;
+  if (k[0] === "u"){
+    const g = glyph(m, SHEET);                  /* 먹빛 추 위라 희게 적는다 */
+    const z = Math.min(1, (W-14)/g.w, (H-16)/Math.max(g.h,1));
+    inner = `<g transform="translate(${W/2 - g.w*z/2} ${H/2 - g.h*z/2}) scale(${z})">${g.body}</g>`;
+  } else {
+    /* 퀴즈 추는 사다리꼴을 쓰지 않는다. 그릇 그림이 곧 추다 */
+    return `<g class="wt ${cls}" data-k="${k}">`
+         + `<rect class="body" x="1" y="1" width="${W-2}" height="${H-2}" rx="4"
+            fill="none" stroke="none"/>`
+         + `<image href="${CUPS[S.cup]}" x="0" y="0" width="${W}" height="${H}"
+            preserveAspectRatio="xMidYMax meet"/></g>`;
+  }
+  return `<g class="wt ${cls}" data-k="${k}">`
+       + `<polygon class="body" points="${lip},2 ${W-lip},2 ${W-1},${H-2} 1,${H-2}"
+          fill="${CAST}" stroke="none"/>${inner}</g>`;
+}
+
+/* ══ 진짜 화살표 — 자루와 머리가 달렸다. 세모 버튼과 다른 것이다 ══ */
+function arrowPath(A){
+  const w = A*0.17, head = A*0.40, hw = A*0.34;
+  return `M ${-w} ${-A/2} L ${w} ${-A/2} L ${w} ${A/2-head}`
+       + ` L ${hw} ${A/2-head} L 0 ${A/2} L ${-hw} ${A/2-head}`
+       + ` L ${-w} ${A/2-head} Z`;
+}
+function goArrow(where, x, y){
+  if (!S.sel || S.at[S.sel] === where) return "";
+  if (!canTouch(S.sel)) return "";
+  return `<g class="go" data-go="${where}" transform="translate(${x} ${y})">
+            <path d="${arrowPath(V.arrow)}" fill="var(--gold)"/></g>`;
+}
+
+/* ══ 저울 ════════════════════════════════════════════════════════ */
+const sideMass = s => ALL().filter(k => S.at[k] === s).reduce((a,k)=>a+massOf(k), 0);
+function tiltDeg(){
+  const d = sideMass("R") - sideMass("L");
+  if (!d) return 0;
+  const t = Math.min(1, (Math.abs(d)-1)/Math.max(1, V.span-1));
+  return Math.sign(d) * (V.tilt0 + (V.tilt1-V.tilt0)*t);
+}
+
+/* 사슬 — 고리를 하나씩 그린다. 줄기를 따라 눕혀 꿴다 */
+function chainLinks(x1, y1, x2, y2){
+  const dx = x2-x1, dy = y2-y1, len = Math.hypot(dx, dy);
+  const deg = Math.atan2(dy, dx) * 180/Math.PI - 90;
+  const n = Math.max(2, Math.round(len / V.link));
+  let out = "";
+  for (let i = 0; i < n; i++){
+    const t = (i + 0.5) / n, x = x1 + dx*t, y = y1 + dy*t;
+    const rx = i % 2 ? V.link*0.34 : V.link*0.19;
+    out += `<ellipse cx="0" cy="0" rx="${rx.toFixed(2)}" ry="${(V.link*0.46).toFixed(2)}"
+      fill="none" stroke="${CAST}" stroke-width="1.6"
+      transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${deg.toFixed(1)})"/>`;
+  }
+  return out;
+}
+
+function boardSVG(){
+  const W = 900, pivot = { x: W/2, y: 92 };
+  const H = pivot.y + V.col + 54;
+  const a = tiltDeg() * Math.PI/180, L = V.beam/2;
+  const ring = s => ({ x: pivot.x + (s==="L"?-1:1)*L*Math.cos(a),
+                       y: pivot.y + (s==="L"?-1:1)*L*Math.sin(a) });
+
+  /* 기둥 — 사람이 준 그림대로 넷으로 나눠 그린다. 통째로 먹빛이다
+       꼭대기 촛대 · 구슬 셋 · 몸통(아래로 갈수록 조금 굵다) · 벌어지는 받침 */
+  const cx = pivot.x, py = pivot.y, F = V.finial;
+  const st = V.shaft/2, sb = V.shaft/2 + 5, bw = V.base/2;
+  const footH = 32, plinth = 13, bottom = py + V.col;
+  const bodyBot = bottom - plinth - footH;
+  const column =
+    /* 뾰족한 꼭대기 */
+    `<path d="M ${cx} ${py-F} q 7 12 6 22 l -12 0 q -1 -10 6 -22 z" fill="${CAST}"/>`
+    /* 구슬 셋 — 아래로 갈수록 굵다 */
+  + [[38, 9, 7], [24, 11, 7.5], [10, 12.5, 8]]
+      .map(([up, rx, ry]) => `<ellipse cx="${cx}" cy="${py-up}" rx="${rx}" ry="${ry}" fill="${CAST}"/>`).join("")
+    /* 구슬과 몸통을 잇는 목 */
+  + `<rect x="${cx-7}" y="${py-46}" width="14" height="${46}" fill="${CAST}"/>`
+    /* 몸통 */
+  + `<path d="M ${cx-st} ${py} L ${cx+st} ${py} L ${cx+sb} ${bodyBot} L ${cx-sb} ${bodyBot} z" fill="${CAST}"/>`
+    /* 받침 — 안으로 패며 벌어졌다가 넓적한 돌로 앉는다 */
+  + `<path d="M ${cx-sb} ${bodyBot}
+       Q ${cx-sb-3} ${bodyBot+footH*0.62} ${cx-bw} ${bodyBot+footH}
+       L ${cx-bw} ${bottom-4} Q ${cx-bw} ${bottom} ${cx-bw+4} ${bottom}
+       L ${cx+bw-4} ${bottom} Q ${cx+bw} ${bottom} ${cx+bw} ${bottom-4}
+       L ${cx+bw} ${bodyBot+footH}
+       Q ${cx+sb+3} ${bodyBot+footH*0.62} ${cx+sb} ${bodyBot} z" fill="${CAST}"/>`;
+
+  /* 들보 — 가운데가 두껍고 끝으로 갈수록 얇다. 끝에 고리가 달렸다 */
+  const beam =
+    `<g class="beam" transform="rotate(${tiltDeg()} ${pivot.x} ${pivot.y})">
+       <path d="M ${pivot.x-L} ${pivot.y} q ${L*0.5} -10 ${L} -12
+                q ${L*0.5} 2 ${L} 12 q ${-L*0.5} 10 ${-L} 12
+                q ${-L*0.5} -2 ${-L} -12 z" fill="${CAST}"/>
+       <circle cx="${pivot.x-L}" cy="${pivot.y}" r="9" fill="none" stroke="${CAST}" stroke-width="5"/>
+       <circle cx="${pivot.x+L}" cy="${pivot.y}" r="9" fill="none" stroke="${CAST}" stroke-width="5"/>
+     </g>`;
+
+  /* 접시 한 벌 — 고리에서 사슬로 매달린다. 접시는 **늘 수평**이다 */
+  /* 화살표가 설 자리 — 저울을 다 그린 뒤 맨 위에 얹는다 */
+  const arrowAt = s => { const r = ring(s);
+    return [r.x, r.y + V.chain - V.wtH - V.arrow*0.85]; };
+  function sling(s){
+    const r = ring(s), pw = V.pan, top = r.y + V.chain;
+    const chains = [-0.78, 0, 0.78]
+      .map(f => chainLinks(r.x, r.y+7, r.x + pw*f, top)).join("");
+    const load = ALL().filter(k => S.at[k] === s);
+    const gap = 5, tot = load.length*V.wtW + (load.length-1)*gap;
+    const wts = load.map((k,i) => {
+      const x = r.x - tot/2 + i*(V.wtW+gap), y = top - V.wtH;
+      const mine = canTouch(k);
+      return `<g transform="translate(${x} ${y})"><g class="${anim.k===k?anim.how:""}">`
+           + weightSVG(k, (mine?"":"locked ") + (S.sel===k?"sel":"")) + `</g></g>`;
+    }).join("");
+    return `<g class="sling" data-side="${s}">${chains}
+      <path d="M ${r.x-pw} ${top} a ${pw} ${V.panD} 0 0 0 ${pw*2} 0 z" fill="${CAST}"/>
+      <rect x="${r.x-pw-2}" y="${top-V.panT}" width="${pw*2+4}" height="${V.panT}"
+            rx="${V.panT/2}" fill="${CAST}"/>
+      ${wts}</g>`;
+  }
+  /* 저울이 서는 자리는 **흰 사각형**이다 */
+  return `<svg class="scale" viewBox="0 0 ${W} ${H}" height="${H}">`
+       + `<rect width="${W}" height="${H}" rx="10" fill="${SHEET}"/>`
+       + column + sling("L") + sling("R") + beam
+       + goArrow("L", ...arrowAt("L")) + goArrow("R", ...arrowAt("R"))
+       + `</svg>`;
+}
+
+/* ══ 정답 칸 ═════════════════════════════════════════════════════ */
+const slotBox = () => { const b = glyphBox(), pad = 14;
+  return { w: b.w + pad*2, h: b.h + pad*2 }; };
+const cellH = () => V.slotW + 2;      /* 정사각형 + 칸막이 두 자리 */
+function cellSVG(n){
+  const b = slotBox(), g = glyph(n, CAST), h = cellH();  /* 흰 칸이라 먹빛이다 */
+  return `<div class="cell" style="height:${h}px">
+    <svg width="${V.slotW}" height="${h-2}" viewBox="0 0 ${b.w} ${b.h}">
+      <g transform="translate(${b.w/2-g.w/2} ${b.h/2-g.h/2})">${g.body}</g></svg></div>`;
+}
+/* 지금 수를 가운데 두고 앞뒤 한 칸씩 더 얹는다. 띠를 한 칸 올려 둬야
+   가운데가 들창에 든다 — 넘길 때는 이 자리를 한 칸 더 밀면 된다 */
+function slotHTML(i){
+  const h = cellH(), v = S.slot[i];
+  const cells = [-1,0,1].map(d => cellSVG((v+d+MAX+1) % (MAX+1))).join("");
+  return `<div class="win" style="width:${V.slotW}px;height:${h}px">
+    <div class="strip" id="strip${i}" style="transform:translateY(${-h}px)">${cells}</div></div>`;
+}
+function answersHTML(){
+  /* 그릇 = 슬롯. 글자 대신 **줄 두 개**로 같음표를 그린다 */
+  const e = V.eq;
+  const eq = `<svg width="${e}" height="${e*0.62}" viewBox="0 0 34 21">
+      <rect x="1" y="3" width="32" height="5" rx="2.5" fill="${CAST}"/>
+      <rect x="1" y="13" width="32" height="5" rx="2.5" fill="${CAST}"/></svg>`;
+  const cup = `<img src="${CUPS[S.cup]}" alt="" style="height:${V.cupH}px">`;
+  /* 오르내림은 ys.css 의 세모 버튼 — 방향이 뜻의 일부인 자리다 */
+  const triBtn = (i, d) =>
+    `<button class="ys-tri${d<0?" down":""}" data-slot="${i}" data-d="${d}"
+       style="width:44px;height:30px">
+       <svg viewBox="0 0 44 30"><polygon points="22,4 41,26 3,26"/></svg></button>`;
+  return `<div class="ans">
+      <div class="eqrow">${cup}${eq}${slotHTML(0)}</div>
+      <div class="lift">${triBtn(0,1)}${triBtn(0,-1)}</div>
+    </div>`;
+}
+
+/* ══ 개별 공간 ═══════════════════════════════════════════════════
+   다람쥐 얼굴 — static/squirrels/ 의 도트 그림을 64px 로 줄여 박았다.
+   참말 게임에서는 파티 이름과 자리 번호로 골라진다 (squirrels.py) */
+/* 퀴즈 추 — 사람이 준 낱장에서 오려 낸 그릇 마흔. 먹빛 실루엣이고
+   바탕은 비어 있어 흰 판 어디에 얹어도 된다 */
+const CUPS = [
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAG4AAABiAQMAAACLV3TDAAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAAEISURBVHjazZTBbYQwEEWfDRLcoIBIUMIWECmUklI4pK7IilJASqCEPRLJy+zBzjKDtCjc8AV93thje74HERmhExERicgCQJWk5wuA3x4AYvrgEv3OUgYAH7LkB8DzZFRpZTPOJ29WftQ20kkszI83o7poj2zPG3fyurBo0szouZeSUcmhALWNgPtcqbM5CpHwYvL2Km9pt1FDez1wdfV8ILjc0HOaodyj8chS84bWXiGuG9p6lYVpQ/tVLhA0EuFVBY/CoP05oz3ZTFiLOlsFv1uy2srWyndrPbmttKLKXsts67oztoJ/yPEJbQH8sL44wF8ezzfdQZ7c5A48/ZUzyYS7h5Rpbdd3lBttTYPABhQAAAAASUVORK5CYII=",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAG4AAABgAQMAAADGn9XIAAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAAD4SURBVHja1ZQxbsMwDEWfJKPJ6BvEBwnQHiUHyaCjpTdRt44ZPcj+HeTEolAYCDKk5eSnT0sUSREpAgRJUkYUC5KU/deC0wDg04J8A/jLDTPGgqTs7dofwM/eSs4GqQ/7b7J4tThazBbnGndJtXYYqc89dcQ6iplzjeK4OjuIzQWTwfoKHgbr3F8fSd1ocP9EFbpGfVVvdFsle2bnphnYbzk3jUTvq7Zpu47B4KVSZc9A4lw5R6sfRvNKd6l5tM4WxW9WsGmG3uIJZ+KaVjUQTDbS8R/MDYvdb2pcM1NGx2LvkvI9064M1bDMzbfbogdwM8Dky0ch+AEy11lRC4L5SQAAAABJRU5ErkJggg==",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAG4AAABMAQMAAAC28RCFAAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAAEuSURBVHjalZMxbsMwDEWfaKFVgQLV2KWAhh6gN4iP0eP4aB56gB7BY0e3UxDIYQc7EZkmQ7U9k/yiPmm0AkBQVa2yxBVVAOSD7WgGZOTGuVet4j9Z/M4OP39cLdSuYbdwNPhwcHiAoy1+mh+tck7I0LDEvfieLPb4noOLDv4JXOLwv2h/K/kFjeIjrvZ4oZwcVqQY3GcTLcy+dioOx57pDDulSm7eLAGZzT3euq+ISWZK0JKVnTV2ARud0Sqp7UIH7M1A/SK9AbWhX7MASOM7b92zxwJIMMMHdGjCVxa4N/cYqfXXoFwf6OuKJ3feV/m53aNVSEb475pFq3k2Pl5P3p6UTtH1SdknlxP2vufSvADdulS1boRzcjKSsvXTWu1aFwgwbtMDgsISQdd9+AVr51tQoH+h3wAAAABJRU5ErkJggg==",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAG4AAABNAQMAAAB9rcMgAAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAAEfSURBVHjalZNNboQwDIVf3GjKYiRYzqJSOUJvMDkaR+lROApHyKILWgU8i0yCHwWp9YpPz7Hxn0M1t2KRDQWADLAmYAz10+/U7wGYKr2ObTLY4iUZ5wULpKt4BQajzsCICBPrTZoNbz3l7W/RYsgBimnyRnUQiD8v0KV9vX9F/aV6saxWDQCwVpw0eYOq6Uqh0i5yRzizGhmnnnAMNtEKqnd19PZLCKMn/GxsCSvuiVBt5B9HzZkvhLEhnDpqDu6anDrTyIUGSm+FcbeiDQDBcDLB7mi+4cQ5Hjn3jGW/G458yWWUHX1X1SQoS9lzogAATlW2LVsEbvdXQ+0FIM9HzzxQzZfUak6EfEkfxfmy5TlY7zyHsWBidf7PpZgLxgPTYFaEOB2JVwAAAABJRU5ErkJggg==",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAG4AAABMAQMAAAC28RCFAAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAAFqSURBVHjapZTNacNAEIW/HQvsg8E65JBDwCrBBQSssnIIWCWkhJSiElKC0oEOPoiw1sthf6R1CARyEMvHSDNv3uwISZL8JRwEHI8BDQDGMZwRmUrkH7grsC6jb9fIURznlcgetiuRPXwB4ATIAAE3A5gB2pzZAwwApi62E1r0R2mAkNrbdYzveQD7mKAPij4rqnYT5c28z4CTuqTglcFJKcwzI5oDvsATExcf8LQZ9njO0VQOvjJjSFgbtkyABswxDRFb5y2qiyYY3dxnmzuDIOrnFFqwYMoS7Uts/zjQ/j7aFajKaH77drj7dt5ZvgeAv8tcFzg1lq4QwNgW0QE0ZTrijSrjzWGr3A8GaWAAW2+wOPeIsbKjwVi11IKURoSTR8pD2cjbqsd92e8JDNwqE1IeWbzesbArrbP4RB1VGd1FrJfVsmXhmojVUtaJJERpcbpUNmReVmgpVGVs8kJbsCxXDz8VOEiS/wbIuaZTAn18QAAAAABJRU5ErkJggg==",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAG4AAABMAQMAAAC28RCFAAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAAEnSURBVHjarZM9bsMwDEafaKPwELQeMxSIj5ATFDpYgfYoPYqPkrGjhw5uoZgZbElkBrdDNemB4t9HinfKUU3NWJGogjv/hd+DM8UmOQ6pcbzs410iTEfN5WCtz0dXxtDOFiO0NozutBAAqlZBl/32W/GW+8dWkL1QLamTvmC6t8698518qMsgncERpgJPyitzxYVkfZdgQ/VfghixptYl+ujW0tbzwilJNf8wIKFgRwQ1ymoSM8IHr9URhFgn6K0jCEXKBhCKWAev1RlA55JVNUmZ/6OX/byi1EWBoGxNKHCVvHchjyya2QlbWW3Gfmt+w0PNg2SvmL+ljluJqun3XzZSBVVdb2/Z90rdXMlTumRc5fjMOJUlA8nP/vjZbb+orkFOqqrpBu7CW9eXFAvfAAAAAElFTkSuQmCC",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAG4AAABFAQMAAACR/kFNAAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAAEJSURBVHjarZM9TsRADIW/8Y52021KOnIESjpyFI6So3AUjrIlDVIKiiCN4i3mz45EgbRTJHnxz7OfPdDPmybBnUfB38HbQjo5vP8L2sxhhaXDyxatdYiujFFcg9Oh5uDgDDI/SA1FJm/+NMY9OutuYwPpkHlwcBtlNJyrd75NDs5IH0RUZjajHEli9/1yagwfZ9gbfOZqlfxmtM4/vIPa9p3sFxAzs8Fr9cJxCmgTK6gmoYl1BoTW/yuAtpZULe8pC1Q7jBlKLwKEUBelTHBpiwKSi6G+VG+NR5OUoJJCSspCIIWwPKX+f6owLI2ntz+3/OV6qmpCNQFwrbwZbjU2fySfaq9w/Xtj741XT8sOqp7TAAAAAElFTkSuQmCC",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAF0AAABuAQMAAAB/UY2DAAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAAFPSURBVHjanZQ9boQwEIU/T5Dibl1uyUkSXyk34GgchSJFSiKl8EoskwIbD7sgoZ1qHm/+x4ybGiXLTb7xBfAW+jtx0e8A77pIEuCWGRyAm3OADtAAEWgiwG/4GgCGbH9RTRKoIiVlAKSxjGSlBQTLuKxEQOgMUxR1EbRfQOKSVuaHP4R2AQMz6LD6J5uns6AXStkfgI4lUXddzRyxMu86+pXx2xZ8BQGSUKLRVOa57V0Qn5ncT38uwAOYEPoyHfyRWdoGQNcFj1fDjJtOW6nfB0SrXTQ+ffVJADNloiSZd8tRAyacYWaQyXiIabSC2Q6e5JFUK61vFEJldFjYLJ/paFTRmmmScdfMHa5EHplh16w5t2D/wqMIrzykc6A979PuMvHRzF6XOvh8uNajZXZqAshT0qZOt16kjY+3Fwl7kQIg5Yguv3N78AejqdSp6R8moGSbOW6bPAAAAABJRU5ErkJggg==",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAG4AAABiAQMAAACLV3TDAAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAAEHSURBVHjatZRNboMwFITHBgkWlcqyu3CEHiAqHKUHiRT3ZhzFR/DSi1cmC0LsZwkk2sS7z4NGeN4PSNIPXI6A9AAwrBgAAFhxITQL3kXgSlIwrXgiKfaBAQAsNk5DUgr1Odg+zyr+dFoylEpdDIpO+kVBO0eNkqNxc669B+RWn29wGY76h0mc040BXOZsgbF4oE9YA32hBpVkt5tVGw8EW+/H/ppmOIz1nipHrIpyo91uMyB0m6oAXltNfcK5mCsSl+xj96sbNELyIZyMKL2SAxX80Fg00lgOTlIb//XnVdC+rPrx30vGaXwk0AGA7Vf8VoWrSFKs8Que72Wc08alWBgBYOIi3gCEvXNf/GzHRQAAAABJRU5ErkJggg==",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAG4AAABNAQMAAAB9rcMgAAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAAFmSURBVHjafZTfaYRAEIe/nQjnw5GzgMBZSOBMJykhBQS0hJTkQwpICZIKJORBZM/Jw86u64VT0OVz/vibmV1RVVX1bVgIOJ4DCgCMY1gN4xVx2rWWe85VuRf78WNs4jhnIns4ZCJ7mFfnBaBN1sU8LPMvwAAgWsMI9pB5NMMEINNkYZ5rjXx507Pw+U3RuCS4V8CpAuAWeGfAEA/PTLRLwDd4wnOxZPVpOoqA4VAVCAzWJ2qZxKUJhBK6aKRxCMzDpnXa/J+CKREyG92dkQF0FGifsNVCqO8532Cve1YohWqlZWv11Qanm9ha4o4CGBs0NYNL74Vitb5sYlWQ7MVckCYEcPICXcIKIWtWjZDV34DqOhP1qMbNwYN6yUo+goBbE29UvYYd26Wd7oX0YbdtndhtOgrDaj1omXNlWMYCAhapAJyChgiFqxBVujSy9cxITBIy3J1vmbBKDwF4jNUSfzKHcKz/AIxLqwMk7CLPAAAAAElFTkSuQmCC",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAG4AAABdAQMAAAB+e8G7AAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAAEQSURBVHjatZTNbYNAEIUfwyriYAk6MCW4gEhQkkugtC2FdMCRw4SXA8bM40BkxeG0n97s/O0wIB0AriRJx0oPdnBYESs+RKAm6Rg3LEi6PZEAULZ5Y/SgDYif7cesiH/Fcj+2X7kLyidqV1OXu4u6YnQFYDnHCF2+iKcxYskphUBJS6hQnRTYIMWc29Nu9LD3NXZ5xdjTC8ZzdaZOh7uN4KhqbgUHUYnepKAhomvcuRCctJNjisi+ilFvuOqYdTpmvYgFRTVN46J4U+yBInha8B3Uj+NcHQZJ8LdB+tsviX0zkHR7dqAAAGv12iwryNI7BrgBALNYLqzQF2HeVx0dnPYs6IZ6xftWxyxLlfSN6D8BUHheVzVzEwAAAABJRU5ErkJggg==",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADYAAABuAQMAAABWVnIEAAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAADFSURBVHja1dM9coUwDEbRg0JByQ7CTsLSKLMslkL5SkoKD0oBIcF5ky5FVPibqx+PLI0lvJRI2IXDLt2/c375yy1vuvxbVX/IHOuNlyu+PM1ff/RR63zjrY6f1lb819bG9LTf7uKxig+gv7gHw8ljdGfgmHeJgEY0xy1hQiuM6MgVbyV0GMmdJktoCIJJi8zFa5agNxB0RmQWmSXQ+Cw5jri/q/l1P/9Hs/bvd97z0HLyZkLmfM5v9kBuyBLe0bOd+6r+xwfhwzq91NX3rwAAAABJRU5ErkJggg==",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADEAAABuAQMAAAC0iml9AAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAADGSURBVHjavdK9bcNADIbhR8whUKkRboRsEGUzjZJRVGYMFx5ARQoV+klxMiLDFgIHQdi895EfyAPvqinh9S3ASZSDWDbacxDTvfwoxnt5YoDpNn/hCZbj+hF7WA/rW3T+O8rE7uZeLVTfOpdqNHtfEjXUIkGzvUcWFbRCj07IPBEaEqGmJjzzQqhoCfqqI8hR5jTpel/1ZX79yP5JHvP/ms0f9xuu9fSDfxw3PRUOS+H7ijB3MuHMmZgzcys+4WP3/9d1HfkCt3EpWWI7e8YAAAAASUVORK5CYII=",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGEAAABuAQMAAAANnu81AAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAAEQSURBVHja5ZQxbsMwDEWfaaPx4MGjt/oIvUF9FB9FY8ceyUfoETJ2dIEOTRGUHUhbghGlSdFM1aSHT5Cfkigm1lUEIV2SaMpGu5gI/MUK2Qrht85kSHo/H9mnykZr475C6kj1NrKK+xZJxB4pIg1I0m5AGKJNhIfEpLAWbECoYoHUaQ9CsSSdQGA0KC1Ru3QAAo1RZ1QajX4ue4AyOHVe2+gOMIMCVnFaz3NcUoknbyJViwVxU2NyD8HP49QdDUX+pnu59E201dWv50qquXWF/0UfN8g5H/Pa/iuvTUrutaoPgNEnvER6gjcLVdUZYKeqQfBZOPiMHSz7s9Gr0fvPHXXrx4DAzuZ29sh7hccjwDdCcy17N1UGUwAAAABJRU5ErkJggg==",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAF8AAABuAQMAAAB7pF2+AAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAAD9SURBVHja1ZQ7TsRAEERfN5blAIFDMvsIHMFH2aP4aHsUh4QmW6TVFMH8bMBos4VOpkpdPVM9bg8LJZ58Qy7OJvxc8XWf4V/GvOnguB+fKm58rKTby/qKe+8qGfeypuKJUElwK9i+OKDcfItTLHQ45dQe5zGTE0h5MwUn79AC0hrJoOCQrI5gAgOwgJxU1AIoFQ1SMBHTebUZHkgyLfAsKTjAC7yWG21gio4AOWkBLJ7LD19h9qPM1Bxl9qTbkJHbau5C+j/s7Uay3tvBsstcjmTnK2USMQtlEoWqLOQ3QnH+B6Xxx8BCqnkHNPL9//mItRM4vJH9VTvrb/18AuKtUtPS+tY9AAAAAElFTkSuQmCC",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACQAAABuAQMAAAB1DSPRAAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAACLSURBVHjatdDLCcJQEIXhL0MW2ZkSUsotyRJSWkpJCVdwoaDGhZiHGlCIszgcfs48GCeKHCcGAfTYP/wH7UffrWa+1270/QbT1jSh+bmrQXrnMvJEClEtMyHKJSlFzEhBJbTqMZM0QiM9twzZkENVEMp4vTDKP/1qY71dJn+8ErKWgV2OMwda1GZ1B9zPGxHvTGtGAAAAAElFTkSuQmCC",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAG4AAABGAQMAAAAXajPjAAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAAEOSURBVHjalZI9boQwEEafB2uXAiku062PkCNwlBwk0nKUHIWjJF1KSgov3sI4nkEKUlwgPcbz830eZuq55pykYcKcLuck9pfCzSL/wu+gI47u0Dp1Brdz1HCdB6aGt2XQfWO/ahy9HVKM3ulckdPoABnNRRX1p2705EPUi9UnUXvT/10qsAbR3i7IovDLNpojLXrb+NCY0G7EZPTyI0jf8NPD+kt3XnRu5k0v18I96Udzds0u1qsexGmFJvoO5KlVMqUu1pxXQBh1KnluqTkJUXsqVCsH63MoWPXHgr5uVan38FU9PKRmu728O7zgpJ5S9N6A0IYuGKsz+nKoGNpQSL027iopY2XKVHSwf+AJvZNFVxDa6GEAAAAASUVORK5CYII=",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAG4AAABaAQMAAABjfvEDAAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAACtSURBVHja3VS7DsMgDDycDIx8An8SPo1P6yd17IDkDqniQ25KGapKYTudH9wZgwo6Ky5+Vun0QvAnWBjFHzbKjNJcbuphZJTlwbD0ubfPldE6MHcrOWfDKDd03KSxlRdlFEwDjp7Np7lpWJmmkofBNLMCKPmu3nYhI32pwF1830qfiGeLmfGGzaZ+PJRk6iEwhcU/MzXBqk2A5YWWr/ao2q8oODTEvZzed7iptiehfhsLMSOpJgAAAABJRU5ErkJggg==",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAG4AAAA8AQMAAAC90x1EAAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAAEBSURBVHjafZK9bcQwDEafecZFxQGnMl08QgY4IB4lm+RGySgeISO4THlIpQCKmcL6IRHkVPGB0kd+pLjSzptm6cSCOy8+C9zB74gY5fTFYe56n2z+7eJx9XizOKyukDwmi6fRZaNkmf9tchoczt6z6h+DU+/ivn2PgpPa2EaXzf5tChJxJno8ckOCSb5PpAYPysVcDj/M5IbnhN1gTANi+OMIW6MnzlkG4zfaJldeQfuCB/83BIQ+95MfzjOgq5mzfXsAhOb/AgjBrghNrapqFsaCx710FQt+C3HHamkq2asRFnCfRXWpwd7k1HYPUiRLCSkFSzdSg9AH0rpAqsgu+AvsdUFb+CsBFgAAAABJRU5ErkJggg==",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAG4AAABCAQMAAACM+3H1AAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAAEMSURBVHjajZO9bcNADEafaAFSEcQqU6TwCBnAQG40FRkko2QEj6ARjCCFA1z0uTjpTDqIY3ZPJD/+nZCkCV4lSRlJI0C3YKbYRlI23hb8SQAzq3VSts+K34AdKjKCfVzwnWBbZYtf7sfTL2+UzgGbWEhX0ftNwPkKfW4zBV93aoNyG7rqLdt470TDv+OnP7072lu58y3lRB+8Gdv5RQ+4kTXtbXDeKSqnxNErZesv+NWE4IOBv1IXb/SExQndq4P4cjqwxqf6E2+kbNQzPANGcrq+q1SGrGWkbAxxdetITcHW79SqWFtwbatfQpY+XhZMrizSsZZVNni41MGgPMvHGjOv/2vZRiO2p+I8AzVMYrgL3VyJAAAAAElFTkSuQmCC",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAG4AAABXAQMAAADf4OLdAAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAACdSURBVHja7ZOxDUMhDEQfJwpKypSMwigZJaNlMCRSRAk26BNF+l3i7nQ2fgbDHRNRTjb+8VNx88vgzTNl3bjpQ23ZuPk7jGxVmd20qa1Tsv8rTdYOS9/gzl0gzTNERD3ESAhzHRmRD5MLwoxUoRvo3iYQEcwEyGyHQAys6BslEAMrg+Dyklegj8a9N43y8Dw8GHyNtYwnL+Eq63sCHtXtE/9hXMZKAAAAAElFTkSuQmCC",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAG4AAAA1AQMAAACa3EyMAAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAADeSURBVHjahZGxbcNADEXfMYf4Oqt04UIjZAAD1mbRaBohI6jIAHEnGAfRhe50pAuFhaAHflGfn4zs9a0ZU3fNgqsj7B0+fr2U7PHGaPF6MDnMfxY/L66b4mKxE2Swpo48D7wvyNRedY3v3/bN1D9prEk608kH4sjSSTK9n96Jp8GEd1qd5/QMiOFF7ORzF0HNqLPf9wvUnMGf+wOEFuUV0LlpnfgECPvCFwBdmlazEI2WZjNtGOr9Sjjjfj8Qqo+hzNt8BN0mlx9LfaYSa8HYPCFV1lcMNhDVLQ9VVc0vBvk/AQ/0InUAAAAASUVORK5CYII=",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAG4AAABHAQMAAADcNuBGAAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAAC4SURBVHjavZI7DsMgEEQfIwq6UKbkKBzNR/URXKZwRIoQfgmSnUihYjTMzuwuLDTHqkXs/O10Mehj/ALtOW382siNbDiu9SPrj2uD3PHHUZb5hvdRq3kpg8ycFeo32rEW0lrhpff1CD/VBoTr2aalCKlpKe1q1AaEGSovzV0Qm4yCskPXx/AgasoAosaKYBLpJUjcRTE2uaOlNieKsc0wG18z9MUHQTsAAbePs1oz3J5wO/Of/bvvAwt9GAJpRyNZAAAAAElFTkSuQmCC",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAG4AAABGAQMAAAAXajPjAAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAAC5SURBVHja3ZNBDoMwDATHFqpy6IEfkKfwNJ7ah4DcQ6DZNCqo6q05sfLuem0ZFuQN/MFrJsIbNLSQn+CsKH2nzSfV8UI7KsoX5KRoPiezNuCd7J+11vW1htr1XfTouqpsNvVV2d3YV2U7GUfmn7t5Y9VvjWngmA7rclkDOJqycU7g1JQjODVWBqI2jli9yq1Ymbh6Pel7EcSjwKloD+u8k9MxLVjAVn7qgM1fQe1wtwXgtkfZraeIWJ8b2yZka1OJEQAAAABJRU5ErkJggg==",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFcAAABuAQMAAABocx1KAAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAAFPSURBVHjajZQ9bsMwDIWfGKPRUCAeO3TwETp2i0/W5mg6Qo/goQdwgQxCoeh1kCkxP07jxZ9p6vmRooVpT5JMZIZen8yiHIDKMDwCcrgRv2CE5U6jeSdfhnJ3azk/AzqV7DeQSV+cgMr4MGuD4cnwXHkbmv7LW+PBx1Zv1/SZnjArZ9Ec61nO/LvK3Xrtj/RHGhMP9bPJ23h3luOVUs3xgL+tEw3PfePJxMOAWGhHsxcEajy1euPR1bgbN1kZ2JqeeKNv9ghjXQtnZkyM59f2XWfm0O6R3Rd/2cNupbfLQ3+v/24ZJQCCw1VOACAYdXwgGOprQa/WIHg2azcA8L78VwEASWaQEdiRpcauOLvyZluUV2YmYRnwEj8qxwfmzS+WUTx4892bfvK65mz8wHiIyl/Ar54v5eQiM5jK6JFZ8N0KYEndk1kVd2SW9P9/9AeT93Qb/ZA4egAAAABJRU5ErkJggg==",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAABuAQMAAABfvdJ+AAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAADMSURBVHjardIxTsNAEIXhzyMLuaBwSemb4KNwFB9txQk4ggsOEKgoQobCdohNCAqw0urXm53RzL5dBRQT+5klOiCcstpooj2XtzC+iV/Lw6fe/aY+xbiOL/eNcrG+HPP/aw1n+/TRb+Yb1/2P/i9+N6f+1qKGRgS0ohrQCT16cqTKEu4Iwg23hIqWYPBAME2SOcosgWrq3y5zzLtZdH3Z//rv738V9z/l7df6bXt+mLib9ZgTiwGZ3GcJ7zwRnnkldGQvXuBx/qdf/90H57Evb/mklmkAAAAASUVORK5CYII=",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAG0AAABuAQMAAAAXog+7AAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAABoSURBVHja7ZWxDYAwDAQ/TwqXDECRERghozEyZbqkQx8kjGiRrzv9F7YbA4ohCILgDxhn/6aHk673cnXKhcVJK07VRnsuJzDPKacqk2h2FzQQsuEOoupQ6DJWb5TXkN4vmTUilks3YACOugjdKa8ZNwAAAABJRU5ErkJggg==",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFkAAABuAQMAAAB2ui35AAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAAEjSURBVHjaxZQ9bsUgEIQ/NkihinyAFD5GSt/scZR3kBREykF8BCsViZBJ4WezOJCfKm7waGaWxYuHBAD3OWcvrxtIADJRHkGDsK0WQMaubNhWByBuAxFArGYqz45enGLCO5hsAHh442J25gOuhyzCguA58FHgLoBwO9DjUyrMaFfssU8umxrMubeyXtqMhanNOMCfmND7bj+CCEA+Jhcqme8VKLJ0YgySi7/Xgfo6K4CsSlRka1XalpmSiifXpaPTngFJ+/uiZL7yzKMCYep17T0SW0zuDZhVQJYbeLY9WdR3dNbMMoDMzXbG7oCnLuN/dUNM7z9Fuh7798v3P8B9n0hNMHxhmlk19oKLSQVX7fEqxargMqekADE6LetGvY5BdbpP4Ao85noLIpAAAAAASUVORK5CYII=",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAG4AAAA2AQMAAAAcSD4iAAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAADwSURBVHjahZK9bcMwEEYfz0LAQoA5QJBoBG8QjZIRMoALjpYyY6h0mSIFDdC6FCapo4Eo1z3eD7/vSCIt3jRj4lWz0MUOTj3efIc/Vw4GL6z9pOeHyUQLo826lCzKU3fR0MvwLsu8YyFaDH32HVg2VN2x7x4n6yDhr2Jh7YuzF28wBbGGvpHBZJfJZD3zbHZ5TNgnCxeHuO2JJkG2zV4ZrYwvTqCfxkIWpkaH3uAIwubwA9DUalWz0ESfAada2t0KN6HKeinLie0bAVp1qKpmqceubjKYlQqM9envKGU1Be9dp9YSAeb//nO5fakqNP8CXatAn/1jsFYAAAAASUVORK5CYII=",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAG4AAABeAQMAAAD477MVAAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAADHSURBVHja7ZQxDsIwDEVfnCIxVGpvQG/SHoWb0KNwlB4lIyMDQyVKwkLaOFK7UTHg7el/y4njmJFPVCGESW4RHwByjegBJBIBwJDyyy5IRxBUfA9VXCaFlUY7qVyPVbLfxqzuumqckk6hLxJsgyskbVWtb3TUhxwzld0a+8c9cNxU7+moDLhUdQyp9eApE/Uped1681SNxk579UxanVsqqwmpufWqUPc7r5Ctr9zcr+QaAOmUIE3EAkDq5bcCMvenBpB5cZwB3rGyLHyzZyvPAAAAAElFTkSuQmCC",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGkAAABuAQMAAAAeSa/BAAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAACiSURBVHja7ZIxEkIhDEQfGQpKSgsLjuARcjSO5rHotHEGIiDfr44WptvZzWZJ4Ewtl0UbeEH4149XvrvR12D+jLN7zUrfFEOe7E17B3kLg4WlY6O1Cg/FpYHRikH83sxpJZY5q53YbZ6blyHzRisHgm4Uy4BNM7G3MFhYQIi2t17lAEKZsYDgmyP0qWSWSgdi1+x18PxcV7X+G9owAqcbPAJXNJINsLrPoZgAAAAASUVORK5CYII=",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEMAAABuAQMAAABGNjzYAAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAADhSURBVHjazZLBbQMhEEUfE6RwM8fcvKVQSyrZElyCS3EplLCKfLB82Mnhg7Rrr2zLUqRwYJ4G+MMfCA4A/s0oYjD62KJ/P1708YRKg/LqCWqPb1TLimGZS33X5omoGJe5hmmZC4p5paIWDaucDBdwGfFqZF0KI7XyRlTZfq8ERlAJTN0fwKBIDveq2eALPiQUIXZJkihAvuvQyNCoUNYdd/eKS3m7u6FTfvcf/AFN/mi1Mj5YPXFqzmEv5w7T7b4ZLqIzXEUTuOjYX2YG+PRq/ABcwTgAeIFZartqjS5PvP0Cq9w61Wciit8AAAAASUVORK5CYII=",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAG4AAABaAQMAAABjfvEDAAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAACjSURBVHjazZQ9CgMhEIU/XywsUngED5LCo+3RcqSUKQS3CRndRZYQBAcsHm9+vplCnjRxZ8Xw6vWF3H5JniXD0c0rUMWjm1agSr3MvFr5UOhr35MwMl3nIj9t/Va7/1q5zruq3YauPyfnYXJApKEbEXHoJkRor04tJms5Yag5FcK1bYWt5EEYdABhlBGEYSUQxpGBahy1FsHNxiK+k/R52f7MHaptFNMDrmdBAAAAAElFTkSuQmCC",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAG4AAABSAQMAAACPLXNuAAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAACySURBVHja5ZMxEsIwDATXNy5SuqSg0FP8tDyVZ1BkxjQQSxATU6NO3pPnzmNxw9WVUJn/qqzYn7TrL+Jv7XIirvNXlXdq87P2Tsv8bNUS8d0320nAPKbpQ6yxWCiNaUasQ7og6pAWhA2pIUqk7jkqNPccbVPcLIW4yB0IRPILKUIGhQSInqGA6KYNRHDpZyvQusvWNvX9Ty8nfU7stvLzaN1dHH2VupuaWA07pHYsvvQEDzcpEzcUVT1BAAAAAElFTkSuQmCC",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAG4AAABPAQMAAAAwZWIrAAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAADpSURBVHja3ZPLbcMwEEQfx0SgQ4CwBBYSICzNpbmUpAsdKE8OkUVShg35mr09zhA7/GwwEADCFRbBEgBwAASRtQTi50Y4wZVWoTJ3yCffPb5rwFmXHiv/oM4DieMYXzGjctw87dV8fG/aq+mJOe/N0xNzURzdw/tX6fHegMJjVWh8hkGNiDKq3XVMozkh0mjujpQR3RkKuBsGVw2REYFhjlrKCKLFmkC0WAlEy5FBtBwFgvGtmVnE1mmd31untxXL1ofXft095hHTFhmxpcxAMCxxzcgi4HQGOP2t2Z4BvmxXbNsX+LDt+guYjTcT2RZl4AAAAABJRU5ErkJggg==",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAG4AAAA5AQMAAADtHoz3AAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAACqSURBVHjaxZIxDsMgEASHsxVRUqYLT+EpeQpPzTNS4FwK4/jAskWX61Z7K5bdI2Nm5l/T2EAYh3PPpnGt79k4rg09Gy613qLYs03wqWP5WFB6rTPAte8K0iYrbdtCOmU9gokjIITT5Qj63qEW4WZMITgrPAabzQkKuy0Pwu4jgMB9g09Atfye1SIwVTRVk9nctqq+VvhYl7c/xbpca0rHBp3CsvaksFyf6BedXRzUO8yywgAAAABJRU5ErkJggg==",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEgAAABuAQMAAAC+1scvAAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAADUSURBVHja5ZPBDcIwDEVfDFJ7QKIjMAIbwGZ0tI7ACBmhxx4Cn4PdEqmo4oiED8nTdxL92AnCQ8YSz5hvb81mbai0GbKVlfam0aaN7GTjRvYTFctf7hjm+2yv+6noV/5S5fm6ypqdVtq+2tEFtNYGdbYPOlU1qN6BW0ggL3Qjw49pMQ4AnEHqASSkDDQSUgEuEpJ6kpwyjSQDOtpweuAcZJX7a1ByD5qHL9/G31MfpEV7MgQVsjdM49KPOyVKnEBg8Ig2SAOwk5B/0aMMpwnzsyiVgxdnmFExqGv+ZQAAAABJRU5ErkJggg==",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAG4AAABiAQMAAACLV3TDAAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAADjSURBVHja3VS5EYMwEFztMLZChQ4phVJcCqVRCiUQEmg4BwJ0JzzCYxz5sp3V7d4jCQtyuEiYoGYFjJZtLCzYWaPeKg+lUQGnCjue5NbhWGGnS8oFHCrsfEXZRvM7qT+Is2n0X8/Kl2z3eW4o2baaGzRqy5WZpxHpq09SAwdaLTpz9NCCGlYDQjXsQagewjFX9dCCUFV2gKifQqJ2dgDhdP1ErqMBiFyHB4hcRwAIPDb4BCDZSSQyD8Ql8c3pts5q2IVB7NLh/X7HvA+VOyczWQ/ek+++r3RYrNT2yy7WSE6v6AvRXC2lZS0ELwAAAABJRU5ErkJggg==",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADgAAABuAQMAAABIn0K3AAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAADVSURBVHjatdKxbcNADIXh7wghUJFCG+RGyAbRaBpNo7h06SKFAxhmijs7sSCXZvPwfhK8I0gJMpoKD7rc/XU3v8Zllx/u/rybP8Vpl9/0HIcNr10bv2zqh65/fN3te92+16M84a+OEsvuP+Pu582c9cGPMXU/gikGUHuD2W2/FhRhRggVgzBhFEZ8Cm+YyaRkBqsgqN4JJhPBqBIMZr2Eku2WgrKdq2z88nz/L9OS7Zb/83ysy65XS+crwbcDwcmRkgop/KCSS+ve7v0jjv3Ob5tu/OsXWL4yyg4sMYUAAAAASUVORK5CYII=",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAG4AAABYAQMAAAAutlAIAAAABlBMVEUSEA3///95TXMSAAAAAnRSTlP/AOW3MEoAAAC9SURBVHja3ZMxEsMgDARPGheUfoKewtN4Wp6SJ6RM4RlSJGNOiAGnSREqbnSA9myhgNaGP1iOCOrU5iUWMk+qaXHWJtW9N+8Ts/XmxCrP28DhRG9mLQFB3L3hocI/TqhSdgkKuxr7DgXFYdFM/BmoRFgDIJ0WQCH8aGyj0CQoGkMama217KoGKJgBitZ0jt+oNoZaD2pMhlkJxTZIsrRZHlTzCYT1LNjJh+8G5xfy8ZH3qfn23j4v3dyFQ/gvWokWXd7HtuIAAAAASUVORK5CYII="
+];
+const MUGS = [
+  /* a01 */ "data:image/png;base64,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",
+  /* a05 */ "data:image/png;base64,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",
+  /* b04 */ "data:image/png;base64,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",
+  /* d12 */ "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAAAkFBMVEUlFxyebE+1i2vdpGPTjzalYC5SLyJhWFXfUZWnnJTpza7NrpVuRzHZ1cssoZ/xw2LrY2lIp1szr2JIPURkWqyzU5QyaZ5Shq40wG8UM15bozqYsTs3ksH28Nb07tMMBBLvxY/Kg0cIBiXHfD3HfULXm2eWVS7bo23XlVnsvIXNpYnqyqripW2NSyf79+iiWysXhvGsAAAAMHRSTlP///////////////////////////////////////////////////////////////9Ppz/1AAAG3UlEQVR42mWXi3bjKAyGwdc6djJN2+nszK4tg++J47z/2+0vgS/t6CQ5joEPSQghVClSeZGHr6/cO7ys9l5bt6pU5bfu63g/bCGiU/W99dBNMeVI5xl3QEYvVpW7Hl6Tsiw3gDR5wBnT0floQqYAONjCHeio524Cm5MkWmvlOywL9Fcvr1ZtBqYUBEFSqLTcRbnR/DmTSuLYARhHJTGAVJlB+GVKoTFJQeobwOmTktImbrUJCL1LsrTQy8srAFBE9KakNyY2Y5/S4tV2PpDHJbWJNqPWrQfon2QxPoo0Xd/eruQB/CloWf4yAfp33TgQOYD6+PlioUAURQHGK5Uy00C9buyMWFEdnYjWpBtHAbQBzLcfL5AQ4//w+DQrM9LaNAEN3TDk3g3wlfKmQD8DwBOAplW07IC3t8uF58+ob1mDuB2GgZQPlk0DAEYHMG2rLDkALLj+c7lcflte/7iNGGC6DoDSR9wWBwKIGYCVUomyPxnw6gAXS0mSABCF1D8HAXgnfAGYvmdA/3hozTHAKlzfGKAIL+O4MQD0AjhspmozwQH6/glj2yJVDPj3ern893n5ZcP28XgIYO42H2ybqSx3wPP5xPgmLhAKr210vXx+/P4FQBNDhQ1wWMZvGmB2SNPEjx5WaAA+rP38BKBtGixj//BO3FehcoAOAJVoLGPUOkCIEP7zdrVpahFEEcY3JkgQcJ1oIFtIua0MJ1rqjKYE07QtzxWzxUVK1ysmJQWruImDZOgK9oEHCMlttV5TIJ34awBo4TdKUwIKAsUYTvAC74VqBfjxkr2KFspLN7MCHip58JMTNGKa5OSzmgvl1YjFEhtpxAIHMI8eu48BTROJFuJH5dKqjNvSjQeYGjI3TgNzAGA0N01NrOmY5NSWEBfkDbRypyHGXA7wEEAM3VtpCuPY0Puyp3e1KUD0nrT1JFIbHiEayA9rHooCUx1jq9CW4qt9L6gkhJIn3nZJXY8Nm+EAbHmL0ZKS65r39JqaxQRBQf8EVp7OZK1VdwDE62IHuzVgAJoY0CLxqk0Df5IsCIHWYBLLQqe6ht2GKRLZGJ5LG2UAtKGLxHUVHCDkfuijFH4A0Gw4SxQJAPubm6jmKJG9UB2XcQfktQMErSdEJhKATfMTAwyUQq53p4nXoJJEZKLaWWDtHRrwlpTYcyagiY0AgCWgs9sEaj3zuN8XQOtjEptzBYh7PMCefSS6rUAksTodNWglLTSynt8BETTYI5GjgBpOylOQbYCYvRfiJTIJA5Qbn9YjDqBGC6A6AkIkmqG+y0TEJrBOMwuUWAEcSOjXeYBEoqSCzjThIHI/Qe51iFBs5nkFmK7m1xCepwvxBscXG+8AFms4D/MQdsyY5QeqY/CAL2ye52GVjgX5ExuiXDV4J+4yc6MbjlN2ghFeAwCmeeyYNbvxEAFUvj54p6CZh5uXPLjdsOvg96KPcVpppTTv8dtBuvmrCRToIVuXkM9BOLG+21QDoANrC3Yiba1Et2EEwC0jFyfy9jhDLQBr9fOZJLwFEdpZvqp4u6G7dTuaNwWetQ7g3mCVrBaCskmBo+Z04n/SmjMkl54YlVZOA+imkcQGcuqRN4G1TgtNMj//EWErVAe/4jn1GpSpa7yv4qasXRK6+8fT1nzPaKsX3bnwzlSiqXYpMc/zDSBRLYK3ucuYE2ogUpsP2JPw7aMbffOdy+O/ARgU+B5Th9OFNfA5kc7LOSe4AYhc8mat1DdAxqakaJzCKeZy1uIYSH2diNxwPiEUumG631FUCkAiQZRhe+45AxBSdIcFhpcAAC2nsy81FrxTXF9MzmLKUYuxCzlqbutSjB0VBS+F8vVtuZ9SmfOt8SZnEisnn8yzQI4VpCk2Hid2ttb7ars+VFwikMJ+mtcVlDVEreQ9MswhzgS83apTAWy3B2QVzdUZoRBE1qmPwlt07oSp5XAt/yqyUNFb1fcocpQOApCmIyDPOJATll5b5cv//caCc0FC9IkS76ldSN8OOkwu9DRanwgBOEVVx0LTnSyunXtoZIQbHQX7Rwe6F0Cv+b6wXntUtV6PUPtIgRg/+1hzIXYU5LC27bna4DqU7wsbwNfaJb0j/xgnQ919E2R3OWoMFzpsBVXeBg9AiLGCjQPIOobTOPrB88SVRe3KJAb0cNP5WKnyda5nQCSd5jXseDR+/H+vnwDIno/VOjvgwQA+jNvD8nNeH7bsIHUae6HHvetclVudKIDeAxrt8hnSik+CnGJ2QCMAzafzVw36XirJxukbkN0SHD+oVQeeIv4LULpr3HpBxr4vfrCEIT7yw3XVl3v34uN/u4Tu13oHCH/88AyWaARACuTycEHnEf8DgBzKQQPq1GUAAAAASUVORK5CYII="
+];
+function pfpSVG(i){
+  return `<div class="pfp${i===S.me?" me":""}" style="width:${V.pfp}px;
+    height:${V.pfp}px;background-image:url(${MUGS[i]})"></div>`;
+}
+function spacesHTML(){
+  return Array.from({length:S.n}, (_, i) => {
+    const mine = i === S.me;
+    const load = ALL().filter(k => S.at[k] === "home" && ownerOf(k) === i);
+    const w = Math.max(V.spaceW, load.length*(V.wtW+6)+16);
+    const wts = load.map(k =>
+      `<svg width="${V.wtW}" height="${V.wtH}">
+         ${weightSVG(k, (canTouch(k)?"":"locked ") + (S.sel===k?"sel":""))}</svg>`).join("");
+    const A = V.arrow;
+    const go = (S.sel && canTouch(S.sel) && S.at[S.sel] !== "home"
+                && ownerOf(S.sel) === i)
+      ? `<svg class="go" data-go="home" width="${A}" height="${A}"
+           viewBox="${-A/2} ${-A/2} ${A} ${A}" style="position:absolute;left:50%;
+           top:${-A*0.72}px;transform:translateX(-50%)">
+           <path d="${arrowPath(A)}" fill="var(--gold)"/></svg>` : "";
+    return `<div class="me${mine?" mine":""}">
+      <div class="space${mine?" mine":""}" data-i="${i}"
+           style="width:${w}px;min-height:${V.wtH+18}px">${wts}${go}</div>
+      ${pfpSVG(i)}</div>`;
+  }).join("");
+}
+
+/* ══ 그린다 ══════════════════════════════════════════════════════ */
+const anim = { k: null, how: "" };
+function render(){
+  readKnobs();
+  $("board").innerHTML = boardSVG();
+  $("answers").innerHTML = answersHTML();
+  $("spaces").innerHTML = spacesHTML();
+  const b = $("submit");
+  const boss = S.god || S.me === 0;             /* 참말 게임에서는 대장만 누른다 */
+  b.className = "ys-btn " + (boss ? S.verdict : "cool");
+  b.disabled = !boss;
+  anim.k = null; anim.how = "";
+}
+
+/* ══ 손가락 ══════════════════════════════════════════════════════ */
+/* 슬롯을 한 칸 넘긴다. 수가 커지면 띠가 위로 올라간다 */
+let spinning = false;
+function spin(i, d){
+  if (spinning) return;                         /* 흐르는 동안은 안 받는다 */
+  spinning = true;
+  const st = $("strip"+i), h = cellH();
+  st.style.transition = `transform ${V.spin}ms cubic-bezier(.3,.9,.3,1)`;
+  st.style.transform = `translateY(${-h*(1+d)}px)`;
+  setTimeout(() => {
+    S.slot[i] = (S.slot[i] + d + MAX + 1) % (MAX + 1);
+    S.verdict = ""; spinning = false; render();
+  }, V.spin);
+}
+
+function move(k, where){
+  const from = S.at[k];
+  if (from !== "home" && where === "home"){     /* 접시에서 내릴 때만 먼저 띄운다 */
+    anim.k = k; anim.how = "rise"; render();
+    setTimeout(() => { S.at[k] = where; S.sel = null; S.verdict = ""; render(); }, 360);
+    return;
+  }
+  S.at[k] = where; S.sel = null; S.verdict = "";
+  if (where !== "home"){ anim.k = k; anim.how = "drop"; }
+  render();
+}
+document.addEventListener("click", e => {
+  const go = e.target.closest(".go");
+  if (go && S.sel){ move(S.sel, go.dataset.go); return; }
+  const wt = e.target.closest(".wt");
+  if (wt){
+    const k = wt.dataset.k;
+    if (!canTouch(k)) return;                    /* 제 추만 제가 옮긴다 */
+    S.sel = S.sel === k ? null : k;
+    render(); return;
+  }
+  const bt = e.target.closest("[data-slot]");
+  if (bt){ spin(+bt.dataset.slot, +bt.dataset.d); return; }
+});
+$("submit").onclick = () => {
+  const won = S.slot[0] === S.quiz[0];
+  S.verdict = won ? "done" : "bad";
+  render();
+  if (!won) setTimeout(() => { reset(false); render(); }, 900);
+};
+$("n").onchange = () => { S.n = +$("n").value; fillMe(); reset(false); render(); };
+$("me").onchange = () => { S.me = +$("me").value; S.sel = null; render(); };
+$("god").onchange = () => { S.god = $("god").value === "1"; S.sel = null; render(); };
+$("again").onclick = () => { reset(false); $("answer").textContent = ""; render(); };
+$("peek").onclick = () => $("answer").textContent = S.quiz.join(" · ");
+$("apply").onclick = () => {
+  try { Object.assign(G, JSON.parse($("glyph").value)); render(); }
+  catch (err){ $("glyph").value = "읽을 수 없는 JSON 이다 — " + err.message; }
+};
+$("dump").onclick = () => $("glyph").value = JSON.stringify(G, null, 2);
+for (const el of document.querySelectorAll("input[type=range]")) el.oninput = render;
+function fillMe(){
+  $("me").innerHTML = Array.from({length:S.n}, (_,i) =>
+    `<option value="${i}">${i===0?"대장":i+1}</option>`).join("");
+  $("me").value = String(Math.min(S.me, S.n-1));
+  S.me = +$("me").value;
+}
+
+/* ══ 검산 ════════════════════════════════════════════════════════ */
+const chk = [];
+const ok = (name, got, want) => chk.push([name,
+  JSON.stringify(got) === JSON.stringify(want), got, want]);
+
+ok("문제는 스무 가지다", POOL.length, 20);
+ok("더해서 나오는 값은 문제에 안 쓴다", POOL.filter(n => SUMS.has(n)).length, 0);
+ok("맞힐 것은 하나다", newQuiz().length, 1);
+ok("문제는 늘 쓸 수 있는 값에서 나온다",
+   Array.from({length:300}, () => POOL.includes(newQuiz()[0])).every(Boolean), true);
+ok("모든 문제는 저울로 잴 수 있다",
+   POOL.filter(w => {
+     for (let m = 0; m < 81; m++){
+       let v = 0;
+       for (let i = 0, x = m; i < 4; i++, x = Math.floor(x/3)) v += (x%3 - 1) * UNITS[i];
+       if (v === w) return false;
+     }
+     return true;
+   }).length, 0);
+for (const n of [2,3,4]){
+  const trials = Array.from({length:200}, () => deal(n));
+  ok(`${n}마리 — 저마다 추를 적어도 하나 든다`,
+     trials.every(t => t.own.every(a => a.length)), true);
+  ok(`${n}마리 — 퀴즈 추는 한 마리가 든다`,
+     trials.every(t => t.quizOwner.length === 1
+       && t.quizOwner[0] >= 0 && t.quizOwner[0] < n), true);
+}
+ok("추 하나뿐인 다람쥐가 있으면 그가 퀴즈 추를 든다",
+   [2,3,4].every(n => Array.from({length:300}, () => deal(n))
+     .every(t => t.own.some(a => a.length === 1)
+       ? t.own[t.quizOwner[0]].length === 1 : true)), true);
+
+reset(false); readKnobs();
+S.quiz = [11]; S.at["u1"] = "R";
+ok("차가 1 이면 최소 기울기만큼 기운다", Math.abs(tiltDeg()), V.tilt0);
+S.at["u27"] = "L"; S.at["u9"] = "L"; S.at["u3"] = "L";
+ok("많이 차이 나면 최대 기울기에서 멎는다", Math.abs(tiltDeg()), V.tilt1);
+for (const k of ["u1","u3","u9","u27"]) S.at[k] = "home";
+ok("아무것도 안 얹으면 수평이다", tiltDeg(), 0);
+ok("0 은 빈 칸이다", glyph(0, CAST).body, "");
+ok("추는 먹빛 실루엣이다", weightSVG("u1","").includes(`fill="${CAST}"`), true);
+ok("저울이 선 자리는 흰 판이다", boardSVG().includes(`fill="${SHEET}"`), true);
+/* 화살표는 맨 앞에 — 들보보다 뒤에 서면 가려진다 */
+ok("화살표가 저울보다 앞에 선다",
+   (S.sel = "u1", S.at["u1"] = "home",
+    boardSVG().lastIndexOf("class=\"go\"") > boardSVG().indexOf("class=\"beam\"")), true);
+S.sel = null;
+ok("슬롯 한 칸은 정사각형이다", cellH() - 2, V.slotW);
+ok("접시는 너비보다 한참 얕다", V.panD * 3 < V.pan, true);
+/* 실험실은 열어 두되, 잠그면 남의 추는 안 집힌다 */
+ok("다 만지기를 켜면 넷의 추를 다 집는다",
+   (S.god = true, ALL().every(canTouch)), true);
+ok("잠그면 제 추만 집힌다",
+   (S.god = false, S.me = 0, ALL().filter(canTouch).every(k => ownerOf(k) === 0)), true);
+S.god = true;
+ok("화살표는 자루와 머리가 달렸다 — 꼭짓점 일곱", arrowPath(40).split(" L ").length, 7);
+/* 움직이는 g 에는 제 transform 이 없어야 한다 — 있으면 CSS 가 그것을
+   덮어쓰면서 추가 옆으로 샌다 */
+ok("올림 내림은 곧게 위아래로만 간다",
+   (anim.k = "u1", anim.how = "drop", S.at["u1"] = "L",
+    /<g class="drop">/.test(boardSVG()) && !/<g transform="[^"]*" class="drop"/.test(boardSVG())),
+   true);
+anim.k = null; anim.how = ""; S.at["u1"] = "home";
+ok("위 세모가 수를 키운다", /data-d="1"[\s\S]*data-d="-1"/.test(answersHTML()), true);
+ok("아래로 가는 세모만 뒤집는다", (answersHTML().match(/ys-tri down/g) || []).length, 1);
+ok("정답 칸은 한 줄이다", (answersHTML().match(/class="ans"/g) || []).length, 1);
+ok("슬롯은 앞뒤 한 칸씩 거느린다", (slotHTML(0).match(/class="cell"/g) || []).length, 3);
+ok("칸마다 가로 칸막이를 두른다", /class="cell"/.test(cellSVG(7)), true);
+ok("그릇 마흔을 박아 두었다",
+   CUPS.length === 40 && CUPS.every(c => c.startsWith("data:image/png;base64,")), true);
+ok("퀴즈 추는 그릇 그림 그대로다", /<image href="data:image\/png/.test(weightSVG("q0","")), true);
+ok("물음표를 쓰지 않는다", /[?]</.test(weightSVG("q0","") + answersHTML()), false);
+ok("정답 칸은 그릇 · 같음표 · 슬롯 셋이다",
+   (answersHTML().match(/<img |<rect x="1" y="3"|class="win"/g) || []).length, 3);
+ok("다람쥐 얼굴 넷을 박아 두었다",
+   MUGS.length === 4 && MUGS.every(m => m.startsWith("data:image/png;base64,")), true);
+
+$("chk").innerHTML = chk.map(([n,p,got,want]) =>
+  `<div class="${p?"pass":"fail"}">${p?"✔":"✘"} ${n}`
+  + (p ? "" : ` — ${JSON.stringify(got)} ≠ ${JSON.stringify(want)}`) + `</div>`).join("")
+  + `<div class="hint" style="margin-top:6px">${chk.filter(c=>c[1]).length} / ${chk.length}</div>`;
+
+fillMe(); reset(false); render();
+</script>
+</body>
+</html>

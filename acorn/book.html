@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>도토리 — 바코드 읽기 시험</title>
+<style>
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css");
+
+  /* 혼자 서는 한 장이다. 깃헙 페이지스에 올려 **폰으로** 연다 —
+     카메라는 https 라야 열리기 때문이다. ys.css 는 걸지 않고 쓰는 값만 베꼈다 */
+  :root{
+    --ink-900:#12100d; --ink-800:#1b1815; --ink-700:#221e1a;
+    --line:#332e28;    --line-2:#4a433a;
+    --text:#ece7de;    --dim:#8b8275;
+    --gold:#e8b339;    --gold-lit:#ffd873; --green:#3fb950; --red:#e5534b;
+    --t-xs:11.5px; --t-sm:12.5px; --t-md:14.5px; --t-lg:16px; --t-2xl:25px;
+    --s-1:4px; --s-2:8px; --s-3:12px; --s-4:16px; --s-6:24px;
+    --r-sm:5px; --r-md:10px;
+    --font:"Pretendard Variable",Pretendard,-apple-system,"Malgun Gothic",
+      "맑은 고딕",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  /* class 의 display 가 hidden 속성을 이긴다 — 여기서 못 박는다 */
+  [hidden]{display:none !important}
+  body{margin:0;background:var(--ink-900);color:var(--text);
+    font:var(--t-md)/1.6 var(--font);-webkit-tap-highlight-color:transparent;
+    padding:var(--s-4);padding-bottom:var(--s-6);
+    max-width:620px;margin-inline:auto}
+  h1{font-size:var(--t-lg);margin:0 0 var(--s-1);color:var(--gold)}
+  p.lead{color:var(--dim);font-size:var(--t-sm);margin:0 0 var(--s-4)}
+
+  /* 카메라 — 눌러서 초점을 잡는다 */
+  .cam{position:relative;background:#000;border:1px solid var(--line);
+    border-radius:var(--r-md);overflow:hidden;aspect-ratio:4/3;cursor:crosshair}
+  video{width:100%;height:100%;object-fit:cover;display:block}
+  .guide{position:absolute;inset:26% 6%;border:2px solid var(--gold);
+    border-radius:6px;opacity:.5;pointer-events:none}
+  .guide::after{content:"";position:absolute;left:0;right:0;top:50%;
+    height:2px;background:var(--red);opacity:.75}
+  .cam.off .guide{display:none}
+  .cam.off::after{content:"카메라가 꺼져 있다";position:absolute;inset:0;
+    display:grid;place-items:center;color:var(--dim);font-size:var(--t-sm)}
+  /* 눌러 초점 잡은 자리 */
+  .spot{position:absolute;width:64px;height:64px;margin:-32px 0 0 -32px;
+    border:2px solid var(--gold-lit);border-radius:50%;pointer-events:none;
+    animation:pop .7s ease-out forwards}
+  @keyframes pop{from{transform:scale(1.5);opacity:1}to{transform:scale(1);opacity:0}}
+
+  .btns{display:flex;gap:var(--s-2);flex-wrap:wrap;margin:var(--s-3) 0}
+  button,label.file{font:inherit;font-size:var(--t-sm);background:var(--ink-700);
+    color:var(--text);border:1px solid var(--line-2);border-radius:var(--r-sm);
+    padding:9px 14px;cursor:pointer}
+  button.go{background:var(--gold);color:var(--ink-900);border-color:var(--gold);
+    font-weight:700}
+  button:disabled{opacity:.4}
+  input[type=file]{display:none}
+  input[type=text],input[type=number]{font:inherit;font-size:var(--t-sm);
+    background:var(--ink-700);color:var(--text);border:1px solid var(--line-2);
+    border-radius:var(--r-sm);padding:8px 10px}
+  input[type=text]{width:100%}
+  input[type=number]{width:74px}
+  input[type=range]{flex:1;accent-color:var(--gold)}
+
+  /* 확정된 것 */
+  .hit{background:var(--ink-800);border:1px solid var(--line);
+    border-radius:var(--r-md);padding:var(--s-4);margin:var(--s-3) 0}
+  .hit.sure{border-color:var(--green)}
+  .hit.none{color:var(--dim);font-size:var(--t-sm)}
+  .raw{font-size:var(--t-2xl);font-weight:700;letter-spacing:.04em;
+    word-break:break-all;font-variant-numeric:tabular-nums}
+  .reg{font-size:var(--t-lg);color:var(--gold-lit);
+    font-variant-numeric:tabular-nums;margin-top:var(--s-1)}
+  .meta{color:var(--dim);font-size:var(--t-sm);margin-top:var(--s-2)}
+  .ok{color:var(--green)} .bad{color:var(--red)} .warn{color:var(--gold)}
+
+  /* 지금 표 모으는 중 */
+  .votes{display:flex;flex-wrap:wrap;gap:var(--s-1);margin-top:var(--s-2)}
+  .vote{font-size:var(--t-xs);font-variant-numeric:tabular-nums;
+    border:1px solid var(--line-2);border-radius:var(--r-pill,999px);
+    padding:2px 8px;color:var(--dim)}
+  .vote.top{border-color:var(--gold);color:var(--gold-lit)}
+
+  table{width:100%;border-collapse:collapse;font-size:var(--t-sm);
+    font-variant-numeric:tabular-nums}
+  th,td{text-align:left;padding:5px 6px;border-bottom:1px solid var(--line)}
+  th{color:var(--dim);font-weight:600;font-size:var(--t-xs)}
+  td.n{text-align:right;color:var(--dim)}
+  tr.drop td{color:var(--faint,#5b544a)}
+
+  .rows{display:flex;align-items:center;gap:var(--s-2);margin:var(--s-2) 0}
+  .rows>span:first-child{color:var(--dim);font-size:var(--t-sm);white-space:nowrap;
+    min-width:96px}
+  .rows .num{color:var(--dim);font-size:var(--t-sm);min-width:42px;text-align:right;
+    font-variant-numeric:tabular-nums}
+  small.note{display:block;color:var(--dim);font-size:var(--t-xs);line-height:1.5;
+    margin-top:var(--s-2)}
+  hr{border:0;border-top:1px solid var(--line);margin:var(--s-4) 0}
+</style>
+</head>
+<body>
+
+<h1>바코드 읽기 시험</h1>
+<p class="lead">코드39·코다바에는 <b>검사 숫자가 없다.</b> 한 번 읽힌 값은 못 믿는다 —
+  그래서 <b>같은 값이 여러 번</b> 나와야 확정한다. 화면을 <b>눌러 초점</b>을 잡을 수 있다.</p>
+
+<div class="cam off" id="cam">
+  <video id="video" playsinline muted></video>
+  <div class="guide"></div>
+</div>
+
+<div class="btns">
+  <button class="go" id="start">카메라 켜기</button>
+  <button id="stop" disabled>끄기</button>
+  <button id="torch" hidden>손전등</button>
+  <label class="file">사진에서 읽기<input type="file" id="pick" accept="image/*"></label>
+</div>
+<div class="rows" id="zoomRow" hidden><span>확대</span><input type="range" id="zoom"></div>
+
+<div class="hit none" id="hit">아직 확정된 것이 없다.</div>
+
+<div class="rows"><span>맞춰 볼 번호</span>
+  <input type="text" id="want" placeholder="0024408 (있으면 맞나 견줘 본다)" inputmode="numeric"></div>
+<div class="rows"><span>자릿수</span>
+  <input type="text" id="len" value="7,8,10" inputmode="numeric" style="width:96px">
+  <small class="note" style="margin:0">이 자릿수라야 센다 (여럿이면 쉼표).
+    작은 번호대는 <b>0024408</b> 일곱 자리, 큰 번호대는 <b>20131523</b> 여덟 자리로
+    찍힌다. 통째로 열 자리를 찍어 둔 것도 있다. 비우면 안 거른다</small></div>
+<div class="rows"><span>쓰는 번호대</span>
+  <input type="text" id="span" style="min-width:250px"
+    value="0000000001-0000025999, 0020130000-0020132999">
+  <small class="note" style="margin:0">이 사이라야 센다 (여럿이면 쉼표).
+    <b>자릿수만으로는 못 거른다</b> — 여덟 자리를 받아 주는 순간
+    <b>00244081</b> 같은 한 자리 늘어난 오독이 같이 들어온다. 지금 장서의 끝은
+    0000024845 · 0020131830 이라 앞자리를 조금 넉넉히 잡아 두었다.
+    책이 늘면 여기를 넓힌다. 비우면 안 거른다</small></div>
+<div class="rows"><span>필요한 표</span>
+  <input type="range" id="need" min="1" max="6" value="3"><span class="num" id="vNeed">3표</span></div>
+<div class="rows"><span>보는 창</span>
+  <input type="range" id="win" min="3" max="24" value="10"><span class="num" id="vWin">10회</span></div>
+
+<hr>
+<div class="rows">
+  <b style="font-size:var(--t-sm)">읽힌 것 모두</b>
+  <span class="num" id="count" style="min-width:auto"></span>
+  <button id="copy">JSON 베끼기</button>
+  <button id="clear">지우기</button>
+</div>
+<table><thead><tr><th>원문</th><th>꼴</th><th>등록번호</th><th class="n">번</th></tr></thead>
+<tbody id="log"></tbody></table>
+
+<small class="note" id="stat"></small>
+<small class="note" id="engine">엔진을 아직 안 골랐다.</small>
+<small class="note" id="check"></small>
+<small class="note">등록번호는 read365 가 쓰는 <b>10자리</b>다 (예: 0000024408 = 「로마 제국」,
+  청구기호 922.06 켈298ㄹ). 바코드에 일곱 자리로 찍혀 있어도 앞을 0으로 채우면 같은 번호다.
+  번호대가 <b>둘</b>이고 자릿수가 다르다 — 0000024408 은 0024408 로, 0020131523 은
+  20131523 으로 찍힌다. 비도서는 NB00000305 처럼 글자가 앞에 붙는다.</small>
+
+<script>
+(function () {
+  "use strict";
+  const $ = s => document.getElementById(s);
+  const video = $("video"), cam = $("cam");
+  let track = null, det = null, zx = null, engine = "";
+
+  const LOG = new Map();     // 원문 → {raw, fmt, n, first, last, reg, kind, drop}
+  let recent = [];           // 최근 읽힌 값들 — 여기서 표를 센다
+  let sure = null;           // 확정된 값
+  let reads = 0;
+
+  /* ── 읽힌 값을 등록번호로 고쳐 읽는다 ─────────────────────────────
+     코다바는 앞뒤에 A~D 를 달고, 코드39 는 * 로 감싼다. 그것만 떼고
+     **글자 앞머리는 남긴 채** 열 자리가 되게 0을 채운다 (비도서 NB00000305). */
+  function toReg(raw) {
+    const s = String(raw).trim().toUpperCase();
+    if (/^(978|979)\d{10}$/.test(s)) return { kind: "isbn", value: s, digits: 13 };
+    const core = s.replace(/^[A-D*]/, "").replace(/[A-D*]$/, "");
+    const m = core.match(/^([A-Z]{0,2})(\d+)$/);
+    if (!m) return { kind: "모름", value: core || s, digits: 0 };
+    const [, head, digits] = m;
+    const pad = Math.max(0, 10 - head.length - digits.length);
+    return { kind: "등록번호", value: head + "0".repeat(pad) + digits,
+             digits: digits.length };
+  }
+
+  /* ── 쓰는 번호대 안인가 ─────────────────────────────────────────
+     **자릿수 다음에 오는 그물이다.** 여덟 자리를 받아 주지 않으면 큰
+     번호대(0020…)를 아예 못 읽고, 받아 주면 한 자리 늘어난 오독이 따라
+     들어온다. 도서실이 실제로 매긴 번호는 두 토막뿐이니 그 밖은 버린다.
+     글자가 붙은 비도서(NB00000305)에는 대지 않는다 — 번호대가 따로 없다. */
+  function inSpan(value) {
+    if (!/^\d{10}$/.test(value)) return true;
+    const spans = $("span").value.split(",").map(x => x.trim()).filter(Boolean)
+      .map(x => x.split("-").map(y => y.trim()));
+    if (!spans.length) return true;
+    return spans.some(([a, b]) => value >= a && value <= (b || a));
+  }
+
+  /* ── 표를 세어 확정한다 ──────────────────────────────────────────
+     **이 판의 핵심이다.** 코드39 는 검사 숫자가 없어 한 프레임의 값은
+     틀리기 일쑤다 (실측: 37번 읽어 10가지, 맞는 것은 35%). 최근 창 안에서
+     같은 값이 필요한 표를 넘고 **2등보다 많아야** 확정한다. */
+  function tally(list) {
+    const c = new Map();
+    for (const v of list) c.set(v, (c.get(v) || 0) + 1);
+    return [...c.entries()].sort((a, b) => b[1] - a[1]);
+  }
+  function judge(list, need) {
+    const rank = tally(list);
+    if (!rank.length) return null;
+    const [v, n] = rank[0];
+    const second = rank[1] ? rank[1][1] : 0;
+    return (n >= need && n > second) ? { value: v, n, second } : null;
+  }
+
+  /* ── 검산 — 카메라 없이 도는 것만 ──────────────────────────────── */
+  (function selfCheck() {
+    const bad = [];
+    let n = 0;
+    const ok = (name, got, want) => {
+      n++;
+      if (JSON.stringify(got) !== JSON.stringify(want))
+        bad.push(`${name}: ${JSON.stringify(got)} ≠ ${JSON.stringify(want)}`);
+    };
+    const reg = r => toReg(r).value;
+    ok("코다바 앞뒤 글자", reg("A0024408B"), "0000024408");
+    ok("코드39 별표", reg("*0024408*"), "0000024408");
+    ok("숫자만", reg("0024408"), "0000024408");
+    ok("이미 열 자리", reg("0000024408"), "0000024408");
+    ok("소문자·여백", reg(" a0024408c "), "0000024408");
+    ok("비도서", reg("NB00000305"), "NB00000305");
+    ok("ISBN 은 따로", toReg("9788935658435").kind, "isbn");
+    ok("자릿수를 센다", toReg("0024408").digits, 7);
+    // 큰 번호대 — 여덟 자리로 찍힌다
+    ok("큰 번호대 여덟 자리", reg("20131523"), "0020131523");
+    ok("큰 번호대 열 자리 그대로", reg("0020131523"), "0020131523");
+    ok("큰 번호대 자릿수", toReg("20131523").digits, 8);
+    ok("작은 번호대는 번호대 안", inSpan(reg("0024408")), true);
+    ok("큰 번호대도 번호대 안", inSpan(reg("20131523")), true);
+    // 자릿수만으로는 못 거르던 것 — 여기서 걸린다
+    ok("한 자리 늘어난 오독은 번호대 밖", inSpan(reg("00244081")), false);
+    ok("두 번호대 사이도 밖", inSpan(reg("0010000000")), false);
+    ok("비도서에는 안 댄다", inSpan(reg("NB00000305")), true);
+    // 표 세기 — 실제로 찍힌 15초치를 그대로 넣어 본다
+    const real = ["0024408", "002448", "0024408", "002408", "0024448", "0024408",
+                  "0024401", "0024408", "002448", "0024408"];
+    ok("다수결이 맞는 것을 고른다", judge(real, 3).value, "0024408");
+    ok("표가 모자라면 안 고른다", judge(["0024408", "002448"], 3), null);
+    ok("동점이면 안 고른다", judge(["a", "a", "b", "b"], 2), null);
+    $("check").innerHTML = bad.length
+      ? `<span class="bad">검산 ${bad.length}가지 어긋났다 — ${bad.join(" / ")}</span>`
+      : `<span class="ok">검산 ${n}가지 다 통과</span>`;
+  })();
+
+  /* ── 엔진 ────────────────────────────────────────────────────
+     1) 폰에 붙은 BarcodeDetector 를 먼저 쓴다 (안드로이드 크롬)
+     2) 없으면 (아이폰·윈도) ZXing 을 내려받는다 — **꼴을 적어 줘야**
+        코다바를 본다. 안 적으면 코드39·128·EAN 만 본다 */
+  const WANT = ["codabar", "code_39", "code_93", "code_128", "itf",
+                "ean_13", "ean_8", "upc_a", "upc_e", "qr_code"];
+
+  async function pickEngine() {
+    if (window.BarcodeDetector) {
+      try {
+        const sup = await BarcodeDetector.getSupportedFormats();
+        const use = WANT.filter(f => sup.includes(f));
+        if (use.length) {
+          det = new BarcodeDetector({ formats: use });
+          engine = "BarcodeDetector";
+          say(`엔진: <b>${engine}</b> (폰에 붙은 것) · ${use.length}가지` +
+              (sup.includes("codabar") ? "" : ` <span class="bad">코다바는 못 읽는다</span>`));
+          return;
+        }
+      } catch (e) { /* 아래로 */ }
+    }
+    await load("https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js");
+    const Z = window.ZXing;
+    const hints = new Map();
+    hints.set(Z.DecodeHintType.POSSIBLE_FORMATS, [
+      Z.BarcodeFormat.CODABAR, Z.BarcodeFormat.CODE_39, Z.BarcodeFormat.CODE_93,
+      Z.BarcodeFormat.CODE_128, Z.BarcodeFormat.ITF, Z.BarcodeFormat.EAN_13,
+      Z.BarcodeFormat.EAN_8, Z.BarcodeFormat.UPC_A, Z.BarcodeFormat.UPC_E,
+      Z.BarcodeFormat.QR_CODE]);
+    hints.set(Z.DecodeHintType.TRY_HARDER, true);
+    zx = new Z.BrowserMultiFormatReader(hints);
+    engine = "ZXing";
+    say(`엔진: <b>${engine}</b> (내려받은 것, 코다바 켬)`);
+  }
+  let engineLine = "";
+  function say(html) { engineLine = html; $("engine").innerHTML = html; }
+  const load = src => new Promise((res, rej) => {
+    const s = document.createElement("script");
+    s.src = src; s.onload = res; s.onerror = () => rej(new Error("못 내려받았다: " + src));
+    document.head.appendChild(s);
+  });
+
+  /* ── 카메라 ──────────────────────────────────────────────── */
+  async function start() {
+    $("start").disabled = true;
+    try {
+      if (!engine) await pickEngine();
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" },
+                 width: { ideal: 2560 }, height: { ideal: 1440 },
+                 // 흐린 화면이 오독의 주범이다 — 되는 기기면 계속 초점을 잡는다
+                 focusMode: { ideal: "continuous" },
+                 advanced: [{ focusMode: "continuous" }] },
+        audio: false,
+      });
+      video.srcObject = stream;
+      await video.play();
+      track = stream.getVideoTracks()[0];
+      cam.classList.remove("off");
+      $("stop").disabled = false;
+      knobs();
+      engine === "ZXing" ? loopZX() : loopNative();
+    } catch (e) {
+      say(`<span class="bad">카메라를 못 열었다 — ${e.message}</span> (https 라야 열린다)`);
+      $("start").disabled = false;
+    }
+  }
+
+  function stopCam() {
+    if (zx) { try { zx.reset(); } catch (e) {} }
+    if (track) { track.stop(); track = null; }
+    video.srcObject = null;
+    cam.classList.add("off");
+    $("start").disabled = false; $("stop").disabled = true;
+    $("torch").hidden = true; $("zoomRow").hidden = true;
+  }
+
+  /** 손전등·확대·초점 — 되는 기기에서만 뜬다 */
+  function knobs() {
+    const cap = track.getCapabilities ? track.getCapabilities() : {};
+    const set = track.getSettings ? track.getSettings() : {};
+    const can = [];
+    if (cap.focusMode) can.push("초점 " + cap.focusMode.join("/"));
+    if (cap.torch) can.push("손전등");
+    if (cap.zoom) can.push("확대");
+    say(engineLine + (can.length ? ` · 쓸 수 있는 것: ${can.join(" · ")}` : "") +
+        ` · 화면 ${set.width || "?"}×${set.height || "?"}`);
+
+    if (cap.focusMode && cap.focusMode.includes("continuous")) {
+      track.applyConstraints({ advanced: [{ focusMode: "continuous" }] }).catch(() => {});
+    }
+    if (cap.torch) {
+      $("torch").hidden = false;
+      let on = false;
+      $("torch").onclick = async () => {
+        on = !on;
+        await track.applyConstraints({ advanced: [{ torch: on }] }).catch(() => {});
+        $("torch").classList.toggle("go", on);
+      };
+    }
+    if (cap.zoom) {
+      $("zoomRow").hidden = false;
+      const z = $("zoom");
+      z.min = cap.zoom.min; z.max = cap.zoom.max;
+      z.step = cap.zoom.step || 0.1; z.value = set.zoom || cap.zoom.min;
+      z.oninput = () => track.applyConstraints({ advanced: [{ zoom: +z.value }] })
+        .catch(() => {});
+    }
+  }
+
+  /** 눌러서 초점 — 되면 그 자리로, 안 되면 한 번 다시 잡게만 한다 */
+  cam.addEventListener("click", async e => {
+    if (!track) return;
+    const r = cam.getBoundingClientRect();
+    const x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+    const dot = document.createElement("div");
+    dot.className = "spot";
+    dot.style.left = (e.clientX - r.left) + "px";
+    dot.style.top = (e.clientY - r.top) + "px";
+    cam.appendChild(dot);
+    setTimeout(() => dot.remove(), 700);
+    const cap = track.getCapabilities ? track.getCapabilities() : {};
+    const adv = {};
+    if (cap.pointsOfInterest) adv.pointsOfInterest = [{ x, y }];
+    if (cap.focusMode && cap.focusMode.includes("single-shot")) adv.focusMode = "single-shot";
+    else if (cap.focusMode && cap.focusMode.includes("manual")) adv.focusMode = "continuous";
+    if (!Object.keys(adv).length) return;
+    try {
+      await track.applyConstraints({ advanced: [adv] });
+      // 한 번 잡고 나면 다시 계속 잡기로 돌려 둔다
+      if (cap.focusMode && cap.focusMode.includes("continuous"))
+        setTimeout(() => track && track.applyConstraints(
+          { advanced: [{ focusMode: "continuous" }] }).catch(() => {}), 2500);
+    } catch (err) { /* 못 잡는 기기도 있다 */ }
+  });
+
+  async function loopNative() {
+    while (track) {
+      try {
+        const got = await det.detect(video);
+        for (const b of got) saw(b.rawValue, b.format);
+      } catch (e) { /* 프레임 하나쯤은 넘긴다 */ }
+      await new Promise(r => setTimeout(r, 90));
+    }
+  }
+  function loopZX() {
+    zx.decodeFromVideoElementContinuously(video, res => {
+      if (res) saw(res.getText(), fmtName(res.getBarcodeFormat()));
+    });
+  }
+  function fmtName(v) {
+    const Z = window.ZXing;
+    if (!Z || typeof v !== "number") return String(v);
+    for (const k of Object.keys(Z.BarcodeFormat))
+      if (Z.BarcodeFormat[k] === v) return k.toLowerCase();
+    return String(v);
+  }
+
+  /* ── 읽혔다 ──────────────────────────────────────────────── */
+  function saw(raw, fmt) {
+    const now = Date.now();
+    const got = toReg(raw);
+    const want = $("len").value.split(/[,\s]+/).map(n => parseInt(n, 10))
+      .filter(n => n > 0);
+    /* 버렸으면 **왜** 버렸는지를 남긴다 — 자릿수를 넓혀야 할지 번호대를
+       넓혀야 할지가 화면에서 바로 보여야 한다 */
+    let drop = "";
+    if (got.kind === "등록번호") {
+      if (want.length && !want.includes(got.digits)) drop = "자릿수";
+      else if (!inSpan(got.value)) drop = "번호대";
+    }
+
+    reads++;
+    const rec = LOG.get(raw) || { raw, fmt: String(fmt), n: 0, first: now,
+                                  reg: got.value, kind: got.kind, drop };
+    rec.n++; rec.last = now; rec.fmt = String(fmt); rec.drop = drop;
+    LOG.set(raw, rec);
+
+    // EAN·UPC 에는 **검사 숫자가 있다** — 한 번 읽힌 것을 믿어도 된다.
+    // 코드39·코다바에만 표를 센다
+    const checked = /^(ean|upc)/.test(String(fmt)) || got.kind === "isbn";
+    if (checked) {
+      sure = raw;
+      if (navigator.vibrate) navigator.vibrate([30, 40, 30]);
+      showSure({ value: raw, n: 1, second: 0, checked: true });
+    } else if (!drop) {
+      recent.push(raw);
+      const win = +$("win").value;
+      while (recent.length > win) recent.shift();
+      const w = judge(recent, +$("need").value);
+      if (w && w.value !== sure) {
+        sure = w.value;
+        if (navigator.vibrate) navigator.vibrate([30, 40, 30]);
+        showSure(w);
+      } else if (!sure) {
+        showSeeing(raw);          // 아직 표가 모자란다 — 무엇을 보고 있는지는 보여 준다
+      }
+    } else if (!sure) {
+      showSeeing(raw, drop);
+    }
+    draw();
+  }
+
+  /** 아직 확정 전 — 지금 읽히는 것을 흐리게 보여 준다 */
+  function showSeeing(raw, why) {
+    const got = toReg(raw);
+    const rank = tally(recent);
+    const top = rank[0];
+    $("hit").className = "hit";
+    $("hit").innerHTML =
+      `<div class="raw" style="opacity:.6">${esc(raw)}</div>` +
+      `<div class="meta">${why
+        ? `<span class="bad">${why === "번호대" ? "쓰는 번호대 밖이라 버렸다"
+            : "자릿수가 안 맞아 버렸다"}</span> ` +
+          `(${got.digits}자리 → ${esc(got.value)})`
+        : `<span class="warn">보는 중</span> — ${top ? `${esc(top[0])} ${top[1]}표` : ""}` +
+          ` / ${$("need").value}표 모이면 확정한다`}</div>`;
+  }
+
+  function showSure(w) {
+    const got = toReg(w.value);
+    const want = $("want").value.trim();
+    const judgeTxt = !want ? ""
+      : toReg(want).value === got.value
+        ? ` · <span class="ok">맞춰 본 번호와 같다</span>`
+        : ` · <span class="bad">맞춰 본 번호와 다르다</span>`;
+    $("hit").className = "hit sure";
+    $("hit").innerHTML =
+      `<div class="raw">${esc(w.value)}</div>` +
+      `<div class="reg">${got.kind} · ${esc(got.value)}</div>` +
+      `<div class="meta">확정 — ` +
+      (w.checked ? `검사 숫자가 있는 바코드라 한 번으로 믿는다`
+                 : `최근 ${recent.length}회 중 <b>${w.n}표</b> (2등 ${w.second}표)`) +
+      ` · ${new Date().toLocaleTimeString("ko-KR")}${judgeTxt}</div>`;
+  }
+
+  const esc = s => String(s).replace(/[<>&]/g, c => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]));
+
+  function draw() {
+    const rows = [...LOG.values()].sort((a, b) => b.last - a.last);
+    $("count").textContent = `${reads}번 · ${rows.length}가지`;
+    $("log").innerHTML = rows.map(r =>
+      `<tr class="${r.drop ? "drop" : ""}"><td>${esc(r.raw)}` +
+      `${r.drop ? " (" + r.drop + " 버림)" : ""}</td>` +
+      `<td>${esc(r.fmt)}</td><td>${esc(r.reg)}</td><td class="n">${r.n}</td></tr>`).join("");
+
+    // 지금 창에 모인 표
+    const rank = tally(recent);
+    $("stat").innerHTML = rank.length
+      ? `지금 창: ` + rank.map((e, i) =>
+          `<span class="vote${i ? "" : " top"}">${esc(e[0])} ${e[1]}</span>`).join(" ")
+      : "";
+    const want = $("want").value.trim();
+    if (want && reads) {
+      const w = toReg(want).value;
+      let hitN = 0;
+      for (const r of LOG.values()) if (r.reg === w) hitN += r.n;
+      $("stat").innerHTML += `<br>맞는 값이 ${reads}번 중 <b>${hitN}번</b>` +
+        ` (${(hitN / reads * 100).toFixed(0)}%) 읽혔다`;
+    }
+  }
+
+  /* ── 사진 한 장으로도 읽어 본다 ──────────────────────────────── */
+  $("pick").onchange = async e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    if (!engine) await pickEngine();
+    const url = URL.createObjectURL(f);
+    try {
+      if (engine === "ZXing") {
+        const res = await zx.decodeFromImageUrl(url);
+        saw(res.getText(), fmtName(res.getBarcodeFormat()));
+      } else {
+        const bmp = await createImageBitmap(f);
+        const got = await det.detect(bmp);
+        if (!got.length) throw new Error("못 찾았다");
+        for (const b of got) saw(b.rawValue, b.format);
+      }
+    } catch (err) {
+      $("hit").className = "hit none";
+      $("hit").textContent = "사진에서 바코드를 못 찾았다 — " + (err.message || err);
+    }
+    URL.revokeObjectURL(url);
+    e.target.value = "";
+  };
+
+  $("start").onclick = start;
+  $("stop").onclick = stopCam;
+  $("need").oninput = () => { $("vNeed").textContent = $("need").value + "표"; };
+  $("win").oninput = () => { $("vWin").textContent = $("win").value + "회"; };
+  $("clear").onclick = () => {
+    LOG.clear(); recent = []; sure = null; reads = 0; draw();
+    $("hit").className = "hit none"; $("hit").textContent = "아직 확정된 것이 없다.";
+  };
+  $("copy").onclick = () => {
+    const out = JSON.stringify({
+      engine, want: $("want").value.trim(), len: +$("len").value,
+      need: +$("need").value, win: +$("win").value, reads,
+      sure, list: [...LOG.values()].map(r => ({
+        raw: r.raw, format: r.fmt, reg: r.reg, kind: r.kind, count: r.n,
+        dropped: !!r.drop, first: new Date(r.first).toISOString(),
+        last: new Date(r.last).toISOString(),
+      })),
+    }, null, 1);
+    navigator.clipboard?.writeText(out);
+    prompt("읽은 것 — 이대로 보내 주면 된다", out);
+  };
+  draw();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,815 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>도토리 — 벌집 컬링 실험실</title>
+<style>
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css");
+
+  /* 이 페이지는 **혼자 선다.** 서버도 딸린 파일도 없이 깃헙 페이지스에 한 장으로
+     올라간다 — 그래서 ys.css 를 걸지 않고 **쓰는 값만 여기 베껴 둔다.**
+     ys.css 가 바뀌면 이 토막도 손으로 맞춘다. 실험실은 학생이 보는 화면이
+     아니라서 조금 어긋나도 게임에는 안 묻는다.
+     ponytail: 베껴 둔 것이 한 곳뿐이라 손으로 맞춘다. 실험실이 늘어 여러 장이
+     되면 그때 공통 토막을 빼낸다 */
+  :root{
+    --ink-900:#12100d; --ink-800:#1b1815; --ink-700:#221e1a;
+    --line:#332e28;    --line-2:#4a433a;
+    --text:#ece7de;    --dim:#8b8275;
+    --gold:#e8b339;    --gold-lit:#ffd873; --green:#3fb950; --red:#e5534b;
+    --t-xs:11.5px; --t-sm:12.5px; --t-md:14.5px; --t-lg:16px; --t-2xl:25px;
+    --s-2:8px; --s-3:12px; --s-4:16px; --s-6:24px;
+    --r-sm:5px;
+    --m-state:180ms ease;
+    --font:"Pretendard Variable",Pretendard,-apple-system,"Malgun Gothic",
+      "맑은 고딕",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  /* ys.css 의 html,body{height:100%} 는 **안 베낀다** — 이 페이지는 두 칸이
+     세로로 쌓이는 판이라 키를 100%로 못 박으면 폰에서 아래 칸이 판을 덮는다 */
+  body{margin:0;background:var(--ink-900);color:var(--text);
+    font:var(--t-lg)/1.6 var(--font);-webkit-tap-highlight-color:transparent;
+    touch-action:manipulation}
+
+  /* 이 페이지는 운영자가 본다. 학생 화면과 달리 글자가 있어도 된다 */
+  body{-webkit-user-select:auto;user-select:auto;overflow:auto;
+    display:grid;grid-template-columns:1fr 340px;min-height:100vh}
+  @media (max-width:1040px){body{grid-template-columns:1fr}}
+
+  /* ── 왼쪽: 판 ───────────────────────────────────────────────── */
+  .stage{display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:var(--s-4);
+    padding:var(--s-6);position:sticky;top:0;align-self:start;
+    height:100vh;overflow:auto}
+  @media (max-width:1040px){.stage{position:static;height:auto;padding:var(--s-4)}}
+
+  /* 판은 창에 맞춰 줄어든다 — 실험실은 한 화면에 다 들어와야 눈으로 잰다 */
+  svg.board{width:min(100%,760px);height:auto;
+    max-height:calc(100vh - 140px);touch-action:manipulation}
+  @media (max-width:1040px){svg.board{max-height:none}}
+  .tile{cursor:pointer}
+  .tile:hover{stroke:var(--gold)!important;stroke-width:2.6!important}
+  .tile.sel{stroke:var(--gold-lit)!important;stroke-width:3.2!important}
+  .glyph,.stone{pointer-events:none}
+  .pt{font:600 11px/1 var(--font);text-anchor:middle;dominant-baseline:central}
+
+  /* 발사구 — 판 밖에 둘러선 작은 화살. 누르면 그 자리로 스톤이 들어간다 */
+  .port{cursor:pointer;opacity:.34;transition:opacity var(--m-state)}
+  .port:hover{opacity:1}
+  svg.busy .port{display:none}
+  .trace{fill:none;stroke:var(--gold);stroke-width:2.4;opacity:.5;
+    stroke-dasharray:5 6;pointer-events:none}
+
+  /* 점수 줄 */
+  .tally{display:flex;align-items:center;gap:var(--s-4);
+    font:var(--t-lg)/1 var(--font);color:var(--dim)}
+  .tally b{color:var(--text);font-size:var(--t-2xl);font-variant-numeric:tabular-nums}
+  .pips{display:flex;gap:7px}
+  .pip{width:15px;height:15px;border-radius:50%;background:var(--ink-700);
+    border:1px solid var(--line-2)}
+  .pip.left{background:var(--gold);border-color:var(--gold)}
+  .pip.gone{background:transparent;border-style:dashed;opacity:.45}
+
+  /* ── 오른쪽: 손잡이들 ──────────────────────────────────────── */
+  .panel{background:var(--ink-800);border-left:1px solid var(--line);
+    padding:var(--s-6) var(--s-4);display:flex;flex-direction:column;
+    gap:10px;font:var(--t-md)/1.6 var(--font);color:var(--text)}
+  .panel h2{font-size:var(--t-lg);margin:0;color:var(--gold)}
+  .panel h3{font-size:var(--t-xs);margin:var(--s-3) 0 0;color:var(--dim);
+    letter-spacing:.12em;font-weight:700}
+  .panel small{color:var(--dim);font-size:var(--t-sm);line-height:1.55}
+  .row{display:flex;align-items:center;gap:var(--s-2);justify-content:space-between}
+  .row>span:first-child{color:var(--dim);font-size:var(--t-sm);white-space:nowrap}
+  select,input[type=number]{font:inherit;font-size:var(--t-sm);
+    background:var(--ink-700);color:var(--text);border:1px solid var(--line-2);
+    border-radius:var(--r-sm);padding:3px 6px}
+  input[type=range]{width:120px;accent-color:var(--gold)}
+  button{font:inherit;font-size:var(--t-sm);background:var(--ink-700);
+    color:var(--text);border:1px solid var(--line-2);border-radius:var(--r-sm);
+    padding:6px 10px;cursor:pointer}
+  button:hover{border-color:var(--gold);color:var(--gold)}
+  button.on{background:var(--gold);color:var(--ink-900);border-color:var(--gold)}
+  button:disabled{opacity:.4;cursor:default}
+  .btns{display:flex;gap:6px;flex-wrap:wrap}
+  hr{border:0;border-top:1px solid var(--line);margin:var(--s-2) 0;width:100%}
+  .num{font-variant-numeric:tabular-nums;font-size:var(--t-sm);color:var(--dim);
+    min-width:46px;text-align:right}
+
+  /* 셈한 것 */
+  .dist{max-height:280px;overflow:auto;display:flex;flex-direction:column;gap:3px}
+  .bar{display:grid;grid-template-columns:32px 1fr 92px;align-items:center;gap:6px;
+    font-size:var(--t-sm);font-variant-numeric:tabular-nums}
+  .bar i{font-style:normal;text-align:right;color:var(--text)}
+  .bar u{text-decoration:none;height:11px;background:var(--line-2);
+    border-radius:2px;display:block;min-width:1px}
+  .bar.best u{background:var(--gold)}
+  .bar em{font-style:normal;text-align:right;color:var(--dim);font-size:var(--t-xs)}
+  #answer{font-size:var(--t-sm);line-height:1.6}
+  #answer b{color:var(--gold)}
+  .ok{color:var(--green);font-size:var(--t-xs)}
+  .bad{color:var(--red);font-size:var(--t-xs)}
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <svg class="board" id="svg"></svg>
+  <div class="tally">
+    <span>점수 <b id="score">0</b></span>
+    <div class="pips" id="pips"></div>
+    <button id="reset">스톤 물리기</button>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>벌집 컬링 실험실</h2>
+  <small>판 밖 작은 화살을 누르면 그 들머리·그 방향으로 스톤이 미끄러진다.
+    타일을 누르면 종류가 돌고, <b>Shift+누름</b>이면 점수가 오른다.</small>
+
+  <h3>판</h3>
+  <div class="row"><span>한 변</span>
+    <div class="btns"><button data-n="3">3칸</button><button data-n="4">4칸</button>
+      <button data-n="5" class="on">5칸</button></div></div>
+  <div class="row"><span>구멍</span><input type="range" id="wHole" min="0" max="40" value="10"><span class="num" id="vHole">10%</span></div>
+  <div class="row"><span>눈</span><input type="range" id="wSnow" min="0" max="60" value="18"><span class="num" id="vSnow">18%</span></div>
+  <div class="row"><span>화살표</span><input type="range" id="wArrow" min="0" max="60" value="22"><span class="num" id="vArrow">22%</span></div>
+  <div class="row"><span>점수 붙은 칸</span><input type="range" id="wPt" min="0" max="80" value="45"><span class="num" id="vPt">45%</span></div>
+  <div class="btns"><button id="roll">새로 뽑기</button><button id="copy">판 베끼기</button>
+    <button id="paste">판 붙이기</button></div>
+
+  <h3>고른 타일</h3>
+  <div class="row"><span>종류</span>
+    <select id="kind"><option value="ice">얼음 — 그대로 간다</option>
+      <option value="snow">눈 — 멈춘다</option>
+      <option value="hole">구멍 — 빠진다</option>
+      <option value="arrow">화살표 — 꺾인다</option></select></div>
+  <div class="row"><span>화살 방향</span>
+    <div class="btns"><button id="turnL">↺ 왼쪽</button><button id="turnR">오른쪽 ↻</button></div></div>
+  <div class="row"><span>점수</span>
+    <input type="number" id="pt" min="-2" max="2" step="1" value="0" style="width:74px"></div>
+
+  <hr>
+  <h3>보임새 — 타일</h3>
+  <div class="row"><span>결</span>
+    <select id="pal"><option value="frost">서리 — 푸른 얼음</option>
+      <option value="ink">먹 — 무채색</option>
+      <option value="paper">종이 — 누런 등사기</option></select></div>
+  <div class="row"><span>머리</span>
+    <select id="orient"><option value="pointy">뾰족머리 — 가로줄 아홉</option>
+      <option value="flat">평머리 — 세로줄 아홉</option></select></div>
+  <div class="row"><span>틈</span><input type="range" id="gap" min="0" max="16" value="5"><span class="num" id="vGap">.05</span></div>
+  <div class="row"><span>테두리</span><input type="range" id="stroke" min="0" max="40" value="12"><span class="num" id="vStroke">1.2</span></div>
+  <div class="row"><span>도톰함</span><input type="range" id="bevel" min="0" max="100" value="55"><span class="num" id="vBevel">55%</span></div>
+  <div class="row"><span>점수 표시</span>
+    <select id="ptShow"><option value="num">숫자</option><option value="dots">점</option>
+      <option value="none">안 보임</option></select></div>
+  <div class="row"><span>화살 모양</span>
+    <select id="arrowShape"><option value="solid">채운 삼각</option>
+      <option value="line">가는 화살</option><option value="chev">겹살</option></select></div>
+
+  <h3>보임새 — 스톤</h3>
+  <div class="row"><span>빛깔</span>
+    <select id="sPal"><option value="cool">네 마리 네 빛깔 (찬 쪽)</option>
+      <option value="warm">네 마리 네 빛깔 (더운 쪽)</option>
+      <option value="one">한 빛깔에 번호</option></select></div>
+  <div class="row"><span>크기</span><input type="range" id="sSize" min="30" max="85" value="54"><span class="num" id="vSize">.54</span></div>
+  <div class="row"><span>생김새</span>
+    <select id="sStyle"><option value="stone">컬링 스톤 — 손잡이</option>
+      <option value="disc">민 원반</option>
+      <option value="mug">다람쥐 얼굴</option></select></div>
+  <div class="row"><span>그림자</span>
+    <select id="sShadow"><option value="on">있다</option><option value="off">없다</option></select></div>
+
+  <h3>움직임</h3>
+  <div class="row"><span>칸당</span><input type="range" id="speed" min="40" max="400" value="130"><span class="num" id="vSpeed">130ms</span></div>
+  <div class="row"><span>미끄러짐</span>
+    <select id="ease"><option value="out">끝에서 늦다</option>
+      <option value="linear">고르게</option><option value="inout">양끝이 늦다</option></select></div>
+
+  <hr>
+  <h3>셈하기</h3>
+  <small id="cost">—</small>
+  <div class="btns"><button id="solve">최대 점수와 분포를 낸다</button>
+    <button id="play" disabled>최선을 재생</button></div>
+  <div id="answer"></div>
+  <div class="dist" id="dist"></div>
+  <div id="check"></div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // 다람쥐 얼굴 — 딸린 파일 없이 혼자 서려고 그림을 페이지 안에 박아 뒀다
+  // (server/static/squirrel.png 를 160px 로 줄인 것)
+  const MUG = "data:image/png;base64,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";
+
+  /* ═══ 벌집 ═══════════════════════════════════════════════════════
+     축좌표 (q,r) 하나에 칸 하나. 한 변 N칸이면 R = N-1 이고
+     |q| ≤ R · |r| ≤ R · |q+r| ≤ R 인 자리가 판 안이다 (칸 3R²+3R+1 개).
+     여섯 방향은 차례로 동 · 북동 · 북서 · 서 · 남서 · 남동. */
+  const DIR = [[1,0],[1,-1],[0,-1],[-1,0],[-1,1],[0,1]];
+  const DIRNAME = ["동", "북동", "북서", "서", "남서", "남동"];
+  const KINDS = ["ice", "snow", "hole", "arrow"];
+
+  let R = 4;            // 한 변 5칸
+  let T = [];           // 타일 — 번호로 찾는다. 판 밖은 null
+  let cells = [];       // 판 안 칸의 번호 목록
+  let ports = [];       // 발사구 [{cell, dir}]
+  let sel = -1;         // 고른 타일
+
+  const W = () => 2 * R + 1;
+  const id = (q, r) => (q + R) * W() + (r + R);
+  const qOf = n => Math.floor(n / W()) - R;
+  const rOf = n => (n % W()) - R;
+  const inb = (q, r) => Math.abs(q) <= R && Math.abs(r) <= R && Math.abs(q + r) <= R;
+
+  function step(n, d) {
+    const q = qOf(n) + DIR[d][0], r = rOf(n) + DIR[d][1];
+    return inb(q, r) ? id(q, r) : -1;
+  }
+
+  /** 판을 갈아 끼운다. tiles 를 안 주면 지금 비율대로 새로 뽑는다. */
+  function setBoard(radius, tiles) {
+    R = radius;
+    T = new Array(W() * W()).fill(null);
+    cells = [];
+    for (let q = -R; q <= R; q++)
+      for (let r = -R; r <= R; r++)
+        if (inb(q, r)) cells.push(id(q, r));
+    cells.forEach((n, i) => { T[n] = tiles ? tiles[i] : pickTile(); });
+    ports = [];
+    for (let d = 0; d < 6; d++)
+      for (const n of cells) {
+        const q = qOf(n) - DIR[d][0], r = rOf(n) - DIR[d][1];
+        if (!inb(q, r)) ports.push({ cell: n, dir: d });   // 밖에서 들어오는 자리
+      }
+    sel = -1;
+  }
+
+  function pickTile() {
+    const hole = +$("wHole").value, snow = +$("wSnow").value, arrow = +$("wArrow").value;
+    const x = Math.random() * 100;
+    let k = "ice";
+    if (x < hole) k = "hole";
+    else if (x < hole + snow) k = "snow";
+    else if (x < hole + snow + arrow) k = "arrow";
+    let p = 0;
+    if (Math.random() * 100 < +$("wPt").value) {
+      // +1·-1 이 흔하고 ±2 는 드물다 — 큰 점수가 판을 지배하지 않게
+      const r2 = Math.random();
+      p = r2 < .38 ? 1 : r2 < .72 ? -1 : r2 < .88 ? 2 : -2;
+    }
+    return { k, d: k === "arrow" ? (Math.random() * 6 | 0) : -1, p };
+  }
+
+  /* ═══ 규칙 ═══════════════════════════════════════════════════════
+     얼음 그대로 · 구멍 빠진다 · 눈 멈춘다 · 화살표 꺾인다.
+     박힌 돌을 맞히면 굴러온 돌이 **직전 칸**에 서고, 박힌 돌이
+     그 방향을 물려받아 **다음 칸**으로 떠난다 (연쇄된다).
+     판 밖으로 나가거나 구멍에 빠지거나 뱅뱅 돌면 그 돌은 사라진다. */
+  function simulate(occIn, entry, dir, num) {
+    const occ = new Map(occIn);
+    const legs = [];
+    let leg = { num, from: -1, path: [], end: "", restAt: -1, dir };
+    let pos = entry, d = dir, prev = -1, guard = 0;
+    let seen = new Set();
+    for (;;) {
+      if (++guard > 900) { leg.end = "loop"; leg.dir = d; break; }
+      if (pos < 0) { leg.end = "out"; leg.dir = d; break; }
+      const mark = pos * 6 + d;
+      if (seen.has(mark)) { leg.end = "loop"; leg.dir = d; break; }
+      seen.add(mark);
+      if (occ.has(pos)) {                       // 박힌 돌을 맞혔다
+        if (prev < 0) { leg.end = "out"; leg.dir = d; break; }  // 들머리가 막혔다
+        leg.end = "rest"; leg.restAt = prev; leg.bump = pos; legs.push(leg);
+        const hit = occ.get(pos);
+        occ.delete(pos); occ.set(prev, leg.num);
+        leg = { num: hit, from: pos, path: [], end: "", restAt: -1, dir: d };
+        seen = new Set();
+        prev = pos; pos = step(pos, d);
+        continue;
+      }
+      leg.path.push(pos);
+      const t = T[pos];
+      if (t.k === "hole") { leg.end = "hole"; break; }
+      if (t.k === "snow") { leg.end = "rest"; leg.restAt = pos; break; }
+      if (t.k === "arrow") d = t.d;
+      prev = pos; pos = step(pos, d);
+    }
+    legs.push(leg);
+    if (leg.end === "rest") occ.set(leg.restAt, leg.num);
+    return { occ, legs };
+  }
+
+  const scoreOf = occ => { let s = 0; for (const n of occ.keys()) s += T[n].p; return s; };
+  const keyOf = occ => [...occ.keys()].sort((a, b) => a - b).join(",");
+
+  /* ═══ 다 세어 보기 ═══════════════════════════════════════════════
+     발사 순서는 54⁴ = 850만 가지지만, **돌이 놓인 꼴**은 몇 백 가지뿐이라
+     (꼴, 남은 돌) 로 기억해 두면 셈이 그 수만큼으로 줄어든다. */
+  function solve(stones) {
+    const memo = new Map();
+    let calls = 0;
+    function f(occ, k) {
+      if (k === 0) return { dist: new Map([[scoreOf(occ), 1]]), best: scoreOf(occ), seq: [] };
+      const mk = keyOf(occ) + "|" + k;
+      const hit = memo.get(mk);
+      if (hit) return hit;
+      const dist = new Map();
+      let best = -Infinity, seq = null;
+      for (let i = 0; i < ports.length; i++) {
+        calls++;
+        const sub = f(simulate(occ, ports[i].cell, ports[i].dir, 0).occ, k - 1);
+        for (const [s, c] of sub.dist) dist.set(s, (dist.get(s) || 0) + c);
+        if (sub.best > best) { best = sub.best; seq = [i].concat(sub.seq); }
+      }
+      const out = { dist, best, seq };
+      memo.set(mk, out);
+      return out;
+    }
+    const t0 = performance.now();
+    const got = f(new Map(), stones);
+    return { ...got, states: memo.size, calls, ms: performance.now() - t0 };
+  }
+
+  /* ═══ 그리기 ═════════════════════════════════════════════════════ */
+  const U = 10;                       // 칸 하나의 반지름 (SVG 자)
+  const PAL = {
+    frost: { ice: ["#22323e", "#40596c"], snow: ["#c4d0d9", "#f2f7fa"],
+             hole: ["#07090b", "#141d24"], arrow: ["#233a37", "#3d5f59"],
+             edge: "#0a0f12", text: "#e8eef2", minus: "#f0a49c" },
+    ink:   { ice: ["#272421", "#474139"], snow: ["#d2cdc3", "#f3f0e9"],
+             hole: ["#0a0908", "#1b1815"], arrow: ["#332f2a", "#57503f"],
+             edge: "#100e0c", text: "#ece7de", minus: "#e5a29b" },
+    paper: { ice: ["#b7a583", "#dbcdab"], snow: ["#efe6d1", "#fffaf1"],
+             hole: ["#2a2318", "#463b28"], arrow: ["#9b8760", "#c2ae82"],
+             edge: "#4a3f2b", text: "#2b2419", minus: "#8c2f26" },
+  };
+  const SPAL = {
+    cool: ["#7fb0d6", "#a894d8", "#7fc9bd", "#d5dbe2"],
+    warm: ["#d9a05b", "#b5744a", "#8d5a3c", "#e8cfa8"],
+    one:  ["#cfd6dc", "#cfd6dc", "#cfd6dc", "#cfd6dc"],
+  };
+
+  const $ = s => document.getElementById(s);
+  const svg = $("svg");
+  const opt = {};                     // 손잡이들이 여기로 모인다
+
+  function readOpts() {
+    opt.pal = $("pal").value; opt.orient = $("orient").value;
+    opt.gap = +$("gap").value / 100; opt.stroke = +$("stroke").value / 10;
+    opt.bevel = +$("bevel").value / 100; opt.ptShow = $("ptShow").value;
+    opt.arrowShape = $("arrowShape").value; opt.sPal = $("sPal").value;
+    opt.sSize = +$("sSize").value / 100; opt.sStyle = $("sStyle").value;
+    opt.sShadow = $("sShadow").value === "on";
+    opt.speed = +$("speed").value; opt.ease = $("ease").value;
+    $("vGap").textContent = "." + String(+$("gap").value).padStart(2, "0");
+    $("vStroke").textContent = opt.stroke.toFixed(1);
+    $("vBevel").textContent = $("bevel").value + "%";
+    $("vSize").textContent = "." + $("sSize").value;
+    $("vSpeed").textContent = opt.speed + "ms";
+    for (const k of ["Hole", "Snow", "Arrow", "Pt"])
+      $("v" + k).textContent = $("w" + k).value + "%";
+  }
+
+  function px(n) {
+    const q = qOf(n), r = rOf(n), s3 = Math.sqrt(3);
+    return opt.orient === "pointy"
+      ? { x: U * s3 * (q + r / 2), y: U * 1.5 * r }
+      : { x: U * 1.5 * q, y: U * s3 * (r + q / 2) };
+  }
+  function hexPath(cx, cy, rad) {
+    const off = opt.orient === "pointy" ? -90 : 0;
+    let p = "";
+    for (let i = 0; i < 6; i++) {
+      const a = (60 * i + off) * Math.PI / 180;
+      p += (i ? "L" : "M") + (cx + rad * Math.cos(a)).toFixed(2) + " " +
+           (cy + rad * Math.sin(a)).toFixed(2);
+    }
+    return p + "Z";
+  }
+  /** 한 칸 옮겨 갔을 때 그림에서 얼마나 움직이나 — 화살·발사구가 이걸 쓴다.
+      (0,0) 이 그림의 원점이라 방향 벡터를 그대로 좌표로 옮기면 된다 */
+  function delta(d) {
+    const q = DIR[d][0], r = DIR[d][1], s3 = Math.sqrt(3);
+    return opt.orient === "pointy"
+      ? { x: U * s3 * (q + r / 2), y: U * 1.5 * r }
+      : { x: U * 1.5 * q, y: U * s3 * (r + q / 2) };
+  }
+
+  function arrowGlyph(d, col) {
+    const v = delta(d), ang = Math.atan2(v.y, v.x) * 180 / Math.PI, r = U * .52;
+    if (opt.arrowShape === "solid")
+      return `<path d="M${r} 0L${-r * .6} ${r * .62}L${-r * .6} ${-r * .62}Z"
+        fill="${col}" transform="rotate(${ang})"/>`;
+    if (opt.arrowShape === "line")
+      return `<path d="M${-r} 0H${r * .8}M${r * .8} 0L${r * .1} ${r * .5}M${r * .8} 0L${r * .1} ${-r * .5}"
+        fill="none" stroke="${col}" stroke-width="2" stroke-linecap="round"
+        transform="rotate(${ang})"/>`;
+    return `<path d="M${-r * .7} ${-r * .5}L${0} 0L${-r * .7} ${r * .5}M${r * .1} ${-r * .5}L${r * .8} 0L${r * .1} ${r * .5}"
+      fill="none" stroke="${col}" stroke-width="2" stroke-linecap="round"
+      stroke-linejoin="round" transform="rotate(${ang})"/>`;
+  }
+
+  function ptGlyph(p, pal) {
+    if (!p || opt.ptShow === "none") return "";
+    const col = p > 0 ? pal.text : pal.minus;
+    if (opt.ptShow === "num")
+      return `<text class="pt" fill="${col}" y="${U * .42}">${p > 0 ? "+" + p : p}</text>`;
+    let s = "";
+    for (let i = 0; i < Math.abs(p); i++)
+      s += `<circle cx="${(i - (Math.abs(p) - 1) / 2) * 4.4}" cy="${U * .46}" r="1.7"
+        fill="${col}" ${p < 0 ? 'fill-opacity=".9"' : ""}/>`;
+    return s;
+  }
+
+  function stoneGlyph(num, rad) {
+    const c = SPAL[opt.sPal][(num - 1) % 4];
+    const sh = opt.sShadow ? ` filter="url(#drop)"` : "";
+    if (opt.sStyle === "mug")
+      return `<g${sh}><circle r="${rad}" fill="${c}"/>
+        <image href="${MUG}" x="${-rad * .88}" y="${-rad * .88}"
+          width="${rad * 1.76}" height="${rad * 1.76}" clip-path="url(#mugclip)"/>
+        <circle r="${rad}" fill="none" stroke="${c}" stroke-width="2.4"/></g>`;
+    const body = `<circle r="${rad}" fill="url(#st${(num - 1) % 4})" stroke="#0b0a09"
+      stroke-width="1.1"/><circle r="${rad * .62}" fill="none" stroke="#0b0a09"
+      stroke-opacity=".35" stroke-width="1"/>`;
+    const grip = opt.sStyle === "stone"
+      ? `<rect x="${-rad * .12}" y="${-rad * .95}" width="${rad * .24}" height="${rad * .62}"
+           rx="${rad * .1}" fill="#1a1613"/>
+         <circle cy="${-rad * .92}" r="${rad * .27}" fill="${c}" stroke="#1a1613" stroke-width="1"/>`
+      : "";
+    const mark = opt.sPal === "one"
+      ? `<text class="pt" fill="#1a1613" dy=".5">${num}</text>` : "";
+    return `<g${sh}>${body}${mark}${grip}</g>`;
+  }
+
+  /* 화면에 남아 있는 스톤들 — 번호가 곧 발사 차례다 */
+  let occ = new Map();
+  let fired = 0;
+  const STONES = 4;
+
+  function render() {
+    readOpts();
+    const pal = PAL[opt.pal];
+    let minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9;
+    for (const n of cells) {
+      const p = px(n);
+      minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+      minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+    }
+    const m = U * 2.6;
+    const vb = [minX - m, minY - m, maxX - minX + m * 2, maxY - minY + m * 2];
+
+    let defs = `<filter id="drop" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="1.6" stdDeviation="1.4" flood-opacity=".55"/></filter>
+      <clipPath id="mugclip" clipPathUnits="objectBoundingBox">
+        <circle cx=".5" cy=".5" r=".5"/></clipPath>`;
+    for (const k of KINDS) {
+      const [a, b] = pal[k], mix = opt.bevel;
+      defs += `<linearGradient id="g_${k}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="${b}" stop-opacity="${.35 + .65 * mix}"/>
+        <stop offset="1" stop-color="${a}"/></linearGradient>`;
+    }
+    for (let i = 0; i < 4; i++) {
+      const c = SPAL[opt.sPal][i];
+      defs += `<radialGradient id="st${i}" cx=".35" cy=".3" r=".75">
+        <stop offset="0" stop-color="#ffffff" stop-opacity=".45"/>
+        <stop offset="1" stop-color="${c}"/></radialGradient>`;
+    }
+
+    const rad = U * (1 - opt.gap);
+    let tiles = "", glyphs = "";
+    for (const n of cells) {
+      const p = px(n), t = T[n];
+      tiles += `<path class="tile${n === sel ? " sel" : ""}" data-id="${n}"
+        d="${hexPath(p.x, p.y, rad)}" fill="url(#g_${t.k})"
+        stroke="${pal.edge}" stroke-width="${opt.stroke}"/>`;
+      let g = "";
+      if (t.k === "hole")
+        g += `<circle r="${rad * .46}" fill="#000" fill-opacity=".85"/>
+              <circle r="${rad * .46}" fill="none" stroke="${pal.snow[0]}"
+                stroke-opacity=".25" stroke-width="1"/>`;
+      if (t.k === "snow")
+        g += `<circle r="${rad * .17}" fill="${pal.hole[0]}" fill-opacity=".22"/>`;
+      if (t.k === "arrow") g += arrowGlyph(t.d, pal.text);
+      g += ptGlyph(t.p, pal);
+      if (g) glyphs += `<g class="glyph" transform="translate(${p.x.toFixed(2)},${p.y.toFixed(2)})">${g}</g>`;
+    }
+
+    let pts = "";
+    for (let i = 0; i < ports.length; i++) {
+      const c = px(ports[i].cell), v = delta(ports[i].dir);
+      const x = c.x - v.x * .72, y = c.y - v.y * .72;
+      const ang = Math.atan2(v.y, v.x) * 180 / Math.PI;
+      pts += `<g class="port" data-port="${i}" transform="translate(${x.toFixed(2)},${y.toFixed(2)}) rotate(${ang.toFixed(1)})">
+        <path d="M${U * .5} 0L${-U * .35} ${U * .34}L${-U * .35} ${-U * .34}Z" fill="${pal.text}"/>
+        <rect x="${-U * .5}" y="${-U * .5}" width="${U}" height="${U}" fill="transparent"/></g>`;
+    }
+
+    svg.setAttribute("viewBox", vb.map(v => v.toFixed(1)).join(" "));
+    svg.innerHTML = `<defs>${defs}</defs><g id="tiles">${tiles}</g>
+      <g id="glyphs">${glyphs}</g><g id="ports">${pts}</g>
+      <g id="trace"></g><g id="stones"></g><g id="anim"></g>`;
+    renderStones();
+    renderTally();
+  }
+
+  function renderStones() {
+    const g = svg.querySelector("#stones");
+    if (!g) return;
+    const rad = U * opt.sSize;
+    let s = "";
+    for (const [n, num] of occ) {
+      const p = px(n);
+      s += `<g class="stone" data-num="${num}" transform="translate(${p.x.toFixed(2)},${p.y.toFixed(2)})">${stoneGlyph(num, rad)}</g>`;
+    }
+    g.innerHTML = s;
+  }
+
+  function renderTally() {
+    $("score").textContent = (scoreOf(occ) > 0 ? "+" : "") + scoreOf(occ);
+    let s = "";
+    for (let i = 1; i <= STONES; i++)
+      s += `<div class="pip ${i > fired ? "left" : occ.has(cellOfNum(i)) ? "" : "gone"}"></div>`;
+    $("pips").innerHTML = s;
+  }
+  function cellOfNum(num) {
+    for (const [n, v] of occ) if (v === num) return n;
+    return -1;
+  }
+
+  /* ═══ 미끄러지는 것 보이기 ══════════════════════════════════════ */
+  const EASE = {
+    linear: k => k,
+    out: k => 1 - (1 - k) * (1 - k),
+    inout: k => k < .5 ? 2 * k * k : 1 - 2 * (1 - k) * (1 - k),
+  };
+  const tween = (ms, fn) => new Promise(res => {
+    let t0 = 0;
+    requestAnimationFrame(function go(t) {
+      if (!t0) t0 = t;
+      const k = Math.min(1, (t - t0) / ms);
+      fn(EASE[opt.ease](k));
+      k < 1 ? requestAnimationFrame(go) : res();
+    });
+  });
+
+  async function animate(legs) {
+    const anim = svg.querySelector("#anim");
+    const rad = U * opt.sSize;
+    for (const leg of legs) {
+      for (const [n, v] of [...occ]) if (v === leg.num) occ.delete(n);  // 떠난다
+      renderStones();
+      const start = leg.from >= 0 ? px(leg.from)
+        : (() => { const p = px(leg.path[0]), v = delta(leg.dir);
+                   return { x: p.x - v.x, y: p.y - v.y }; })();
+      const el = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      el.setAttribute("class", "stone");
+      el.setAttribute("transform", `translate(${start.x},${start.y})`);
+      el.innerHTML = stoneGlyph(leg.num, rad);
+      anim.appendChild(el);
+
+      const way = [start].concat(leg.path.map(px));
+      const v = delta(leg.dir);
+      if (leg.end === "out") {
+        const last = way[way.length - 1];
+        // 못 들어간 돌(들머리가 막혔다)은 문턱까지만 왔다 사라진다
+        const far = leg.path.length ? 1.8 : .45;
+        way.push({ x: last.x + v.x * far, y: last.y + v.y * far });
+      }
+      const go = (a, b, ms) => tween(ms, k => el.setAttribute("transform",
+        `translate(${a.x + (b.x - a.x) * k},${a.y + (b.y - a.y) * k})`));
+      for (let i = 1; i < way.length; i++) await go(way[i - 1], way[i], opt.speed);
+      if (leg.bump !== undefined) {       // 박힌 돌을 톡 치고 물러선다
+        const a = way[way.length - 1], hitPx = px(leg.bump);
+        const mid = { x: a.x + (hitPx.x - a.x) * .42, y: a.y + (hitPx.y - a.y) * .42 };
+        await go(a, mid, opt.speed * .45);
+        await go(mid, a, opt.speed * .45);
+      }
+      if (leg.end !== "rest") {                              // 빠졌거나 나갔거나 돌았다
+        await tween(220, k => {
+          el.setAttribute("opacity", String(1 - k));
+          el.querySelector("g,circle")?.setAttribute("transform", `scale(${1 - k * .7})`);
+        });
+      }
+      el.remove();
+      if (leg.end === "rest") occ.set(leg.restAt, leg.num);
+      renderStones();
+    }
+  }
+
+  let busy = false;
+  async function fire(pi) {
+    if (busy || fired >= STONES) return;
+    busy = true; svg.classList.add("busy");
+    svg.querySelector("#trace").innerHTML = "";
+    const p = ports[pi];
+    const num = fired + 1;
+    const r = simulate(occ, p.cell, p.dir, num);
+    fired++;
+    await animate(r.legs);
+    occ = r.occ;                                   // 셈은 규칙 쪽을 따른다
+    renderStones(); renderTally();
+    busy = false; svg.classList.remove("busy");
+  }
+
+  function preview(pi) {
+    if (busy) return;
+    const p = ports[pi];
+    const r = simulate(occ, p.cell, p.dir, 0);
+    let d = "";
+    for (const leg of r.legs) {
+      const way = (leg.from >= 0 ? [px(leg.from)] : []).concat(leg.path.map(px));
+      way.forEach((w, i) => { d += (i ? "L" : "M") + w.x.toFixed(1) + " " + w.y.toFixed(1); });
+    }
+    svg.querySelector("#trace").innerHTML = d ? `<path class="trace" d="${d}"/>` : "";
+  }
+
+  /* ═══ 손잡이 ═════════════════════════════════════════════════════ */
+  function $on(el, ev, fn) { el.addEventListener(ev, fn); }
+  const $ids = ["pal", "orient", "gap", "stroke", "bevel", "ptShow", "arrowShape",
+                "sPal", "sSize", "sStyle", "sShadow", "speed", "ease"];
+  $ids.forEach(k => $on($(k), "input", render));
+  ["wHole", "wSnow", "wArrow", "wPt"].forEach(k => $on($(k), "input", readOpts));
+
+  svg.addEventListener("click", e => {
+    const port = e.target.closest("[data-port]");
+    if (port) return fire(+port.dataset.port);
+    const tile = e.target.closest("[data-id]");
+    if (!tile) return;
+    const n = +tile.dataset.id, t = T[n];
+    if (sel !== n) { sel = n; showSel(); return render(); }
+    if (e.shiftKey) t.p = t.p >= 2 ? -2 : t.p + 1;
+    else {
+      const i = KINDS.indexOf(t.k);
+      if (t.k === "arrow" && t.d < 5) t.d++;          // 화살표는 여섯 방향을 먼저 돈다
+      else { t.k = KINDS[(i + 1) % 4]; t.d = t.k === "arrow" ? 0 : -1; }
+    }
+    showSel(); render();
+  });
+  svg.addEventListener("mouseover", e => {
+    const port = e.target.closest("[data-port]");
+    if (port) preview(+port.dataset.port);
+  });
+  svg.addEventListener("mouseout", e => {
+    if (e.target.closest("[data-port]")) svg.querySelector("#trace").innerHTML = "";
+  });
+
+  function showSel() {
+    if (sel < 0) return;
+    $("kind").value = T[sel].k;
+    $("pt").value = T[sel].p;
+  }
+  $on($("kind"), "change", () => {
+    if (sel < 0) return;
+    T[sel].k = $("kind").value;
+    T[sel].d = T[sel].k === "arrow" ? Math.max(0, T[sel].d) : -1;
+    render();
+  });
+  $on($("pt"), "change", () => { if (sel >= 0) { T[sel].p = Math.max(-2, Math.min(2, +$("pt").value | 0)); render(); } });
+  $on($("turnL"), "click", () => { if (sel >= 0 && T[sel].k === "arrow") { T[sel].d = (T[sel].d + 5) % 6; render(); } });
+  $on($("turnR"), "click", () => { if (sel >= 0 && T[sel].k === "arrow") { T[sel].d = (T[sel].d + 1) % 6; render(); } });
+
+  document.querySelectorAll("[data-n]").forEach(b => $on(b, "click", () => {
+    document.querySelectorAll("[data-n]").forEach(x => x.classList.remove("on"));
+    b.classList.add("on");
+    setBoard(+b.dataset.n - 1);
+    fresh();
+  }));
+  $on($("roll"), "click", () => { setBoard(R); fresh(); });
+  $on($("reset"), "click", () => { occ = new Map(); fired = 0; render(); });
+  $on($("copy"), "click", () => {
+    const s = JSON.stringify({ r: R, t: cells.map(n => T[n]) });
+    navigator.clipboard?.writeText(s);
+    prompt("이 판을 적어 둔 것 — charts 로 옮길 때 쓴다", s);
+  });
+  $on($("paste"), "click", () => {
+    const s = prompt("적어 둔 판을 붙인다");
+    if (!s) return;
+    try { const o = JSON.parse(s); setBoard(o.r, o.t); fresh(); }
+    catch (err) { alert("못 읽었다: " + err.message); }
+  });
+
+  function fresh() {
+    occ = new Map(); fired = 0;
+    $("answer").innerHTML = ""; $("dist").innerHTML = "";
+    $("play").disabled = true;
+    $("cost").textContent = `칸 ${cells.length}개 · 발사구 ${ports.length}개 · 순서 ${
+      (ports.length ** STONES).toLocaleString()}가지`;
+    render();
+  }
+
+  /* ── 셈하기 ─────────────────────────────────────────────────── */
+  let bestSeq = null;
+  $on($("solve"), "click", () => {
+    $("solve").disabled = true; $("solve").textContent = "세는 중…";
+    setTimeout(() => {
+      const got = solve(STONES);
+      bestSeq = got.seq;
+      $("play").disabled = false;
+      const total = [...got.dist.values()].reduce((a, b) => a + b, 0);
+      $("cost").textContent = `칸 ${cells.length}개 · 발사구 ${ports.length}개 · ` +
+        `순서 ${total.toLocaleString()}가지 → 꼴 ${got.states}개 · ${got.ms.toFixed(0)}ms`;
+      $("answer").innerHTML = `최대 <b>${got.best > 0 ? "+" : ""}${got.best}</b>점 — ` +
+        got.seq.map((i, k) => `${k + 1}) ${portName(i)}`).join(" · ");
+      const rows = [...got.dist.entries()].sort((a, b) => b[0] - a[0]);
+      const top = Math.max(...rows.map(r => r[1]));
+      $("dist").innerHTML = rows.map(([s, c]) =>
+        `<div class="bar${s === got.best ? " best" : ""}"><i>${s > 0 ? "+" + s : s}</i>
+          <u style="width:${(c / top * 100).toFixed(1)}%"></u>
+          <em>${c.toLocaleString()} · ${(c / total * 100).toFixed(2)}%</em></div>`).join("");
+      $("solve").disabled = false; $("solve").textContent = "최대 점수와 분포를 낸다";
+    }, 30);
+  });
+
+  function portName(i) {
+    const p = ports[i], q = qOf(p.cell), r = rOf(p.cell);
+    const row = r + R + 1;
+    const first = Math.max(-R, -R - r);
+    return `${row}행 ${q - first + 1}째 칸에서 ${DIRNAME[p.dir]}쪽`;
+  }
+
+  $on($("play"), "click", async () => {
+    if (!bestSeq || busy) return;
+    occ = new Map(); fired = 0; render();
+    for (const i of bestSeq) { await fire(i); await tween(180, () => {}); }
+  });
+
+  /* ═══ 검산 — 규칙 여덟 가지. 판을 띄우기 전에 한 번 돌린다 ═══════ */
+  function selfCheck() {
+    const keep = { R, T, cells, ports };
+    const bad = [];
+    let n = 0;
+    const ok = (name, got, want) => {
+      n++;
+      if (JSON.stringify(got) !== JSON.stringify(want))
+        bad.push(`${name}: ${JSON.stringify(got)} ≠ ${JSON.stringify(want)}`);
+    };
+    // 한 변 2칸(일곱 칸)짜리 작은 판에 손으로 깔아 본다
+    const lay = spec => {
+      setBoard(1, cells.map(() => ({ k: "ice", d: -1, p: 0 })));
+      for (const [q, r, t] of spec) T[id(q, r)] = Object.assign({ k: "ice", d: -1, p: 0 }, t);
+    };
+    const west = () => ({ cell: id(-1, 0), dir: 0 });          // 서쪽에서 동쪽으로
+    const cellsOf = o => [...o.keys()].map(n => [qOf(n), rOf(n)]);
+
+    lay([]);
+    ok("얼음은 가로지른다", cellsOf(simulate(new Map(), west().cell, 0, 1).occ), []);
+
+    lay([[0, 0, { k: "snow" }]]);
+    ok("눈에서 선다", cellsOf(simulate(new Map(), west().cell, 0, 1).occ), [[0, 0]]);
+
+    lay([[0, 0, { k: "hole" }]]);
+    ok("구멍에 빠진다", cellsOf(simulate(new Map(), west().cell, 0, 1).occ), []);
+
+    lay([[0, 0, { k: "arrow", d: 5 }], [0, 1, { k: "snow" }]]);
+    ok("화살표로 꺾인다", cellsOf(simulate(new Map(), west().cell, 0, 1).occ), [[0, 1]]);
+
+    lay([]);
+    const hit = simulate(new Map([[id(1, 0), 1]]), west().cell, 0, 2);
+    ok("굴러온 돌은 직전 칸", cellsOf(hit.occ), [[0, 0]]);      // 박힌 돌은 밖으로 나갔다
+    ok("박힌 돌이 떠난다", hit.legs.length, 2);
+
+    lay([[1, 0, { k: "snow" }]]);
+    const chain = simulate(new Map([[id(0, 0), 1]]), west().cell, 0, 2);
+    ok("떠민 돌도 규칙을 따른다", cellsOf(chain.occ).sort(), [[-1, 0], [1, 0]].sort());
+
+    lay([]);
+    ok("들머리가 막히면 못 든다",
+       cellsOf(simulate(new Map([[id(-1, 0), 1]]), west().cell, 0, 2).occ), [[-1, 0]]);
+
+    lay([[0, 0, { k: "arrow", d: 3 }], [-1, 0, { k: "arrow", d: 0 }]]);
+    ok("뱅뱅 돌면 사라진다", cellsOf(simulate(new Map(), west().cell, 0, 1).occ), []);
+
+    lay([[0, 0, { k: "snow", p: 2 }], [1, 0, { k: "snow", p: -1 }]]);
+    const two = simulate(simulate(new Map(), id(-1, 0), 0, 1).occ, id(1, -1), 5, 2).occ;
+    ok("점수는 선 칸의 것", scoreOf(two), 2 + -1);
+
+    R = keep.R; T = keep.T; cells = keep.cells; ports = keep.ports;
+
+    // 메모해 가며 센 것이 **다 세어 본 것**과 같은가. 지금 깔린 진짜 판에서,
+    // 스톤 둘(54² = 2,916가지)만 맞대 본다 — 메모 열쇠가 어긋나면 여기서 걸린다
+    const brute = new Map();
+    (function rec(o, k) {
+      if (!k) { const s = scoreOf(o); return void brute.set(s, (brute.get(s) || 0) + 1); }
+      for (const p of ports) rec(simulate(o, p.cell, p.dir, 0).occ, k - 1);
+    })(new Map(), 2);
+    const tidy = m => [...m.entries()].sort((a, b) => a[0] - b[0]);
+    ok("메모한 셈이 다 세어 본 것과 같다", tidy(solve(2).dist), tidy(brute));
+
+    $("check").innerHTML = bad.length
+      ? `<div class="bad">검산 ${bad.length}가지 어긋났다 — ${bad.join(" / ")}</div>`
+      : `<div class="ok">검산 ${n}가지 다 통과</div>`;
+  }
+
+  readOpts();
+  setBoard(4);
+  selfCheck();
+  fresh();
+})();
+</script>
+</body>
+</html>

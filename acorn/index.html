@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>도토리</title>
+<style>
+  :root{--bg:#0e1116;--fg:#e6edf3;--dim:#8b98a5;--faint:#5c6773;
+        --gold:#e8b339;--line:#222933}
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--fg);margin:0;padding:40px 20px 80px;
+    font:16px/1.7 "Pretendard","Malgun Gothic",system-ui,sans-serif;
+    display:flex;flex-direction:column;align-items:center}
+  .wrap{width:min(560px,100%)}
+  h1{font-size:26px;margin:0 0 4px;letter-spacing:-.02em}
+  p.sub{color:var(--dim);margin:0 0 30px;font-size:14px}
+  h2{font-size:13px;color:var(--faint);font-weight:600;letter-spacing:.06em;
+    margin:30px 0 10px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  a{display:flex;align-items:baseline;gap:10px;color:var(--fg);
+    text-decoration:none;padding:13px 16px;margin-bottom:8px;
+    border:1px solid var(--line);border-radius:10px}
+  a:hover,a:focus{border-color:var(--gold);outline:none}
+  a b{font-weight:600}
+  a span{color:var(--dim);font-size:13px}
+  a i{margin-left:auto;color:var(--faint);font-size:12px;font-style:normal;
+    white-space:nowrap}
+  footer{color:var(--faint);font-size:13px;margin-top:34px;line-height:1.75}
+  footer a{display:inline;border:none;padding:0;margin:0;color:var(--gold)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>도토리</h1>
+  <p class="sub">폰에서 그냥 열린다. 서버도 설치도 없다.</p>
+
+  <h2>게임</h2>
+  <a href="speed.html"><b>스피드 슬라이드</b><span>5×5 에서 가운데 3×3 만</span><i>2~4</i></a>
+  <a href="layer.html"><b>필름 나눠 그리기</b><span>겹쳐야만 나오는 칸</span><i>2~4</i></a>
+  <a href="cctv.html"><b>CCTV</b><span>비친 골목이 어디인지</span><i>혼자</i></a>
+
+  <h2>문제를 짜는 연장</h2>
+  <a href="maze.html"><b>미로</b><span>CCTV 문제를 담는다</span></a>
+  <a href="book.html"><b>바코드</b><span>도서관 책을 읽어 본다</span></a>
+  <a href="speed-lab.html"><b>스피드 슬라이드 실험실</b><span>타일·시간을 돌려 본다</span></a>
+  <a href="scale.html"><b>양팔 저울</b><span>추를 얹어 본다</span></a>
+  <a href="ternary.html"><b>삼진법 표기</b><span>생김새를 고른다</span></a>
+
+  <h2>접은 것</h2>
+  <a href="film.html"><b>필름 겹치기</b><span>재미가 덜했다</span></a>
+  <a href="film-editor.html"><b>필름 편집기</b><span>위 게임의 문제를 짰다</span></a>
+  <a href="curl.html"><b>벌집 컬링</b><span>기획을 폐기했다</span></a>
+
+  <footer>
+    대회 게임은 <a href="../">한 칸 위</a>에 있다 — 쇼기 · 룰렛 경매 ·
+    단어 맞히기 · 블라인드 중간고사.<br>
+    여기 것은 규칙이 페이지 안에서 돈다. 폰 넷이 한 파티가 되는 꼴은 아직
+    만들고 있다.
+  </footer>
+</div>
+</body>
+</html>
