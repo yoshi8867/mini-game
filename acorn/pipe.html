@@ -1,0 +1,1455 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>도토리 — 파이프 잇기 실험실</title>
+<style>
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css");
+
+  /* 이 페이지는 **혼자 선다.** 깃헙 페이지스에 한 장으로 올라간다 */
+  :root{
+    --ink-900:#12100d; --ink-800:#1b1815; --ink-700:#221e1a;
+    --line:#332e28;    --line-2:#4a433a;
+    --text:#ece7de;    --dim:#8b8275;    --faint:#463f37;
+    --gold:#e8b339;    --gold-lit:#ffd873;
+    --green:#3fb950;   --green-lit:#8ae79a; --red:#e5534b;
+    --paper:hsl(44 32% 74%);
+    --t-xs:11.5px; --t-sm:12.5px; --t-md:14.5px; --t-lg:16px; --t-2xl:25px;
+    --s-1:4px; --s-2:8px; --s-3:12px; --s-4:16px; --s-6:24px;
+    --r-sm:5px; --r-md:10px; --m-state:180ms ease; --m-lamp:70ms linear;
+    --font:"Pretendard Variable",Pretendard,-apple-system,"Malgun Gothic",
+      "맑은 고딕",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none !important}
+  body{margin:0;background:var(--ink-900);color:var(--text);
+    font:var(--t-md)/1.6 var(--font);-webkit-tap-highlight-color:transparent;
+    display:grid;grid-template-columns:1fr 320px;min-height:100vh}
+  @media (max-width:1040px){body{grid-template-columns:1fr}}
+
+  .stage{padding:var(--s-6);display:flex;flex-direction:column;
+    gap:var(--s-6);align-items:center}
+  .panel{border-left:1px solid var(--line);background:var(--ink-800);
+    padding:var(--s-4);display:flex;flex-direction:column;gap:var(--s-3);
+    overflow:auto;max-height:100vh;position:sticky;top:0}
+  @media (max-width:1040px){.panel{position:static;max-height:none;
+    border-left:0;border-top:1px solid var(--line)}}
+
+  h2{font-size:var(--t-sm);color:var(--dim);margin:0;letter-spacing:.08em;
+    text-transform:uppercase;font-weight:600}
+  .row{display:flex;align-items:center;gap:var(--s-2)}
+  .row label{flex:0 0 88px;font-size:var(--t-sm);color:var(--dim)}
+  .row input[type=range]{flex:1;accent-color:var(--gold)}
+  .row output{flex:0 0 46px;text-align:right;font-size:var(--t-sm);
+    font-variant-numeric:tabular-nums}
+  select,button,input[type=number]{background:var(--ink-700);color:var(--text);
+    border:1px solid var(--line-2);border-radius:var(--r-sm);
+    padding:6px 10px;font:var(--t-sm) var(--font)}
+  button{cursor:pointer}
+  button:hover{border-color:var(--gold)}
+  textarea{width:100%;height:110px;background:var(--ink-900);color:var(--dim);
+    border:1px solid var(--line);border-radius:var(--r-sm);padding:var(--s-2);
+    font:11px/1.5 ui-monospace,Consolas,monospace;resize:vertical}
+  .hint{font-size:var(--t-sm);color:var(--dim);margin:0;text-align:center}
+  textarea.art{height:150px;color:var(--text);letter-spacing:.22em;
+    font:17px/1.45 ui-monospace,Consolas,"D2Coding",monospace;text-align:center}
+  .hint b{color:var(--text);font-weight:600}
+  .wide{width:min(560px,100%)}
+
+  /* 판 — 칸·램프·단추·이름이 한 그물에 앉는다 */
+  .board{display:grid;justify-content:center;align-items:center;
+    justify-items:center}
+  .name{font-style:normal;font-size:var(--t-sm);color:var(--dim);
+    font-variant-numeric:tabular-nums}
+  /* 도는 것은 원판째다. 튀는 움직임은 ys.css 의 --m-pop 그대로 */
+  .tile{line-height:0;transition:transform var(--spin,300ms)
+    var(--ease,cubic-bezier(.2,1.5,.4,1))}
+  .tile svg{display:block}
+
+  /* 눈 — 그림이 바뀌는 참에 **눈꺼풀이 감겼다 뜬다.** 원판의 동그라미는
+     그대로 있고, 그 안쪽에서 먹빛 꺼풀이 바닥까지 내려와 덮는다.
+     꺼풀은 원판 **바깥**에 둔다 — 안에 두면 돌아간 각만큼 비스듬히
+     내려와 칸마다 다른 쪽에서 감긴다 */
+  .eye{position:relative;line-height:0}
+  /* 동그라미를 남겨 두려고 테두리 선 두께만큼 안으로 들인다 */
+  .cut{position:absolute;inset:1.5px;border-radius:50%;overflow:hidden;
+    pointer-events:none}
+  .lid{position:absolute;inset:0;background:var(--ink-900);
+    transform:translateY(-100%);
+    transition:transform var(--shut,260ms) cubic-bezier(.4,0,.5,1)}
+  .eye.shut .lid{transform:translateY(0)}
+
+  /* 소통용 램프 (.ys-dot). 빛깔은 --c/--cl 로 갈아 끼운다 */
+  .dot{--c:var(--green);--cl:var(--green-lit);
+    border-radius:50%;flex:none;background:var(--ink-700);
+    border:1px solid var(--line);
+    transition:background var(--m-lamp),border-color var(--m-lamp),
+      box-shadow var(--m-lamp)}
+  .dot.on{background:var(--cl);border-color:var(--cl);
+    box-shadow:0 0 6px var(--cl),0 0 15px var(--c),
+      0 0 32px color-mix(in srgb,var(--c) 85%,transparent),
+      0 0 56px color-mix(in srgb,var(--c) 50%,transparent)}
+  /* 아직 안 이어졌다 — `.ys-dot.warn` 과 같은 꼴이다 (적색 = 풀리지 않았다) */
+  .dot.warn{--c:var(--red);--cl:color-mix(in srgb,var(--red) 80%,#fff)}
+  .dot.win{box-shadow:0 0 8px var(--cl),0 0 22px var(--c),
+      0 0 48px color-mix(in srgb,var(--c) 90%,transparent),
+      0 0 80px color-mix(in srgb,var(--c) 60%,transparent)}
+
+  /* 짝은 **색이 아니라 가락**으로 가른다 — 다 적색이다.
+     1짝은 숨 쉬듯 어두워졌다 밝아지고(아주 꺼지지는 않는다),
+     2짝은 짧게 끊고, 3짝은 길게 끊는다. 가락은 JS 가 적어 넣는다 */
+  @keyframes dim{0%,100%{opacity:1}50%{opacity:var(--floor,.42)}}
+  .dot.p0{animation:dim var(--bt,3.2s) ease-in-out infinite}
+  .dot.p1{animation:beat1 var(--st,2.8s) linear infinite}
+  .dot.p2{animation:beat2 var(--st,4.4s) linear infinite}
+  /* 움직임을 줄여 달라는 기기에서는 가락이 멈춰 짝이 같아진다 —
+     그런 기기에서만 모양으로 가른다 */
+  @media (prefers-reduced-motion:reduce){
+    *{animation-duration:.01ms !important;transition-duration:.01ms !important}
+    .dot.p1{border-radius:var(--r-sm)}
+    .dot.p2{border-radius:3px;transform:rotate(45deg)}
+  }
+
+  /* 둥근 버튼 (.ys-btn). 속은 비운다 */
+  .btn{border-radius:50%;border:2px solid var(--gold);padding:0;
+    background:radial-gradient(circle at 50% 38%,
+      color-mix(in srgb,var(--gold) 13%,var(--ink-800)),
+      color-mix(in srgb,var(--gold) 5%,var(--ink-900)));
+    color:var(--gold);cursor:pointer;position:relative;touch-action:none;
+    transition:transform 80ms,border-color var(--m-state),
+      background var(--m-state),color var(--m-state)}
+  .btn:active{transform:scale(.955)}
+  /* 남의 단추 — 자리만 비워 둔다 (.ys-hand.none 과 같은 뜻) */
+  .btn.none{visibility:hidden}
+  .btn.done{border-color:var(--green);color:var(--green);cursor:default;
+    background:radial-gradient(circle at 50% 38%,
+      color-mix(in srgb,var(--green) 12%,var(--ink-800)),
+      color-mix(in srgb,var(--green) 5%,var(--ink-900)))}
+  .btn.bad{border-color:var(--red);color:var(--red)}
+
+  /* 문제 한 줄 */
+  .say{display:flex;gap:var(--s-4);flex-wrap:wrap;justify-content:center;
+    font-size:var(--t-sm);font-variant-numeric:tabular-nums}
+  .say b{color:var(--text);font-weight:600}
+  .say i{font-style:normal;color:var(--dim)}
+
+  /* 깊이 분포 막대 */
+  .bars{display:flex;align-items:flex-end;gap:3px;height:96px;
+    width:min(560px,100%)}
+  .bars > div{flex:1;display:flex;flex-direction:column;
+    justify-content:flex-end;align-items:center;gap:3px;height:100%}
+  .bars u{display:block;width:100%;background:var(--line-2);
+    border-radius:3px 3px 0 0;text-decoration:none}
+  .bars u.pick{background:var(--gold)}
+  .bars span{font-size:var(--t-xs);color:var(--dim);
+    font-variant-numeric:tabular-nums}
+
+  .chk{font-size:var(--t-xs);line-height:1.8}
+  .chk b{font-weight:600}
+  .pass{color:var(--green)} .fail{color:var(--red)}
+</style>
+</head>
+<body>
+
+<style id="beats"></style>
+
+<div class="stage">
+  <div class="board" id="board"></div>
+  <p class="hint" id="verdict">&nbsp;</p>
+  <p class="hint">
+    <b>제출 단추는 없다.</b> 적색은 「아직 안 이어졌다」고, 이어진 짝은
+    그 자리에서 <b>녹색</b>이 된다. 짝은 색이 아니라 <b>가락</b>으로 가른다 —
+    숨 쉬는 짝 · 짧게 끊는 짝 · 길게 끊는 짝.
+  </p>
+
+  <div class="say" id="say"></div>
+  <div class="row">
+    <button id="deal">새 문제</button>
+    <button id="shake">흩어놓기</button>
+    <button id="back">맞춰 놓기</button>
+    <button id="hint">한 수 보기</button>
+    <button id="wink">눈 감았다 뜨기</button>
+  </div>
+
+  <div class="wide">
+    <h2>그림으로 보고 고치기</h2>
+    <p class="hint">
+      가운데 4×4 가 원판이고, <b>둘레의 수가 짝 번호</b>다 (1·2·3).
+      <code>*</code> 로 적어도 되지만 그때는 <b>풀린 꼴</b>이어야 짝을 찾는다.
+      고쳐서 「읽어 들이기」를 누르면 그대로 판이 된다.
+    </p>
+    <textarea class="art" id="art" spellcheck="false"></textarea>
+    <div class="row" style="justify-content:center">
+      <button id="read">읽어 들이기</button>
+      <button id="artnow">지금 판 적기</button>
+      <button id="artsol">풀린 꼴 적기</button>
+      <span class="hint" id="artsay"></span>
+    </div>
+  </div>
+
+  <div class="wide">
+    <h2>난도 — 깊이 분포</h2>
+    <p class="hint">
+      깊이는 <b>목표와 지금 사이의 최소 누름 수</b>다. 4<sup>8</sup> 가지를
+      값싼 것부터 다 눌러 보고 처음 풀리는 데까지 센다.
+      금빛이 지금 받기로 한 범위다.
+    </p>
+    <div class="bars" id="bars"></div>
+    <p class="hint" id="stat">&nbsp;</p>
+    <div class="row" style="justify-content:center">
+      <button id="run100">백 판 뽑아 보기</button>
+      <button id="run400">사백 판</button>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>문제</h2>
+  <div class="row"><label>어디서</label>
+    <select id="src">
+      <option value="mix">문제집과 뽑기를 섞는다</option>
+      <option value="bank">문제집에서만</option>
+      <option value="make">뽑아서만</option>
+    </select></div>
+  <div class="row"><label>대칭</label>
+    <select id="sym">
+      <option value="0">그대로 (실험실에서는 이쪽)</option>
+      <option value="1">돌리고 뒤집어 섞는다</option>
+    </select></div>
+  <div class="row"><label>램프 짝</label>
+    <select id="pairs">
+      <option value="2">두 짝</option><option value="3">세 짝</option>
+    </select></div>
+  <div class="row"><label>꼬기</label>
+    <select id="loop">
+      <option value="0">그냥</option>
+      <option value="1">한 짝이 +자를 두 방향으로 건넌다</option>
+    </select></div>
+  <div id="knobs2"></div>
+  <p class="hint" style="text-align:left">
+    <b>쓰는 칸</b>이 난도를 가장 잘 가른다 — 길이 지나는 칸은 각도가 못
+    박히니, 많이 쓸수록 다시 맞출 자리가 줄어든다.
+    <b>8 칸이면 쉽고</b> (깊이 4.3 · 푸는 자리 32),
+    <b>14 칸부터는 푸는 자리가 하나</b>다 (깊이 8.4).
+    규칙 때문에 <b>8 칸보다 적을 수는 없다</b>.
+  </p>
+  <p class="hint" style="text-align:left" id="pool">&nbsp;</p>
+
+  <h2>나눠 쥐기</h2>
+  <div class="row"><label>마리 수</label>
+    <select id="n"><option>2</option><option>3</option>
+      <option selected>4</option></select></div>
+  <div class="row"><label>나는</label>
+    <select id="me"></select></div>
+  <div class="row"><label>손대기</label>
+    <select id="god">
+      <option value="1">다 만진다 (혼자 풀어 보기)</option>
+      <option value="0">제 단추만</option>
+    </select></div>
+
+  <h2>보임새</h2>
+  <div id="knobs"></div>
+  <p class="hint" style="text-align:left" id="size">&nbsp;</p>
+
+  <h2>램프 가락</h2>
+  <div class="row"><label>2짝</label>
+    <input id="b1" value="----,,-,,--,-----,,-,,--,------" style="flex:1"></div>
+  <div class="row"><label>3짝</label>
+    <input id="b2" value=",,,,---------------,,,,------------,,,,-----------"
+      style="flex:1"></div>
+  <p class="hint" style="text-align:left">
+    <code>-</code> 켜짐 · <code>,</code> 꺼짐. 한 칸이 「점멸 한 칸」만큼이다
+  </p>
+
+  <h2>내보내기</h2>
+  <div class="row">
+    <button id="dump">이 문제 JSON (풀린 꼴)</button>
+    <button id="reset">되돌린다</button>
+  </div>
+  <textarea id="out" readonly></textarea>
+
+  <h2>검산</h2>
+  <div class="chk" id="chk"></div>
+  <p class="hint" style="text-align:left" id="loose"></p>
+</div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+
+/* ── 파이프의 규칙 ───────────────────────────────────────────────
+   칸 하나는 「어느 쪽끼리 통하나」로만 정해진다. +자는 통로가 둘이고
+   서로 섞이지 않는다 — 그래서 흐름이 꺾이지 않는다 */
+const N = 0, E = 1, S = 2, W = 3;
+const DX = [0, 1, 0, -1], DY = [-1, 0, 1, 0], OPP = [2, 3, 0, 1];
+const CH = { line: [[N, S]], bend: [[N, E]], plus: [[N, S], [E, W]] };
+const KINDS = ["line", "bend", "plus"];
+const chans = (k, rot) => CH[k].map(([a, b]) => [(a + rot) % 4, (b + rot) % 4]);
+function thru(k, rot, side){
+  for (const [a, b] of chans(k, rot)){
+    if (a === side) return b;
+    if (b === side) return a;
+  }
+  return -1;                                 // 벽이다
+}
+
+/* 램프 — 테두리 칸의 바깥 면마다 하나. 열둘 칸에 열여섯 개 */
+const LAMPS = [];
+for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) for (let d = 0; d < 4; d++){
+  const nx = x + DX[d], ny = y + DY[d];
+  if (nx < 0 || nx > 3 || ny < 0 || ny > 3) LAMPS.push({ x, y, d });
+}
+const key = l => l.x + "," + l.y + "," + l.d;
+const FILE = "abcd";
+const spot = l => FILE[l.x] + (l.y + 1) + " " + "↑→↓←"[l.d];
+
+/* 칸의 각 = 쌓인 누름 + (그 열 누름) + (그 행 누름). 더하기라 순서를
+   가리지 않는다 — 그래서 갈 수 있는 자리가 4⁸ 이 아니라 16384 다 */
+const rotAt = (G, x, y, c, r) =>
+  (((G[y][x].n + (c ? c[x] : 0) + (r ? r[y] : 0)) % 4) + 4) % 4;
+
+function walk(G, lamp, c, r){
+  let x = lamp.x, y = lamp.y, side = lamp.d;
+  for (let i = 0; i < 64; i++){
+    const out = thru(G[y][x].kind, rotAt(G, x, y, c, r), side);
+    if (out < 0) return null;
+    const nx = x + DX[out], ny = y + DY[out];
+    if (nx < 0 || nx > 3 || ny < 0 || ny > 3) return { x, y, d: out };
+    x = nx; y = ny; side = OPP[out];
+  }
+  return null;
+}
+/* 램프 짝의 규칙 — **멀어야 한다.**
+   짝의 두 램프는 **맞은편 면**이어야 하고(위↔아래 · 왼↔오른), 지나는
+   **열이 바뀌어야** 한다. a1 위에서 a4 아래로 곧장 내려가는 것은 한 열에
+   직선만 깔면 되니 문제가 아니다 (좌우 짝은 네 열을 다 건너니 저절로 된다).
+   두 짝짜리는 둘을 더 지킨다 — 둘이 **네 면을 다 쓰고**(한 짝은 위아래, 한
+   짝은 좌우), 어딘가에서 **+자 하나로 엇갈린다.** 두 길이 같은 칸을
+   지났다면 그 칸은 반드시 +자다 — 직선과 꺾임은 통로가 하나뿐이라
+   두 길이 같이 쓸 수 없다. 세 짝짜리는 엇갈림을 안 따진다 (면이 넷뿐이라
+   두 짝이 같은 축을 쓰게 된다) */
+const far = (a, b) => OPP[a.d] === b.d && a.x !== b.x;
+const upDown = l => l.d === N || l.d === S;
+
+function walkT(G, lamp){                     /* 지나는 칸까지 적어 온다 */
+  let x = lamp.x, y = lamp.y, side = lamp.d;
+  const tiles = [];
+  for (let i = 0; i < 64; i++){
+    tiles.push(y * 4 + x);
+    const out = thru(G[y][x].kind, rotAt(G, x, y, null, null), side);
+    if (out < 0) return { out: null, tiles };
+    const nx = x + DX[out], ny = y + DY[out];
+    if (nx < 0 || nx > 3 || ny < 0 || ny > 3) return { out: { x, y, d: out }, tiles };
+    x = nx; y = ny; side = OPP[out];
+  }
+  return { out: null, tiles };
+}
+function solves(G, tgt, c, r){
+  for (const [a, b] of tgt){
+    const o = walk(G, a, c, r);
+    if (!o || key(o) !== key(b)) return false;
+  }
+  return true;
+}
+
+/* ── 깊이 ───────────────────────────────────────────────────────
+   누름 벡터 하나가 열 넷·행 넷의 누름 횟수다 (저마다 0~3). 값싼 것부터
+   훑어 처음 풀리는 데서 멈춘다. 되돌리는 값은 세 번이라 비싸다 */
+const COST = new Uint8Array(65536);
+for (let v = 0; v < 65536; v++){
+  let s = 0;
+  for (let i = 0; i < 8; i++) s += (v >> (2 * i)) & 3;
+  COST[v] = s;
+}
+const ORDER = Uint16Array.from({ length: 65536 }, (_, i) => i)
+  .sort((a, b) => COST[a] - COST[b]);
+const CB = [0, 0, 0, 0], RB = [0, 0, 0, 0];
+function load(v){
+  for (let i = 0; i < 4; i++){
+    CB[i] = (v >> (2 * i)) & 3;
+    RB[i] = (v >> (8 + 2 * i)) & 3;
+  }
+}
+function depthOf(G, tgt){
+  for (let i = 0; i < 65536; i++){
+    const v = ORDER[i];
+    load(v);
+    if (solves(G, tgt, CB, RB)) return COST[v];
+  }
+  return null;                               // 있을 수 없다
+}
+function countOf(G, tgt){                    // 푸는 자리가 몇 개인가
+  let n = 0;
+  for (let v = 0; v < 65536; v++){ load(v); if (solves(G, tgt, CB, RB)) n++; }
+  return n / 4;                              // 네 겹으로 겹친다
+}
+
+/* ── 문제 뽑기 ───────────────────────────────────────────────────
+   **길을 먼저 깐다.** 아무렇게나 깔아 놓고 규칙에 맞는 짝을 찾는 것은
+   헛수고다 — 네 면을 가로지르는 긴 길 둘이 우연히 나는 판은 **천 판에
+   한 판**이고, 그런 길이 셋인 판은 **사만 판에 한 판**이다 (파이선으로
+   따로 세어 맞춰 본 값이다).
+   그래서 **램프 짝을 먼저 고르고, 그 사이로 길을 깔고, 남은 칸을 아무
+   타일로 채운다.** 그 판이 해다. 거기서 거꾸로 흔들면 문제가 된다 */
+const rnd = n => Math.floor(Math.random() * n);
+const shuffle = a => {
+  for (let i = a.length - 1; i > 0; i--){
+    const j = rnd(i + 1), t = a[i]; a[i] = a[j]; a[j] = t;
+  }
+  return a;
+};
+const MIX = ["line", "line", "line", "bend", "bend", "bend", "bend", "plus"];
+function rawGrid(){
+  return Array.from({ length: 4 }, () =>
+    Array.from({ length: 4 }, () => ({ kind: MIX[rnd(MIX.length)], n: rnd(4) })));
+}
+/* 램프 짝을 고른다. 두 짝짜리는 **한 짝이 위아래, 한 짝이 좌우**라
+   네 면을 다 쓴다. 세 짝짜리는 거기에 아무 축 하나를 더 얹는다 */
+const lampOf = (ax, i, end) => ax
+  ? { x: end ? 0 : 3, y: i, d: end ? W : E }
+  : { x: i, y: end ? 3 : 0, d: end ? S : N };
+function randPairs(k){
+  const axes = shuffle(k === 2 ? [0, 1] : [0, 1, rnd(2)]);
+  const out = [], used = new Set();
+  for (const ax of axes){
+    for (let t = 0; t < 40; t++){
+      const a = lampOf(ax, rnd(4), 0), b = lampOf(ax, rnd(4), 1);
+      if (!far(a, b)) continue;               // 맞은편 면 · 열이 바뀌어야 한다
+      if (used.has(key(a)) || used.has(key(b))) continue;
+      used.add(key(a)); used.add(key(b));
+      out.push([a, b]);
+      break;
+    }
+  }
+  return out.length === k ? out : null;
+}
+
+/* 램프 A 로 들어가 램프 B 로 나오는 길 하나를 깐다.
+   한 칸에 통로는 둘까지고, 둘이면 **둘 다 직선이고 서로 엇갈려야** 한다
+   (= 그 칸이 +자다). 길이 다른 데로 새어 나가서는 안 된다.
+
+   `loop` 를 켜면 **그 길 하나가 제 몸을 한 번 꼬아야** 한다 — 같은 +자를
+   동서로 한 번, 남북으로 또 한 번 건넌다. 올가미 꼴이 된다 */
+function route(ch, A, B, loop){
+  const fits = (cell, a, b) => {
+    const list = ch.get(cell);
+    if (!list) return true;
+    if (list.length >= 2) return false;
+    const [p, q] = list[0];
+    return OPP[a] === b && OPP[p] === q && a % 2 !== p % 2;
+  };
+  const mine = new Set();                    /* 이 길이 지난 칸 */
+  let twice = 0;                             /* 그중 두 번 지난 칸의 수 */
+  const go = (x, y, inSide, n) => {
+    if (n > 32) return false;
+    const cell = y * 4 + x;
+    for (const o of shuffle([N, E, S, W])){
+      if (o === inSide || !fits(cell, inSide, o)) continue;
+      const atB = x === B.x && y === B.y && o === B.d;
+      const nx = x + DX[o], ny = y + DY[o];
+      if ((nx < 0 || nx > 3 || ny < 0 || ny > 3) && !atB) continue;
+      const list = ch.get(cell) || [];
+      const dup = mine.has(cell);
+      list.push([inSide, o]);
+      ch.set(cell, list);
+      mine.add(cell);
+      if (dup) twice++;
+      if (atB ? (!loop || twice > 0) : go(nx, ny, OPP[o], n + 1)) return true;
+      list.pop();                            /* 되짚는다 */
+      if (!list.length) ch.delete(cell);
+      if (dup) twice--; else mine.delete(cell);
+    }
+    return false;
+  };
+  return go(A.x, A.y, A.d, 0);
+}
+
+/* 길이 지난 칸은 그 통로대로, 남은 칸은 아무 타일로 채운다 */
+function fill(ch){
+  const g = rawGrid();
+  for (const [cell, list] of ch){
+    const t = g[cell >> 2][cell & 3];
+    if (list.length === 2){ t.kind = "plus"; t.n = 0; continue; }
+    const [a, b] = list[0];
+    if (OPP[a] === b){ t.kind = "line"; t.n = a % 2; }
+    else { t.kind = "bend"; t.n = b === (a + 1) % 4 ? a : b; }
+  }
+  return g;
+}
+
+function seed(k){                             // 규칙에 맞는 짝 k 개가 이어진 판
+  for (let i = 0; i < 200; i++){
+    const tgt = randPairs(k);
+    if (!tgt) continue;
+    const ch = new Map();
+    /* 꼬는 길은 **맨 먼저** 깐다. 자리를 많이 쓰니 나중에 깔면 막힌다 */
+    if (!tgt.every(([a, b], j) => route(ch, a, b, V.loop && j === 0))) continue;
+    /* 통로를 놓은 칸의 수가 곧 **길이 쓰는 칸 수**다 (16 중 몇) */
+    return { g: fill(ch), tgt, cells: ch.size };
+  }
+  return null;
+}
+function pick(lo, hi, cap, k){                // 깊이가 lo~hi 인 문제
+  let tries = 0;
+  for (let i = 0; i < (cap || 400); i++){
+    tries++;
+    const s = seed(k || V.pairs);
+    if (!s) continue;
+    if (s.cells < V.cmin || s.cells > V.cmax) continue;
+    const solved = s.g.map(row => row.map(t => t.n));
+    let back = 0;
+    for (let k = 0; k < 8; k++){             // 거꾸로 흔든다
+      const q = rnd(4);
+      back += (4 - q) % 4;                   // 되돌리는 값 — 세 번은 비싸다
+      for (let m = 0; m < 4; m++)
+        (k < 4 ? s.g[m][k] : s.g[k - 4][m]).n += q;
+    }
+    /* **새 판에 이미 이어진 짝이 있으면 버린다** — 처음부터 녹색인
+       램프가 있어서는 안 된다 */
+    if (s.tgt.some(([a, b]) => {
+      const o = walk(s.g, a, null, null);
+      return o && key(o) === key(b);
+    })) continue;
+    const d = depthOf(s.g, s.tgt);
+    if (d === null || d < lo || d > hi) continue;
+    return { G: s.g, tgt: s.tgt, solved, depth: d, back, tries, cells: s.cells };
+  }
+  return null;
+}
+
+/* ── 문제집 ──────────────────────────────────────────────────────
+   사람이 손으로 짜 둔 문제들. 일곱 다 **풀린 꼴**로 적혀 있다 — 쓰는 칸이
+   열다섯·열여섯이고, 하나같이 제 몸을 한 번 이상 꼰다.
+   불러올 때 돌리거나 뒤집고(여덟 꼴), 다시 흩어서 낸다. 적힌 것이 이미
+   흩어진 꼴이면 그대로 낸다 */
+const BANK = [
+  { tile: [["bend:2", "bend:1", "plus:0", "bend:2"],
+           ["bend:0", "plus:0", "plus:0", "plus:0"],
+           ["bend:1", "plus:0", "plus:0", "plus:0"],
+           ["bend:3", "bend:0", "bend:3", "line:0"]],
+    lamp: [["c1 ↑", "d4 ↓"], ["d2 →", "a1 ←"], ["d3 →", "a4 ←"]] },
+  { tile: [["bend:1", "plus:0", "line:1", "bend:2"],
+           ["plus:2", "plus:2", "line:3", "plus:2"],
+           ["plus:0", "plus:0", "bend:2", "line:0"],
+           ["bend:0", "bend:3", "bend:0", "plus:0"]],
+    lamp: [["b1 ↑", "d4 ↓"], ["d2 →", "a2 ←"], ["d4 →", "a3 ←"]] },
+  { tile: [["line:0", "bend:1", "bend:2", "bend:1"],
+           ["plus:0", "bend:3", "bend:0", "bend:3"],
+           ["bend:0", "bend:2", "bend:1", "bend:2"],
+           ["line:2", "bend:0", "plus:0", "bend:3"]],
+    lamp: [["a1 ↑", "c4 ↓"], ["d1 →", "a2 ←"]] },
+  { tile: [["bend:0", "bend:2", "bend:1", "bend:2"],
+           ["line:3", "bend:0", "plus:0", "bend:3"],
+           ["bend:1", "bend:2", "bend:0", "bend:2"],
+           ["bend:3", "bend:0", "line:1", "plus:0"]],
+    lamp: [["a1 ↑", "d4 ↓"], ["d4 →", "a4 ←"]] },
+  { tile: [["bend:1", "plus:0", "bend:2", "bend:1"],
+           ["bend:0", "bend:3", "line:0", "line:0"],
+           ["bend:2", "bend:3", "line:0", "line:0"],
+           ["bend:0", "line:1", "plus:0", "bend:3"]],
+    lamp: [["b1 ↑", "c4 ↓"], ["d1 →", "a3 ←"]] },
+  { tile: [["bend:1", "bend:2", "bend:0", "bend:2"],
+           ["plus:0", "plus:0", "bend:2", "line:0"],
+           ["line:0", "bend:0", "plus:0", "plus:0"],
+           ["bend:0", "line:1", "bend:3", "line:0"]],
+    lamp: [["d3 →", "a2 ←"], ["c1 ↑", "d4 ↓"]] },
+  /* 열여섯 칸을 다 쓰고, 한 짝이 +자를 세 번 꼬는 것 */
+  { tile: [["bend:1", "bend:2", "bend:1", "bend:3"],
+           ["plus:0", "plus:0", "plus:0", "bend:2"],
+           ["line:0", "bend:0", "plus:0", "plus:0"],
+           ["bend:0", "line:1", "plus:0", "bend:3"]],
+    lamp: [["d1 ↑", "c4 ↓"], ["a2 ←", "d3 →"]] },
+  { tile: [["line:0", "bend:0", "bend:1", "bend:2"],
+           ["bend:0", "bend:2", "bend:0", "plus:0"],
+           ["bend:1", "plus:0", "line:1", "bend:3"],
+           ["bend:3", "bend:0", "line:1", "bend:2"]],
+    lamp: [["d2 →", "a4 ←"], ["a1 ↑", "d4 ↓"]] },
+  { tile: [["bend:1", "line:1", "bend:3", "bend:0"],
+           ["line:0", "bend:1", "bend:2", "bend:1"],
+           ["plus:0", "plus:0", "bend:3", "line:0"],
+           ["line:0", "bend:0", "line:1", "bend:3"]],
+    lamp: [["d2 →", "a3 ←"], ["c1 ↑", "a4 ↓"]] },
+  { tile: [["bend:1", "bend:3", "bend:1", "line:1"],
+           ["line:0", "bend:1", "plus:0", "bend:2"],
+           ["line:0", "bend:0", "bend:3", "line:0"],
+           ["plus:0", "line:1", "line:1", "bend:3"]],
+    lamp: [["b1 ↑", "a4 ↓"], ["d1 →", "a4 ←"]] },
+  { tile: [["bend:1", "bend:2", "line:1", "line:0"],
+           ["bend:0", "plus:0", "line:1", "bend:3"],
+           ["line:1", "plus:0", "bend:2", "bend:2"],
+           ["bend:1", "bend:3", "bend:0", "line:1"]],
+    lamp: [["d1 ↑", "a4 ↓"], ["d4 →", "a3 ←"]] },
+  { tile: [["bend:1", "bend:3", "bend:1", "bend:2"],
+           ["bend:0", "line:1", "plus:0", "bend:3"],
+           ["bend:2", "bend:1", "plus:0", "line:1"],
+           ["bend:0", "bend:3", "bend:0", "bend:2"]],
+    lamp: [["b1 ↑", "d4 ↓"], ["a3 ←", "d3 →"]] },
+  { tile: [["bend:1", "plus:0", "line:1", "bend:2"],
+           ["plus:0", "plus:0", "bend:2", "line:0"],
+           ["bend:0", "plus:0", "plus:0", "plus:0"],
+           ["bend:1", "bend:3", "bend:0", "bend:3"]],
+    lamp: [["a4 ↓", "b1 ↑"], ["d3 →", "a2 ←"]] },
+  { tile: [["plus:0", "bend:2", "bend:1", "line:1"],
+           ["bend:0", "plus:0", "plus:0", "bend:2"],
+           ["bend:1", "plus:0", "bend:3", "line:0"],
+           ["bend:0", "bend:3", "bend:1", "bend:3"]],
+    lamp: [["d1 →", "a1 ←"], ["a1 ↑", "c4 ↓"]] },
+  /* 이 하나는 위아래 짝이 **한 열에 서 있다** (c1 ↔ c4). 뽑을 때는 막는
+     꼴이지만, 사람이 짠 것은 길이 열세 칸을 돌아가므로 쉽지 않다 */
+  { tile: [["bend:2", "plus:0", "bend:0", "bend:2"],
+           ["bend:1", "bend:2", "bend:1", "bend:3"],
+           ["plus:0", "bend:3", "plus:0", "bend:3"],
+           ["bend:0", "line:1", "plus:0", "line:1"]],
+    lamp: [["c1 ↑", "c4 ↓"], ["a3 ←", "d4 →"]] },
+  { tile: [["bend:3", "bend:1", "bend:3", "bend:3"],
+           ["bend:1", "bend:3", "line:0", "plus:0"],
+           ["plus:0", "bend:2", "bend:1", "line:1"],
+           ["line:0", "bend:0", "bend:3", "line:1"]],
+    lamp: [["a3 ←", "d3 →"], ["a4 ↓", "c1 ↑"]] },
+  { tile: [["bend:1", "bend:3", "bend:1", "bend:2"],
+           ["plus:0", "bend:3", "bend:0", "plus:0"],
+           ["line:0", "bend:1", "plus:0", "bend:3"],
+           ["plus:0", "bend:3", "bend:0", "plus:0"]],
+    lamp: [["a4 ↓", "b1 ↑"], ["d2 →", "a4 ←"]] },
+  { tile: [["bend:1", "bend:0", "plus:3", "bend:2"],
+           ["line:1", "bend:1", "plus:3", "plus:2"],
+           ["bend:1", "plus:3", "bend:3", "line:2"],
+           ["plus:0", "bend:3", "plus:2", "line:2"]],
+    lamp: [["b1 ↑", "d4 ↓"], ["d2 →", "a4 ←"], ["a4 ↓", "c1 ↑"]] },
+];
+
+/* ── 그림으로 적고 읽기 ─────────────────────────────────────────
+   사람이 손으로 문제를 그릴 수 있게, 판을 **상자 글자 6×6** 으로 적는다.
+
+       .12..        0 번 칸은 왼쪽 램프, 5 번 칸은 오른쪽 램프
+       .┌┐┌┘        0 번 줄은 위 램프, 5 번 줄은 아래 램프
+       2┼┼┼┐        가운데 4×4 가 원판이다
+       .│└┼┼1       램프에 적는 수가 **짝 번호**다 (1·2·3)
+       .└─┼┘        `*` 로 적어도 된다 — 그때는 길을 걸어 짝을 찾는다
+       ..1..        (그러려면 그린 것이 풀린 꼴이어야 한다)
+*/
+const ART = { "02": "│", "13": "─", "12": "┌", "23": "┐", "01": "└", "03": "┘" };
+const ART_BACK = (() => {
+  const m = new Map();
+  for (const [sig, ch] of Object.entries(ART)){
+    const want = sig.split("").map(Number).sort().join("");
+    for (const k of KINDS) for (let r = 0; r < 4; r++){
+      const c = chans(k, r);
+      if (c.length === 1 && [...c[0]].sort().join("") === want && !m.has(ch))
+        m.set(ch, { kind: k, n: r });
+    }
+  }
+  m.set("┼", { kind: "plus", n: 0 });
+  return m;
+})();
+
+function artOf(G, tgt){
+  const tag = new Map();
+  tgt.forEach((p, i) => p.forEach(l => tag.set(key(l), String(i + 1))));
+  const at = (x, y, d) => tag.get(x + "," + y + "," + d) || ".";
+  const out = ["." + [0, 1, 2, 3].map(x => at(x, 0, N)).join("") + "."];
+  for (let y = 0; y < 4; y++){
+    let s = at(0, y, W);
+    for (let x = 0; x < 4; x++){
+      const t = G[y][x], r = ((t.n % 4) + 4) % 4;
+      s += t.kind === "plus" ? "┼"
+         : ART[chans(t.kind, r).map(p => [...p].sort().join(""))[0]];
+    }
+    out.push(s + at(3, y, E));
+  }
+  out.push("." + [0, 1, 2, 3].map(x => at(x, 3, S)).join("") + ".");
+  return out.join("\n");
+}
+
+/* 그림을 판으로. 성치 않으면 까닭을 글로 돌려준다 */
+function artRead(txt){
+  const ls = txt.replace(/\r/g, "").split("\n").filter(s => s.trim());
+  if (ls.length < 6) return "여섯 줄이어야 한다";
+  const ch = (r, c) => (ls[r] || "")[c] || ".";
+  const G = [];
+  for (let y = 0; y < 4; y++){
+    const row = [];
+    for (let x = 0; x < 4; x++){
+      const c = ch(y + 1, x + 1), t = ART_BACK.get(c);
+      if (!t) return `${FILE[x]}${y + 1} 자리의 「${c}」 를 모른다`;
+      row.push({ kind: t.kind, n: t.n });
+    }
+    G.push(row);
+  }
+  const marks = [];
+  for (let i = 0; i < 4; i++){
+    const put = (c, l) => { if (c !== "." && c !== " ") marks.push({ c, l }); };
+    put(ch(0, i + 1), { x: i, y: 0, d: N });
+    put(ch(5, i + 1), { x: i, y: 3, d: S });
+    put(ch(i + 1, 0), { x: 0, y: i, d: W });
+    put(ch(i + 1, 5), { x: 3, y: i, d: E });
+  }
+  if (marks.length < 4 || marks.length > 6 || marks.length % 2)
+    return `램프가 ${marks.length} 개다 — 넷이나 여섯이어야 한다`;
+  let tgt;
+  if (marks.every(m => "123".includes(m.c))){
+    const by = {};
+    for (const m of marks) (by[m.c] = by[m.c] || []).push(m.l);
+    tgt = Object.keys(by).sort().map(k => by[k]);
+    if (!tgt.every(p => p.length === 2)) return "짝마다 램프가 둘이어야 한다";
+  } else {
+    /* `*` 로 적었다 — 길을 걸어 짝을 찾는다 (그린 것이 풀린 꼴이라야 한다) */
+    const left = new Map(marks.map(m => [key(m.l), m.l]));
+    tgt = [];
+    for (const m of marks){
+      if (!left.has(key(m.l))) continue;
+      const o = walk(G, m.l, null, null);
+      if (!o || !left.has(key(o)) || key(o) === key(m.l))
+        return "별표로 적으면 그린 것이 풀린 꼴이어야 한다 (1·2·3 으로 적어라)";
+      left.delete(key(m.l)); left.delete(key(o));
+      tgt.push([m.l, o]);
+    }
+  }
+  const solved = solvedOf(G, tgt);
+  if (!solved) return "풀 수 없는 판이다 — 짝을 다시 보라";
+  const bad = tgt.filter(([a, b]) => !far(a, b)).length;
+  return { G, tgt, solved, cells: cellsOf(G, tgt, solved), count: 0, tries: 1,
+           from: "그림에서 읽었다" + (bad ? ` (가까운 짝 ${bad} 개)` : "") };
+}
+
+/* 적어 둔 꼴을 판으로 */
+function fromText(p){
+  const G = p.tile.map(row => row.map(s => {
+    const [kind, r] = s.split(":");
+    return { kind, n: +r };
+  }));
+  const tgt = p.lamp.map(pr => pr.map(s => ({
+    x: FILE.indexOf(s[0]), y: +s[1] - 1, d: "↑→↓←".indexOf(s.trim().slice(-1)),
+  })));
+  return { G, tgt };
+}
+
+/* ── 돌리기·뒤집기 ───────────────────────────────────────────────
+   같은 문제라도 돌리거나 뒤집으면 **다른 문제처럼 보인다.** 여덟 가지가
+   있어(네모의 대칭이 여덟이다) 문제집 하나가 여덟 꼴로 늘어난다.
+   칸 자리와 함께 **방향도 같이 옮겨야** 한다 */
+const SYM = [
+  { c: (x, y) => [x, y],         d: d => d,                  n: "그대로" },
+  { c: (x, y) => [3 - y, x],     d: d => (d + 1) % 4,        n: "90°" },
+  { c: (x, y) => [3 - x, 3 - y], d: d => (d + 2) % 4,        n: "180°" },
+  { c: (x, y) => [y, 3 - x],     d: d => (d + 3) % 4,        n: "270°" },
+  { c: (x, y) => [3 - x, y],     d: d => [0, 3, 2, 1][d],    n: "좌우 뒤집기" },
+  { c: (x, y) => [x, 3 - y],     d: d => [2, 1, 0, 3][d],    n: "위아래 뒤집기" },
+  { c: (x, y) => [y, x],         d: d => [3, 2, 1, 0][d],    n: "대각 뒤집기" },
+  { c: (x, y) => [3 - y, 3 - x], d: d => [1, 0, 3, 2][d],    n: "반대각 뒤집기" },
+];
+/* 통로 꼴 → 타일. 방향을 옮긴 뒤 어느 타일인지 되찾는 데 쓴다 */
+const SIG = (() => {
+  const m = new Map();
+  const sig = ps => ps.map(p => [...p].sort().join("")).sort().join("|");
+  for (const k of KINDS) for (let r = 0; r < 4; r++){
+    const s = sig(chans(k, r));
+    if (!m.has(s)) m.set(s, { kind: k, n: r });
+  }
+  return { map: m, sig };
+})();
+function symTile(t, S){
+  const ps = chans(t.kind, ((t.n % 4) + 4) % 4).map(p => p.map(S.d));
+  const got = SIG.map.get(SIG.sig(ps));
+  return { kind: got.kind, n: got.n };
+}
+function symmetry(G, tgt, i){
+  const S = SYM[i], g = [[], [], [], []].map(() => new Array(4));
+  G.forEach((row, y) => row.forEach((t, x) => {
+    const [nx, ny] = S.c(x, y);
+    g[ny][nx] = symTile(t, S);
+  }));
+  const t2 = tgt.map(p => p.map(l => {
+    const [nx, ny] = S.c(l.x, l.y);
+    return { x: nx, y: ny, d: S.d(l.d) };
+  }));
+  return { g, tgt: t2, name: S.n };
+}
+
+/* 흩어진 꼴에서 **풀린 꼴**을 되찾는다 — 가장 값싸게 푸는 누름을 먹인다 */
+function solvedOf(G, tgt){
+  for (let i = 0; i < 65536; i++){
+    const v = ORDER[i];
+    load(v);
+    if (solves(G, tgt, CB, RB))
+      return G.map((row, y) => row.map((t, x) => t.n + CB[x] + RB[y]));
+  }
+  return null;
+}
+/* 풀린 꼴에서 길이 지나는 칸을 세어 본다 */
+function cellsOf(G, tgt, solved){
+  const was = G.map(row => row.map(t => t.n));
+  G.forEach((row, y) => row.forEach((t, x) => { t.n = solved[y][x]; }));
+  const used = new Set(tgt.flatMap(p => walkT(G, p[0]).tiles));
+  G.forEach((row, y) => row.forEach((t, x) => { t.n = was[y][x]; }));
+  return used.size;
+}
+
+/* 문제집은 **차례로** 돈다. 무작위로 집으면 이미 본 것이 또 나와,
+   새 문제를 찾아 뒤질 때 헷갈린다 */
+let bankAt = 0;
+function fromBank(){
+  for (let t = 0; t < BANK.length * 3; t++){
+    const i = bankAt % BANK.length;
+    bankAt = (bankAt + 1) % BANK.length;
+    const raw = BANK[i], one = fromText(raw);
+    if (one.tgt.length !== V.pairs) continue;
+    /* 대칭을 섞을 때는 여덟 꼴 중 **규칙에 맞는 것만** 쓴다.
+       「열이 바뀌어야 한다」는 자가 위아래 짝에만 걸려 있어, 한 행에 누운
+       가로 짝을 대각으로 뒤집으면 한 열에 선 짝이 되어 자에 걸린다.
+       적힌 것이 이미 자를 어겼다면(사람이 그런 것은 그냥 둔다) 안 가린다 */
+    const strict = one.tgt.every(([a, b]) => far(a, b));
+    const s = !V.sym ? 0 : shuffle([0, 1, 2, 3, 4, 5, 6, 7]).find(k =>
+      !strict || symmetry(one.G, one.tgt, k).tgt.every(([a, b]) => far(a, b)));
+    if (s === undefined) continue;
+    const { g, tgt, name } = symmetry(one.G, one.tgt, s);
+    const solved = solvedOf(g, tgt);
+    if (!solved) continue;
+    const cells = cellsOf(g, tgt, solved);
+    if (cells < V.cmin || cells > V.cmax) continue;
+    const q = { G: g, tgt, solved, cells, count: 0, tries: t + 1,
+                from: `문제집 ${i + 1}번` + (V.sym ? ` · ${name}` : "") };
+    q.depth = depthOf(g, tgt);
+    q.back = q.depth;
+    const pre = tgt.some(([a, b]) => {
+      const o = walk(g, a, null, null);
+      return o && key(o) === key(b);
+    });
+    /* 이미 풀려 있거나 자에 안 맞으면 다시 흩는다 */
+    if (pre || q.depth < V.lo || q.depth > V.hi){
+      if (!shake(q)) continue;
+    }
+    return q;
+  }
+  return null;
+}
+
+/* ── 손잡이 ──────────────────────────────────────────────────── */
+const KNOB = [
+  ["tileD", "원판 지름", 40, 120, 83, "px"],
+  ["gap",   "칸 틈",      0,  16,  2, "px"],
+  ["pipe",  "파이프 굵기", 4, 34, 19, "px"],
+  ["lampD", "램프 지름",   8,  26, 12, "px"],
+  ["btnD",  "단추 지름",  36,  80, 40, "px"],
+  ["spin",  "도는 시간",  80, 600, 300, "ms"],
+  ["pop",   "튕김",        0,  60, 50, "%"],
+  ["bt",    "호흡 시간", 1200, 5000, 3200, "ms"],
+  ["floor", "호흡 바닥",  10,  80, 42, "%"],
+  ["unit",  "점멸 한 칸", 40, 200, 90, "ms"],
+  ["off",   "점멸 바닥",   0,  40,  0, "%"],
+  ["shut",  "눈 감는 시간", 0, 600, 260, "ms"],
+  ["hold",  "감은 참",      0, 800, 180, "ms"],
+  ["wave",  "칸마다 늦추기", 0,  80,  18, "ms"],
+];
+const KNOB2 = [                              /* 문제를 뽑는 틀 */
+  ["lo",   "깊이 아래",    0, 16,  0, ""],
+  ["hi",   "깊이 위",      0, 16, 16, ""],
+  ["cmin", "쓰는 칸 아래", 8, 16,  8, ""],
+  ["cmax", "쓰는 칸 위",   8, 16, 16, ""],
+];
+const V = {};
+const slider = ([k, name, lo, hi, def, unit]) =>
+  `<div class="row"><label>${name}</label>
+   <input type="range" id="k_${k}" min="${lo}" max="${hi}" value="${def}">
+   <output id="o_${k}">${def}${unit}</output></div>`;
+$("knobs").innerHTML = KNOB.map(slider).join("");
+$("knobs2").innerHTML = KNOB2.map(slider).join("");
+
+/* 짝은 색이 아니라 **가락**으로 가른다. 램프는 다 적색이고(= 아직 안
+   이어졌다), 이어진 짝만 그 자리에서 녹색이 된다. 가락 글은
+   `-` 켜짐 · `,` 꺼짐 이고, 한 칸이 「점멸 한 칸」이다 */
+function beatCSS(name, pat, off){
+  const n = pat.length;
+  let s = `@keyframes ${name}{`;
+  for (let i = 0; i < n; i++)
+    s += `${(i / n * 100).toFixed(3)}%,${((i + 1) / n * 100 - .001).toFixed(3)}%`
+       + `{opacity:${pat[i] === "-" ? 1 : off}}`;
+  return s + "}";
+}
+
+/* 원판의 생김새는 다 잡혔다 — 고르는 판에서 고른 값이다 */
+const T = { bend: 49, cross: 1, ringW: 1, bg: "hsl(44 32% 74%)",
+            ink: "#12100d", ring: "rgba(0,0,0,.22)" };
+
+function readKnobs(){
+  for (const [k, , , , , unit] of KNOB.concat(KNOB2)){
+    V[k] = +$("k_" + k).value;
+    $("o_" + k).textContent = V[k] + unit;
+  }
+  if (V.lo > V.hi){ V.hi = V.lo; $("k_hi").value = V.lo; $("o_hi").textContent = V.lo; }
+  if (V.cmin > V.cmax){
+    V.cmax = V.cmin;
+    $("k_cmax").value = V.cmin; $("o_cmax").textContent = V.cmin;
+  }
+  V.pairs = +$("pairs").value;
+  V.loop  = $("loop").value === "1";
+  V.src   = $("src").value;
+  V.sym   = $("sym").value === "1";
+  V.n    = +$("n").value;
+  V.god  = $("god").value === "1";
+  V.me   = Math.min(+($("me").value || 1), V.n);
+  V.beat = [$("b1").value || "-", $("b2").value || "-"];
+  const st = document.body.style;
+  st.setProperty("--spin", V.spin + "ms");
+  st.setProperty("--ease", `cubic-bezier(.2,${(1 + V.pop / 100).toFixed(2)},.4,1)`);
+  st.setProperty("--bt", V.bt + "ms");
+  st.setProperty("--shut", V.shut + "ms");
+  st.setProperty("--floor", V.floor / 100);
+  $("beats").textContent =
+    beatCSS("beat1", V.beat[0], V.off / 100) +
+    beatCSS("beat2", V.beat[1], V.off / 100);
+}
+/* 가락 하나가 도는 데 걸리는 시간 — 글자 수 × 한 칸 */
+const beatMS = i => (V.beat[i - 1] || "-").length * V.unit;
+
+/* ── 원판 한 장 ─────────────────────────────────────────────────
+   파이프는 원 안에 머문다 (clipPath). 그러지 않으면 꺾이는 자리의
+   모서리가 원 밖으로 삐죽 나온다 */
+let uid = 0;
+function tileSVG(kind, D){
+  const c = D / 2, R = D / 2, pw = Math.min(V.pipe, D * 0.6), id = "cp" + (++uid);
+  const line = (d, w, col) => `<path d="${d}" fill="none" stroke="${col}" `
+    + `stroke-width="${w}" stroke-linecap="butt" stroke-linejoin="round"/>`;
+  const end = D;
+  let body = "";
+  if (kind === "line"){
+    body = line(`M ${c} ${c - end} L ${c} ${c + end}`, pw, T.ink);
+  } else if (kind === "bend"){
+    const k = T.bend / 100 * (c - pw / 4);
+    body = line(`M ${c} ${c - end} L ${c} ${c - k} Q ${c} ${c} ${c + k} ${c} `
+              + `L ${c + end} ${c}`, pw, T.ink);
+  } else {
+    /* 한쪽이 위로 지나가는 다리 — 「여기서는 안 꺾인다」를 글자 없이 알린다 */
+    body = line(`M ${c - end} ${c} L ${c + end} ${c}`, pw, T.ink)
+         + line(`M ${c} ${c - end} L ${c} ${c + end}`, pw + T.cross * 2, T.bg)
+         + line(`M ${c} ${c - end} L ${c} ${c + end}`, pw, T.ink);
+  }
+  return `<svg viewBox="0 0 ${D} ${D}" width="${D}" height="${D}" `
+    + `xmlns="http://www.w3.org/2000/svg">`
+    + `<clipPath id="${id}"><circle cx="${c}" cy="${c}" r="${R}"/></clipPath>`
+    + `<circle cx="${c}" cy="${c}" r="${R - T.ringW / 2}" fill="${T.bg}" `
+    + `stroke="${T.ring}" stroke-width="${T.ringW}"/>`
+    + `<g clip-path="url(#${id})">${body}</g></svg>`;
+}
+
+/* ── 판 ─────────────────────────────────────────────────────────
+   누름은 쌓아만 둔다 — 그림은 계속 같은 쪽으로 돌고, 통로는 네 번마다
+   제자리로 온다 */
+let Q = null;
+const okPair = i => {                        /* 이 짝은 이어졌나 */
+  const o = walk(Q.G, Q.tgt[i][0], null, null);
+  return !!o && key(o) === key(Q.tgt[i][1]);
+};
+const lit = () => Q && solves(Q.G, Q.tgt, null, null);
+const ownerOf = i => i % V.n;                /* 열 a~d, 행 1~4 를 돌려 나눈다 */
+const mine = i => V.god || ownerOf(i) === V.me - 1;
+
+function press(i){                           /* 0~3 열 a~d · 4~7 행 1~4 */
+  if (!mine(i)) return;
+  for (let m = 0; m < 4; m++) (i < 4 ? Q.G[m][i] : Q.G[i - 4][m]).n++;
+  turn();
+}
+
+function board(){
+  const D = V.tileD, g = V.gap, L = V.lampD, B = V.btnD, lab = 20;
+  const which = new Map();
+  Q.tgt.forEach((p, i) => p.forEach(l => which.set(key(l), i)));
+  const at = (r, c, h) => `<div style="grid-row:${r};grid-column:${c}">${h}</div>`;
+  const dot = l => `<div class="${dotClass(which.get(key(l)))}" `
+    + `id="d${l.x}${l.y}${l.d}" style="width:${L}px;height:${L}px;`
+    + `${dotStyle(which.get(key(l)))}"></div>`;
+  const btn = i => `<button class="btn${mine(i) ? "" : " none"}" data-i="${i}" `
+    + `style="width:${B}px;height:${B}px"></button>`;
+
+  let out = "";
+  for (let j = 0; j < 4; j++){
+    out += at(1, 3 + j, `<i class="name">${FILE[j]}</i>`);
+    out += at(2, 3 + j, dot({ x: j, y: 0, d: N }));
+    out += at(7, 3 + j, dot({ x: j, y: 3, d: S }));
+    out += at(8, 3 + j, btn(j));
+  }
+  for (let i = 0; i < 4; i++){
+    out += at(3 + i, 1, `<i class="name">${i + 1}</i>`);
+    out += at(3 + i, 2, dot({ x: 0, y: i, d: W }));
+    out += at(3 + i, 7, dot({ x: 3, y: i, d: E }));
+    out += at(3 + i, 8, btn(4 + i));
+    for (let j = 0; j < 4; j++)
+      out += at(3 + i, 3 + j,
+        `<div class="eye" style="width:${D}px;height:${D}px">`
+        + `<div class="tile" id="t${i}${j}" `
+        + `style="transform:rotate(${Q.G[i][j].n * 90}deg)">`
+        + tileSVG(Q.G[i][j].kind, D) + `</div>`
+        + `<div class="cut"><i class="lid" style="transition-delay:`
+        + `${(i + j) * V.wave}ms"></i></div></div>`);
+  }
+  const b = $("board");
+  b.style.gap = g + "px";
+  b.style.gridTemplateColumns = `${lab}px ${L}px repeat(4,${D}px) ${L}px ${B}px`;
+  b.style.gridTemplateRows    = `${lab}px ${L}px repeat(4,${D}px) ${L}px ${B}px`;
+  b.innerHTML = out;
+  $("size").textContent = `판은 가로 ${lab + L * 2 + D * 4 + g * 7 + B}px · `
+    + `세로 ${lab + L * 2 + D * 4 + g * 7 + B}px 든다 (폰은 342px 쯤이다)`;
+}
+
+/* 램프 하나의 꼴 — 꺼진 램프 / 아직 안 이어진 짝(적색 + 제 가락) /
+   이어진 짝(녹색, 가락 없이 가만히) */
+const lampClass = (done, i) => done ? "dot on" : `dot on warn p${i}`;
+const dotClass = i => i === undefined ? "dot" : lampClass(okPair(i), i);
+const dotStyle = i =>
+  i === undefined || i === 0 || okPair(i) ? "" : `--st:${beatMS(i)}ms`;
+
+/* ── 눈 감았다 뜨기 ─────────────────────────────────────────────
+   그림이 바뀌는 참에 눈꺼풀이 내려와 다 덮고, 그 사이에 판을 갈아 놓고,
+   다시 올라가며 새 그림이 드러난다. **각만 바뀌는 것(흩어놓기·한 수
+   보기)은 감지 않는다** — 그건 원판이 돌아가는 것을 봐야 하는 참이다 */
+const eyes = () => document.querySelectorAll(".eye");
+function blink(swap){
+  const was = eyes();
+  if (!was.length || !V.shut){ swap(); return; }   /* 첫 판은 그냥 깐다 */
+  was.forEach(e => e.classList.add("shut"));
+  setTimeout(() => {
+    swap();                                  /* 감긴 사이에 갈아 놓는다 */
+    eyes().forEach(e => e.classList.add("shut"));
+    /* 새로 만든 칸은 감긴 꼴로 한 번 그려진 뒤에야 뜨는 것이 보인다 */
+    requestAnimationFrame(() => requestAnimationFrame(() =>
+      eyes().forEach(e => e.classList.remove("shut"))));
+  }, V.shut + V.wave * 6 + V.hold);
+}
+
+/* 돌아가는 것과 램프만 고친다 — **칸을 다시 만들지 않는다.** 다시 만들면
+   새 요소가 처음부터 그 각도라 애니메이션이 안 걸린다 */
+function turn(){
+  for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++){
+    const el = $("t" + i + j);
+    if (el) el.style.transform = `rotate(${Q.G[i][j].n * 90}deg)`;
+  }
+  paint();
+  say();
+}
+function paint(){                            /* 켜진 램프들의 꼴만 고친다 */
+  Q.tgt.forEach((p, i) => p.forEach(l => {
+    const el = $("d" + l.x + l.y + l.d);
+    if (!el) return;
+    el.className = dotClass(i);
+    el.style.cssText = `width:${V.lampD}px;height:${V.lampD}px;${dotStyle(i)}`;
+  }));
+}
+
+function render(){
+  readKnobs();
+  if (!Q) return;
+  const sel = $("me");
+  if (sel.options.length !== V.n)
+    sel.innerHTML = Array.from({ length: V.n }, (_, i) =>
+      `<option value="${i + 1}"${i + 1 === V.me ? " selected" : ""}>${i + 1}</option>`).join("");
+  board();
+  say();
+}
+
+function say(){
+  const now = depthOf(Q.G, Q.tgt);
+  $("say").innerHTML =
+    `<span><i>처음 깊이</i> <b>${Q.depth}</b></span>`
+    + `<span><i>지금 깊이</i> <b>${now}</b></span>`
+    + `<span><i>쓰는 칸</i> <b>${Q.cells}</b> / 16</span>`
+    + `<span><i>푸는 자리</i> <b>${Q.count}</b> / 16384</span>`
+    + `<span><i>뽑느라 버린 판</i> <b>${Q.tries - 1}</b></span>`
+    + `<span><i>짝</i> <b>${Q.tgt.map(p => p.map(spot).join(" ↔ ")).join(" · ")}</b></span>`
+    + `<span><i>어디서</i> <b>${Q.from || "뽑았다"}</b></span>`;
+  const n = Q.tgt.filter((_, i) => okPair(i)).length;
+  $("verdict").textContent = n === Q.tgt.length
+    ? "다 이었다" : `${n} / ${Q.tgt.length} 짝 이었다`;
+}
+
+function deal(){
+  readKnobs();
+  const bank = V.src === "bank" || (V.src === "mix" && rnd(2));
+  const q = (bank ? fromBank() || pick(V.lo, V.hi)
+                  : pick(V.lo, V.hi) || fromBank()) || pick(0, 16);
+  if (!q){ $("pool").textContent = "못 뽑았다 — 자를 넓혀라"; return; }
+  q.count = countOf(q.G, q.tgt);
+  blink(() => {
+    Q = q;
+    $("pool").textContent = (q.from || "뽑았다") + ` · 버린 것 ${q.tries - 1} 개`;
+    render();
+    artFill(false);
+    $("artsay").textContent = "";
+  });
+}
+
+/* ── 난도 재기 ───────────────────────────────────────────────── */
+function survey(n){
+  const hist = new Array(14).fill(0);
+  let tries = 0, deep = 0, cells = 0;
+  for (let i = 0; i < n; i++){
+    const q = pick(0, 24, 400, V.pairs);     /* 깊이는 안 가리고 다 받는다 */
+    if (!q) continue;
+    tries += q.tries;
+    hist[Math.min(q.depth, 13)]++;
+    cells += q.cells;
+    if (q.depth >= V.lo && q.depth <= V.hi) deep++;
+  }
+  const all = hist.reduce((a, b) => a + b, 0), top = Math.max(...hist, 1);
+  const ds = hist.flatMap((c, d) => new Array(c).fill(d));
+  $("bars").innerHTML = hist.map((c, d) =>
+    `<div><span>${c || ""}</span>
+     <u class="${d >= V.lo && d <= V.hi ? "pick" : ""}"
+        style="height:${(c / top * 100).toFixed(1)}%"></u>
+     <span>${d === 13 ? "13+" : d}</span></div>`).join("");
+  $("stat").innerHTML = `${all} 판 · 평균 <b>`
+    + `${(ds.reduce((a, b) => a + b, 0) / all).toFixed(1)}</b>`
+    + ` · 중간값 <b>${ds[Math.floor(all / 2)]}</b>`
+    + ` · 가장 깊은 것 <b>${ds[all - 1]}</b>`
+    + ` · 깊이 ${V.lo}~${V.hi} 가 <b>${(deep / all * 100).toFixed(0)}%</b>`
+    + ` · 쓰는 칸 평균 <b>${(cells / all).toFixed(1)}</b>/16`
+    + ` · 한 판 뽑는 데 판 <b>${(tries / all).toFixed(1)}</b> 개를 본다`;
+}
+
+/* ── 손가락 ────────────────────────────────────────────────── */
+$("board").onclick = e => {
+  const b = e.target.closest(".btn");
+  if (b) press(+b.dataset.i);
+};
+/* 풀린 꼴에서 다시 흩어 놓는다 — 램프 짝과 타일은 그대로다.
+   새로 뽑을 때와 같은 자를 쓴다 (이어진 짝이 없고, 깊이가 범위 안) */
+function shake(q){
+  const P = q || Q;
+  for (let t = 0; t < 300; t++){
+    P.G.forEach((row, i) => row.forEach((tl, j) => { tl.n = P.solved[i][j]; }));
+    let back = 0;
+    for (let k = 0; k < 8; k++){
+      const r = rnd(4);
+      back += (4 - r) % 4;
+      for (let m = 0; m < 4; m++) (k < 4 ? P.G[m][k] : P.G[k - 4][m]).n += r;
+    }
+    if (P.tgt.some(([a, b]) => {
+      const o = walk(P.G, a, null, null);
+      return o && key(o) === key(b);
+    })) continue;
+    const d = depthOf(P.G, P.tgt);
+    if (d < V.lo || d > V.hi) continue;
+    P.depth = d; P.back = back;
+    if (P === Q) turn();
+    return true;
+  }
+  return false;                              /* 못 흩었다 — 판은 풀린 꼴이다 */
+}
+$("art").value = "";
+const artFill = solved => {
+  if (!Q) return;
+  if (!solved) return void ($("art").value = artOf(Q.G, Q.tgt));
+  const was = Q.G.map(row => row.map(t => t.n));
+  Q.G.forEach((row, y) => row.forEach((t, x) => { t.n = Q.solved[y][x]; }));
+  $("art").value = artOf(Q.G, Q.tgt);
+  Q.G.forEach((row, y) => row.forEach((t, x) => { t.n = was[y][x]; }));
+};
+$("artnow").onclick = () => { artFill(false); $("artsay").textContent = ""; };
+$("artsol").onclick = () => { artFill(true); $("artsay").textContent = ""; };
+$("read").onclick = () => {
+  const got = artRead($("art").value);
+  if (typeof got === "string"){ $("artsay").textContent = got; return; }
+  got.depth = depthOf(got.G, got.tgt);
+  got.back = got.depth;
+  got.count = countOf(got.G, got.tgt);
+  blink(() => {
+    Q = got;
+    $("artsay").textContent = "읽었다";
+    $("pool").textContent = got.from;
+    render();
+  });
+};
+$("deal").onclick = deal;
+$("wink").onclick = () => blink(() => {});   /* 판은 그대로 두고 눈만 감는다 */
+$("shake").onclick = shake;
+$("back").onclick = () => {
+  Q.G.forEach((row, i) => row.forEach((t, j) => { t.n = Q.solved[i][j]; }));
+  turn();
+};
+$("hint").onclick = () => {                  /* 값싼 한 수 — 깊이를 줄이는 단추 */
+  const was = depthOf(Q.G, Q.tgt);
+  if (!was) return;                          // 이미 이어져 있다
+  for (let i = 0; i < 8; i++){
+    for (let m = 0; m < 4; m++) (i < 4 ? Q.G[m][i] : Q.G[i - 4][m]).n++;
+    const d = depthOf(Q.G, Q.tgt);
+    if (d === was - 1){ turn(); return; }
+    for (let m = 0; m < 4; m++) (i < 4 ? Q.G[m][i] : Q.G[i - 4][m]).n += 3;
+  }
+};
+$("run100").onclick = () => survey(100);
+$("run400").onclick = () => survey(400);
+$("reset").onclick = () => {
+  for (const [k, , , , def] of KNOB.concat(KNOB2)) $("k_" + k).value = def;
+  render();
+};
+$("dump").onclick = () => {
+  /* 문제집은 **풀린 꼴**로 받는다. 지금 흩어진 꼴을 적으면 불러올 때
+     또 흩으므로 같은 문제가 두 번 흩어진다 */
+  const was = Q.G.map(row => row.map(t => t.n));
+  Q.G.forEach((row, y) => row.forEach((t, x) => { t.n = Q.solved[y][x]; }));
+  $("out").value = JSON.stringify({
+    tile: Q.G.map(row => row.map(t => t.kind + ":" + ((t.n % 4) + 4) % 4)),
+    lamp: Q.tgt.map(p => p.map(spot)),
+    depth: Q.depth, count: Q.count, cells: Q.cells,
+  }, null, 1);
+  Q.G.forEach((row, y) => row.forEach((t, x) => { t.n = was[y][x]; }));
+};
+for (const el of document.querySelectorAll("input,select")) el.oninput = render;
+
+/* ── 검산 ───────────────────────────────────────────────────── */
+readKnobs();
+deal();
+survey(30);
+const chk = [];
+const ok = (name, got, want) => chk.push([name,
+  JSON.stringify(got) === JSON.stringify(want), got, want]);
+
+ok("+자는 흐름을 꺾지 않는다", [thru("plus", 0, N), thru("plus", 0, E)], [S, W]);
+ok("막다른 길이 없다", KINDS.map(k => new Set(chans(k, 0).flat()).size), [2, 2, 4]);
+ok("램프는 열여섯, 테두리 칸은 열둘",
+   [LAMPS.length, new Set(LAMPS.map(l => l.x + "," + l.y)).size], [16, 12]);
+ok("뽑은 문제는 깊이가 바라는 범위 안이다",
+   Q.depth >= V.lo && Q.depth <= V.hi, true);
+ok("뽑은 문제는 풀린다 · 푸는 자리가 하나 이상이다",
+   [Q.depth !== null, Q.count > 0], [true, true]);
+ok("안 이어진 짝은 적색이고, 이어지면 녹색이 된다 — 가락도 멈춘다",
+   [lampClass(false, 0), lampClass(true, 0)], ["dot on warn p0", "dot on"]);
+ok("짝마다 가락이 다르다 — 숨 쉬기 · 짧게 끊기 · 길게 끊기",
+   [0, 1, 2].map(i => lampClass(false, i).split(" ").pop()), ["p0", "p1", "p2"]);
+ok("되돌려 놓으면 램프가 다 녹색이다", (() => {
+  const was = Q.G.map(row => row.map(t => t.n));
+  Q.G.forEach((row, i) => row.forEach((t, j) => { t.n = Q.solved[i][j]; }));
+  const got = Q.tgt.map((_, i) => dotClass(i));
+  Q.G.forEach((row, i) => row.forEach((t, j) => { t.n = was[i][j]; }));
+  return got;
+})(), ["dot on", "dot on"]);
+ok("원판마다 눈꺼풀이 하나씩 있다",
+   [eyes().length, document.querySelectorAll(".eye .lid").length], [16, 16]);
+ok("가락 글이 그대로 들어간다 — 켜짐 칸은 1, 꺼짐 칸은 0",
+   (() => {
+     const css = beatCSS("t", "-,-", 0);
+     return [(css.match(/opacity:1/g) || []).length,
+             (css.match(/opacity:0/g) || []).length];
+   })(), [2, 1]);
+ok("멀어야 한다 — 맞은편 면에, 열이 바뀌어야 한다", [
+  far({ x: 0, y: 0, d: N }, { x: 0, y: 0, d: W }),   /* a1 위 → a1 왼쪽 */
+  far({ x: 0, y: 0, d: N }, { x: 0, y: 3, d: S }),   /* a1 위 → a4 아래 — 한 열 */
+  far({ x: 0, y: 0, d: N }, { x: 2, y: 3, d: S }),   /* a1 위 → c4 아래 */
+  far({ x: 3, y: 3, d: E }, { x: 0, y: 3, d: W }),   /* d4 오른쪽 → a4 왼쪽 */
+], [false, false, true, true]);
+ok("뽑은 짝이 다 맞은편 면이고 열이 바뀐다",
+   Q.tgt.every(([a, b]) => far(a, b)), true);
+ok("두 짝이 네 면을 다 쓴다", (() => {
+  const q = pick(0, 24, 400, 2);
+  return q ? new Set(q.tgt.flat().map(l => l.d)).size : "못 뽑았다";
+})(), 4);
+ok("두 길이 +자 한 칸에서 엇갈린다", (() => {
+  const q = pick(0, 24, 400, 2);
+  if (!q) return "못 뽑았다";
+  q.G.forEach((row, i) => row.forEach((t, j) => { t.n = q.solved[i][j]; }));
+  const [a, b] = q.tgt.map(p => new Set(walkT(q.G, p[0]).tiles));
+  const same = [...a].filter(t => b.has(t));
+  return [same.length > 0, same.every(t => q.G[t >> 2][t & 3].kind === "plus")];
+})(), [true, true]);
+ok("새 판에는 이어진 짝이 하나도 없다",
+   Q.tgt.map((_, i) => okPair(i)), Q.tgt.map(() => false));
+ok("흩어놓기도 이어진 짝을 남기지 않는다 · 깊이를 다시 잰다", (() => {
+  const was = Q.depth;
+  if (!shake()) return "못 흩었다";
+  return [Q.tgt.some((_, i) => okPair(i)), Q.depth === depthOf(Q.G, Q.tgt),
+          typeof was === "number"];
+})(), [false, true, true]);
+ok("그림으로 적고 다시 읽으면 같은 판이다", (() => {
+  const art = artOf(Q.G, Q.tgt);
+  const got = artRead(art);
+  if (typeof got === "string") return got;
+  /* 각이 아니라 **통로 꼴**로 견준다 — 직선은 두 번마다, +자는 매번
+     같은 타일로 돌아오므로 각은 달라도 같은 판이다 */
+  const sig = G => JSON.stringify(G.map(r => r.map(t =>
+    SIG.sig(chans(t.kind, ((t.n % 4) + 4) % 4)))));
+  const same = sig(got.G) === sig(Q.G);
+  /* 짝 안에서 어느 쪽이 먼저인지는 뜻이 없다 — 모아서 견준다 */
+  const set = t => JSON.stringify(t.map(p => p.map(key).sort()));
+  const lamps = set(got.tgt) === set(Q.tgt);
+  return [same, lamps, got.cells === Q.cells];
+})(), [true, true, true]);
+ok("별표로 적은 그림도 읽는다 (풀린 꼴이면 짝을 찾아낸다)", (() => {
+  const was = Q.G.map(row => row.map(t => t.n));
+  Q.G.forEach((row, y) => row.forEach((t, x) => { t.n = Q.solved[y][x]; }));
+  const art = artOf(Q.G, Q.tgt).replace(/[123]/g, "*");
+  Q.G.forEach((row, y) => row.forEach((t, x) => { t.n = was[y][x]; }));
+  const got = artRead(art);
+  if (typeof got === "string") return got;
+  return got.tgt.length === Q.tgt.length;
+})(), true);
+ok("성치 않은 그림은 까닭을 알려 준다", [
+  typeof artRead("...."), typeof artRead(".....\n.XXXX\n.....\n.....\n.....\n....."),
+], ["string", "string"]);
+ok("상자 글자 일곱이 타일 일곱에 그대로 맞는다",
+   [...ART_BACK.keys()].length, 7);
+ok("문제집에 적힌 것이 다 성하다 — 짝이 이어지고 램프가 짝을 짓는다", (() => {
+  const bad = [], loose = [];
+  BANK.forEach((raw, i) => {
+    const { G, tgt } = fromText(raw);
+    const solved = solvedOf(G, tgt);
+    if (!solved) return bad.push(i + 1 + " 풀 수 없다");
+    /* 「열이 바뀐다」는 뽑을 때 쓰는 자다. 사람이 짠 것은 어겨도 받는다 */
+    if (!tgt.every(([a, b]) => far(a, b))) loose.push(i + 1);
+    const cells = cellsOf(G, tgt, solved);
+    if (cells < 8) bad.push(i + 1 + " 칸이 " + cells);
+    if (tgt.length === 2 && new Set(tgt.flat().map(l => l.d)).size !== 4)
+      bad.push(i + 1 + " 네 면을 안 쓴다");
+    if (new Set(tgt.flat().map(key)).size !== tgt.length * 2)
+      bad.push(i + 1 + " 램프가 겹친다");
+  });
+  $("loose").textContent = loose.length
+    ? `문제집 ${loose.join("·")}번은 「열이 바뀐다」를 어긴 짝이 있다 `
+      + `(사람이 짠 것이라 그냥 쓴다)` : "";
+  return bad;
+})(), []);
+ok("한 행에 누운 가로 짝은 대각으로 뒤집으면 자에 걸린다 — 그 꼴은 안 쓴다",
+   (() => {
+     const a = { x: 3, y: 3, d: E }, b = { x: 0, y: 3, d: W };   /* d4 → a4 */
+     const t = symmetry([[{ kind: "plus", n: 0 }, 0, 0, 0].map(() =>
+       ({ kind: "plus", n: 0 }))].concat([1, 2, 3].map(() =>
+       [0, 0, 0, 0].map(() => ({ kind: "plus", n: 0 })))), [[a, b]], 6);
+     return [far(a, b), far(t.tgt[0][0], t.tgt[0][1])];
+   })(), [true, false]);
+ok("돌리고 뒤집어도 같은 문제다 — 여덟 꼴이 다 풀린다", (() => {
+  const { G, tgt } = fromText(BANK[2]);
+  const got = [];
+  for (let i = 0; i < 8; i++){
+    const s = symmetry(G, tgt, i);
+    const sol = solvedOf(s.g, s.tgt);
+    got.push(sol ? cellsOf(s.g, s.tgt, sol) : null);
+  }
+  return [new Set(got).size, got[0]];        /* 쓰는 칸 수는 안 바뀐다 */
+})(), [1, cellsOf(fromText(BANK[2]).G, fromText(BANK[2]).tgt,
+        solvedOf(fromText(BANK[2]).G, fromText(BANK[2]).tgt))]);
+ok("여덟 꼴이 서로 다른 판이다 (대칭이 제구실을 한다)", (() => {
+  const { G, tgt } = fromText(BANK[2]);
+  const seen = new Set();
+  for (let i = 0; i < 8; i++){
+    const s = symmetry(G, tgt, i);
+    seen.add(s.g.map(r => r.map(t => t.kind + ((t.n % 4) + 4) % 4).join()).join("/")
+      + "|" + s.tgt.map(p => p.map(key).join()).join());
+  }
+  return seen.size;
+})(), 8);
+ok("문제집에서 낸 것도 처음부터 이어진 짝이 없다", (() => {
+  const src = V.src;
+  V.src = "bank";
+  const bad = [];
+  for (let i = 0; i < 12; i++){
+    const q = fromBank();
+    if (!q){ bad.push("못 냈다"); break; }
+    const pre = q.tgt.some(([a, b]) => {
+      const o = walk(q.G, a, null, null);
+      return o && key(o) === key(b);
+    });
+    if (pre) bad.push("이미 이어져 있다");
+    if (q.depth !== depthOf(q.G, q.tgt)) bad.push("깊이가 안 맞는다");
+  }
+  V.src = src;
+  return bad;
+})(), []);
+ok("쓰는 칸 수는 길이 참말로 지나는 칸 수다 · 여덟 칸보다 적을 수 없다",
+   (() => {
+     const q = pick(0, 24, 400, 2);
+     if (!q) return "못 뽑았다";
+     q.G.forEach((row, i) => row.forEach((t, j) => { t.n = q.solved[i][j]; }));
+     const used = new Set(q.tgt.flatMap(p => walkT(q.G, p[0]).tiles));
+     return [used.size === q.cells, q.cells >= 8];
+   })(), [true, true]);
+ok("쓰는 칸을 열다섯 이상으로 좁혀서도 뽑힌다", (() => {
+  const lo = V.cmin;
+  V.cmin = 15;
+  const q = pick(0, 24, 400, 2);
+  V.cmin = lo;
+  return q ? q.cells >= 15 : "못 뽑았다";
+})(), true);
+ok("꼬기를 켜면 한 짝이 +자 하나를 두 방향으로 건넌다", (() => {
+  const was = V.loop;
+  V.loop = true;
+  const q = pick(0, 24, 400, 2);
+  V.loop = was;
+  if (!q) return "못 뽑았다";
+  q.G.forEach((row, i) => row.forEach((t, j) => { t.n = q.solved[i][j]; }));
+  for (const p of q.tgt){
+    const ts = walkT(q.G, p[0]).tiles;
+    const twice = ts.filter((c, i) => ts.indexOf(c) !== i);
+    if (twice.length)
+      return [true, twice.every(c => q.G[c >> 2][c & 3].kind === "plus")];
+  }
+  return "꼬인 짝이 없다";
+})(), [true, true]);
+ok("세 짝짜리 문제도 뽑힌다", (() => {
+  const q = pick(0, 9, 200, 3);
+  return q ? [q.tgt.length, q.depth !== null] : "못 뽑았다";
+})(), [3, true]);
+ok("되돌려 놓으면 짝이 다 이어진다", (() => {
+  const was = Q.G.map(row => row.map(t => t.n));
+  Q.G.forEach((row, i) => row.forEach((t, j) => { t.n = Q.solved[i][j]; }));
+  const got = lit();
+  Q.G.forEach((row, i) => row.forEach((t, j) => { t.n = was[i][j]; }));
+  return got;
+})(), true);
+ok("깊이는 흔든 것을 되돌리는 값보다 크지 않다",
+   [Q.depth <= Q.back, Q.back <= 24], [true, true]);
+ok("한 판에서 갈 수 있는 자리는 16384 가지다", (() => {
+  const seen = new Set();
+  for (let v = 0; v < 65536; v++){
+    load(v);
+    let k = 0;
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) k = k * 4 + ((CB[j] + RB[i]) % 4);
+    seen.add(k);
+  }
+  return seen.size;
+})(), 16384);
+ok("값싼 것부터 훑는다 — 처음 것이 0, 끝이 24",
+   [COST[ORDER[0]], COST[ORDER[65535]]], [0, 24]);
+ok("서른 판을 뽑아 다 풀었다", (() => {
+  for (let i = 0; i < 30; i++){
+    const q = pick(0, 9, 60);
+    if (!q) return "못 뽑았다";
+  }
+  return true;
+})(), true);
+ok("단추 여덟이 다 임자가 있다", [2, 3, 4].map(n => {
+  const who = new Set();
+  for (let i = 0; i < 8; i++) who.add(i % n);
+  return who.size;
+}), [2, 3, 4]);
+ok("제 단추가 아니면 안 눌린다", (() => {
+  const g = V.god, m = V.me;
+  V.god = false; V.me = 1;
+  const not = [...Array(8).keys()].filter(i => !mine(i)).length;
+  V.god = g; V.me = m;
+  return not;
+})(), 6);
+ok("칸을 돌릴 때 칸을 다시 만들지 않는다 — 다시 만들면 애니메이션이 안 걸린다",
+   (() => {
+     const html = $("board").innerHTML, g = V.god;
+     V.god = true;
+     const was = $("t00").style.transform;
+     press(0);
+     const got = [$("board").innerHTML === html, $("t00").style.transform !== was];
+     for (let k = 0; k < 3; k++) press(0);          // 제자리로 돌려 놓는다
+     V.god = g;
+     return got;
+   })(), [true, true]);
+ok("네 번 누르면 제자리다", (() => {
+  const was = rotAt(Q.G, 1, 1, null, null);
+  for (let k = 0; k < 4; k++) for (let m = 0; m < 4; m++) Q.G[m][1].n++;
+  return rotAt(Q.G, 1, 1, null, null) === was;
+})(), true);
+
+$("chk").innerHTML = chk.map(([n, p, got, want]) =>
+  `<div class="${p ? "pass" : "fail"}">${p ? "✔" : "✘"} <b>${n}</b>`
+  + (p ? "" : ` — ${JSON.stringify(got)} ≠ ${JSON.stringify(want)}`) + `</div>`).join("")
+  + `<div class="hint" style="text-align:left;margin-top:6px">`
+  + `${chk.filter(c => c[1]).length} / ${chk.length}</div>`;
+render();
+</script>
+</body>
+</html>
