@@ -978,7 +978,10 @@ function finish(winner, why){            // winner: 0 | 1 | null(무승부)
   const draw = winner === null;
   banner.classList.toggle("draw", draw);
   banner.classList.add("end", "on");
-  const word = s => draw ? "무승부" : s === winner ? "승리" : "패배";
+  /* 보는 사람은 어느 쪽도 아니다 — 양쪽 알림 모두 `누구의 승리` 로 */
+  const who = !draw && SPECT() && netPeople[winner];
+  const word = s => draw ? "무승부" : SPECT() ? (who ? who.name + "의 " : "") + "승리"
+                  : s === winner ? "승리" : "패배";
   const box = s => trayOf(s) === 0 ? ".bmsg.a" : ".bmsg.b";
   banner.querySelector(box(0) + " .txt").textContent = word(0);
   banner.querySelector(box(1) + " .txt").textContent = word(1);
