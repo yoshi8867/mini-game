@@ -219,6 +219,11 @@ if (require.main === module){
   a.start(T);
   assert.strictEqual(a.add("쀒뷁", "next").pos, 1, "다음 자리에 안 들어갔다");
   assert.strictEqual(a.add("  웹툰 ", "end").pos, n, "「끝」 앞에 안 들어갔다");
+  const w5 = a.order[5];
+  assert.strictEqual(a.add("가지", 5).pos, 5, "고른 자리에 안 들어갔다");
+  assert.strictEqual(a.order[6], w5, "고른 낱말 앞에 안 들어갔다");
+  assert.strictEqual(a.add("나무", 0).pos, 1, "이미 낸 자리에 들어갔다");
+  assert.strictEqual(a.add("바다", 999).pos, a.order.length - 2, "「끝」 뒤로 갔다");
   assert.strictEqual(a.order[a.order.length - 1], "끝", "「끝」이 마지막이 아니다");
   assert.strictEqual(a.order[a.off[0]], w3, "끈 문제가 엉뚱한 낱말로 옮겨 갔다");
   assert.strictEqual(other.order.length, n, "남의 판에 끼워 넣어졌다");
@@ -227,7 +232,7 @@ if (require.main === module){
   const p0 = [...a.people.keys()][0];
   a.say(p0, a.ask.word, T + 1000);
   a.tick(T + 8000);
-  assert.strictEqual(a.ask.word, "쀒뷁", "끼워 넣은 낱말이 다음에 안 나왔다");
+  assert.strictEqual(a.ask.word, "나무", "끼워 넣은 낱말이 다음에 안 나왔다");
   assert.ok(a.ask.sheets.length === 3 && a.ask.sheets.some(s => s.some(r => /[1-9a-f]/.test(r))),
             "끼워 넣은 낱말을 못 그렸다");
   console.log("add     진행 중에 다음 / 「끝」 앞에 끼워 넣고, 돋움으로 그린다");

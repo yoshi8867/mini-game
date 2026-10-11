@@ -201,7 +201,11 @@ class Quiz {
     if (this.state === "done") return {err: "nothing"};
     if (!/^[\uAC00-\uD7A3]{1,4}$/.test(word) || [...word].some(c => !D.GRID[c]))
       return {err: "badword"};
-    const pos = at === "next" ? this.nth + 1 : this.order.length - 1;
+    /* at 은 "next" · "end" 또는 order 의 자리 — 그 낱말 앞에 넣는다. 고르는 사이에
+       문제가 넘어갔을 수 있으니 아직 안 낸 자리 ~ 「끝」 앞으로 묶는다 */
+    const lo = this.nth + 1, hi = this.order.length - 1;
+    const pos = at === "next" ? lo : at === "end" ? hi
+              : Math.max(lo, Math.min(hi, Number.isInteger(at) ? at : hi));
     this.order.splice(pos, 0, word);
     this.off = this.off.map(i => i >= pos ? i + 1 : i);
     return {ok: true, pos};

@@ -254,7 +254,8 @@ const $ = s => document.querySelector(s);
 const el = id => document.getElementById(id);
 const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c =>
   ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const PINS = {};                            /* 코드 → [이름, 참가 비번]. 학생 QR 이 쓴다 */
+const PINS = {};
+const RESTS = {};                           /* 퀴즈 코드 → 아직 안 낸 문제. 끼워 넣을 자리를 고를 때 쓴다 */                            /* 코드 → [이름, 참가 비번]. 학생 QR 이 쓴다 */
 
 /* 서버는 게임 페이지와 같은 곳이다 */
 const Q = new URLSearchParams(location.search);
@@ -472,10 +473,8 @@ function quizPaint(j){
       acts.push(qbtn("quizskip", q.code, "", "이 문제 넘기기"));
     if (q.state === "running" && q.nth < q.total)
       acts.push(qbtn("quizlast", q.code, "", "「끝」으로 건너뛰기"));
-    if (q.state !== "done"){
-      if (q.state === "running") acts.push(qbtn("quizaddnext", q.code, "", "다음 문제로 끼워 넣기"));
-      acts.push(qbtn("quizaddend", q.code, "", "「끝」 앞에 넣기"));
-    }
+    if (q.state !== "done") acts.push(qbtn("quizadd", q.code, "", "문제 끼워 넣기"));
+    RESTS[q.code] = q.rest || [];
     acts.push(qbtn("qr", q.code, "", "학생 QR"));
     PINS[q.code] = [q.title, q.pin];
     acts.push(qbtn("quizclose", q.code, "bad right",
@@ -569,12 +568,18 @@ async function qact(what, code){
       !confirm("남은 문제를 건너뛰고 마지막 문제 「끝」을 냅니다. 지금 문제는 공개 없이 넘어갑니다. 갈까요?")) return;
   const body = {code};
   /* 낱말 끼워 넣기 — 입력칸을 카드에 두면 4초마다 다시 그릴 때 지워진다. 그래서 묻는다 */
-  if (what === "quizaddnext" || what === "quizaddend"){
+  if (what === "quizadd"){
     const w = prompt("끼워 넣을 낱말 (한글 1~4글자)", "");
     if (w === null || !w.trim()) return;
+    /* 어느 낱말 앞에 넣을지 번호로 고른다. 1 이면 바로 다음 문제, 맨 끝 번호는 「끝」 앞 */
+    const rest = RESTS[code] || [];
+    const menu = rest.map((r, k) => (k + 1) + ". " + r.word + (r.off ? " (꺼짐)" : "")).join("\n");
+    const k = prompt("「" + w.trim() + "」 을 어느 문제 앞에 넣을까요? 번호를 적으세요.\n\n" + menu,
+                     String(rest.length));
+    if (k === null) return;
+    const r = rest[Math.max(1, Math.min(rest.length, parseInt(k, 10) || rest.length)) - 1];
     body.word = w.trim();
-    body.at = what === "quizaddnext" ? "next" : "end";
-    what = "quizadd";
+    body.at = r ? r.i : "end";
   }
   if (what === "quizmock"){
     const n = prompt("연습 참가자를 몇 명 넣을까요?", "20");
