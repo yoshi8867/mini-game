@@ -119,6 +119,14 @@ button:disabled{opacity:.4}
   margin-left:3px;vertical-align:middle;display:inline-block}
 .bdg.hit{background:var(--gold);color:#16171a}
 .bdg.miss{background:#f7dad7;color:var(--lose)}
+
+/* 교실 앞 화면 (?t=1) — 칠판에 띄운다. 넓게, 크게 */
+body.teach .wrap{max-width:1100px}
+body.teach .rankrow{padding:12px 14px}
+body.teach .tname{font-size:20px}
+body.teach .mates{font-size:15px}
+body.teach .pts{font-size:22px}
+body.teach .top .spent{font-size:20px}
 </style>
 
 <div class="wrap">
@@ -222,16 +230,22 @@ const ERR = {badpin:"비밀번호가 맞지 않습니다", noquiz:"없는 퀴즈
              empty:"답을 적어 주세요", stranger:"팀에 들어 있지 않습니다",
              notrunning:"지금은 답을 받지 않습니다", nohello:"다시 들어와 주세요"};
 const STATE = {open:"접수 중", running:"진행 중", done:"끝남"};
+const TEACH = Q.has("t");                   /* 교실 앞에 띄우는 화면 — 참가자가 아니다 */
+document.body.classList.toggle("teach", TEACH);
 
 let sock = null, me = null, rows = [], chose = null;
 /* 들어간 퀴즈. 메모리에만 두면 소켓이 끊겼다 붙는 것은 견뎌도 새로고침은 못
    견딘다. 서버는 이미 들어온 pid 를 비번 없이 받아 주니 코드만 들고 있으면 된다. */
-const SEAT = "quiz-seat";
+const SEAT = TEACH ? "quiz-seat-t" : "quiz-seat";
 const seat = {
   get(){ try { return localStorage.getItem(SEAT) || null; } catch (e) { return null; } },
   set(v){ try { v ? localStorage.setItem(SEAT, v) : localStorage.removeItem(SEAT); } catch (e) {} },
 };
 let joined = seat.get();                    /* 들어간 퀴즈 코드 — 끊기면 이걸로 돌아온다 */
+let watchPin = "";                          /* 교사용은 명단에 없으니 다시 붙을 때 비번이 든다 */
+try { watchPin = localStorage.getItem("quiz-seat-pin") || ""; } catch (e) {}
+const enterQuiz = (code, pin) =>
+  send(TEACH ? "quizwatch" : "quizjoin", TEACH ? {code, pin: pin || watchPin} : {code, pin});
 let V = null;                         /* 마지막으로 받은 내 모습 */
 let gotAt = 0;                        /* 그것을 받은 때 — 경과를 여기서 센다 */
 
@@ -257,7 +271,7 @@ function connect(){
   sock.onopen = () => {
     send("hello", {pid: PID});
     send("quizzes", {});
-    if (joined) send("quizjoin", {code: joined});     /* 돌아온 사람은 비번이 없다 */
+    if (joined) enterQuiz(joined);           /* 돌아온 사람은 비번이 없다 */
   };
   sock.onmessage = e => {
     let m; try { m = JSON.parse(e.data); } catch (x) { return; }
@@ -315,7 +329,8 @@ el("enter").addEventListener("click", () => {
   if (!chose) return say("pickMsg", "들어갈 퀴즈를 골라 주세요.", "bad");
   const pin = el("pin").value.replace(/[^0-9]/g, "");
   say("pickMsg", "들어가는 중입니다…");
-  send("quizjoin", {code: chose, pin});
+  if (TEACH){ watchPin = pin; try { localStorage.setItem("quiz-seat-pin", pin); } catch (e) {} }
+  enterQuiz(chose, pin);
 });
 el("out").addEventListener("click", () => { joined = null; send("quizleave", {}); });
 
@@ -358,6 +373,7 @@ function take(v){
   if (waiting){
     el("lobbyTitle").textContent = v.title;
     el("lobbyN").textContent = v.people;
+    if (TEACH) el("lobbyName").parentNode.hidden = true;
     return;
   }
   paintPlay();
@@ -369,8 +385,8 @@ function paintPlay(){
   /* 몇 문제가 남았는지는 밝히지 않는다 — 「끝」을 맞히면 그때 안다 */
   el("nth").textContent = v.state === "done" ? "끝" : "";
   el("myteam").textContent = v.team ? v.team.name : "";
-  el("sayBox").hidden = !v.ask;
-  if (v.ask) el("text").focus();
+  el("sayBox").hidden = TEACH || !v.ask;
+  if (v.ask && !TEACH) el("text").focus();
   shout();
   ranks();
   tick();
@@ -391,17 +407,19 @@ setInterval(tick, 250);
 function ink(sheet, color, over, overColor){
   const cv = el("board");
   const n = sheet.length;
-  const wide = n * N + (n - 1) * GAP;
-  const z = Math.max(2, Math.min(28, Math.floor(620 / wide)));
-  cv.width = wide * z; cv.height = N * z;
-  /* 한 글자짜리가 화면을 다 먹지 않게 — 칸 하나는 20px 까지다 */
-  cv.style.maxWidth = (wide * 28) + "px";
+  /* 판은 늘 넉 자 폭이다. 한 글자든 넉 자든 칸 크기가 같아 글자 높이가 같다.
+     낱말은 그 가운데에 놓는다 */
+  const FULL = 4 * N + 3 * GAP, wide = n * N + (n - 1) * GAP;
+  const z = Math.max(2, Math.min(28, Math.floor(620 / FULL)));
+  const left = Math.floor((FULL - wide) / 2) * z;
+  cv.width = FULL * z; cv.height = N * z;
+  cv.style.maxWidth = (FULL * 28) + "px";
   const g = cv.getContext("2d");
   g.clearRect(0, 0, cv.width, cv.height);
   const lay = (one, c) => {
     g.fillStyle = c;
     one.forEach((hexed, i) => {
-      const ox = i * (N + GAP) * z;
+      const ox = left + i * (N + GAP) * z;
       for (let y = 0; y < N; y++){
         const row = parseInt(hexed.substr(y * 4, 4), 16);
         for (let x = 0; x < N; x++)

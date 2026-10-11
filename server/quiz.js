@@ -311,13 +311,21 @@ class Quiz {
   view(pid, now){
     const me = this.people.get(pid);
     if (!me) return null;
-    const out = {code: this.code, title: this.title, state: this.state,
-                 name: me.name, people: this.people.size,
-                 nth: this.nth + 1, teams: this.teams.length};
+    const out = this.watch(now);
+    delete out.fan;
+    out.name = me.name;
+    out.nth = this.nth + 1;
     if (me.team !== null){
       const t = this.teams[me.team];
       out.team = {id: t.id, name: t.name, full: t.full, mates: this.folk(t.id)};
     }
+    return out;
+  }
+  /* 교실 앞 화면이 보는 것 — 학생과 같은 낱장 한 장과 순위. 팀도 이름도 없고,
+     몇 번째 문제인지도 없다 */
+  watch(now){
+    const out = {code: this.code, title: this.title, state: this.state, fan: true,
+                 people: this.people.size, teams: this.teams.length};
     if (this.state === "running" && this.ask && !this.reveal)
       out.ask = {page: this.ask.page, sheet: this.ask.sheets[this.ask.page],
                  len: this.ask.word.length, spent: this.spent(now),

@@ -110,8 +110,17 @@ async function admin(what, body){
   kids[0].send("quizjoin", {code});
   assert.ok((await kids[0].next("quizme")).name, "돌아온 사람이 막혔다");
 
+  /* 교실 앞 화면 — 비번은 받되 명단에는 안 들어간다 */
+  const fan = await hello("wstest-quiz-fan-zzzz");
+  fan.send("quizwatch", {code, pin: "0000"});
+  assert.strictEqual((await fan.next("error")).why, "badpin", "교실 앞 화면에 틀린 비번이 통했다");
+  fan.send("quizwatch", {code, pin: "4321"});
+  const fv = await fan.next("quizme");
+  assert.ok(fv.fan && !fv.name && fv.people === 6, "교실 앞 화면이 참가자로 들어갔다");
+
   /* ─── 팀을 짜고 시작한다 ─── */
   for (const c of kids) c.drain();
+  fan.drain();
   const begun = await admin("quizstart", {code});
   assert.ok(begun.ok, "시작이 안 됐다: " + begun.why);
   assert.strictEqual(begun.teams, 2, "여섯이 두 팀이 아니다");
@@ -126,6 +135,10 @@ async function admin(what, body){
     assert.strictEqual(v.board.length, 2, "순위가 두 줄이 아니다");
     assert.ok(v.board.every(t => t.score === 0), "시작부터 점수가 있다");
   }
+  const fs = await fan.next("quizme", 5000, m => !!m.ask);
+  assert.ok(fs.ask.sheet.length === fs.ask.len && fs.board.length === 2 && !fs.team && !fs.nth,
+            "교실 앞 화면에 낱장 · 순위가 안 오거나 팀 · 문제 번호가 왔다");
+  mine.push(fs);
   /* 답은 화면으로 나가지 않는다 */
   const look = await admin("state");
   const word = look.quizzes.find(q => q.code === code).word;
@@ -190,6 +203,7 @@ async function admin(what, body){
   assert.strictEqual(health.quizzes, 0, "닫았는데 퀴즈가 남았다");
 
   for (const c of kids) c.close();
+  fan.close();
   console.log("소켓 왕복 통과 — 열기 · 참가 · 팀 · 오답 · 정답 · 공개 · 넘기기 · 닫기");
   bye(0);
 })();

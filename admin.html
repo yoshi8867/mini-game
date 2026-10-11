@@ -476,6 +476,7 @@ function quizPaint(j){
     if (q.state !== "done") acts.push(qbtn("quizadd", q.code, "", "문제 끼워 넣기"));
     RESTS[q.code] = q.rest || [];
     acts.push(qbtn("qr", q.code, "", "학생 QR"));
+    acts.push('<a class="lnk" target="_blank" href="' + esc(teachUrl("quiz.html")) + '">교실 앞 화면 ↗</a>');
     PINS[q.code] = [q.title, q.pin];
     acts.push(qbtn("quizclose", q.code, "bad right",
                    q.state === "running" ? "퀴즈 중단" : "퀴즈 닫기"));
@@ -681,8 +682,8 @@ function oboard(o){
 
 /* ─── 학생 QR ─── 학생 화면 주소를 크게. 서버를 바꿔 쓰고 있으면 그것도 싣는다 */
 /* 교실 앞 화면 — 판을 고르고 참가 비번을 넣으면 들어간다 */
-function teachUrl(){
-  const u = new URL("omr.html?t=1", location.href);
+function teachUrl(page){
+  const u = new URL((page || "omr.html") + "?t=1", location.href);
   if (Q.get("server")) u.searchParams.set("server", Q.get("server"));
   return u.href;
 }

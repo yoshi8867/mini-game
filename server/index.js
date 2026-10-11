@@ -234,8 +234,8 @@ function pushQuiz(quiz){
   keep("quiz", quiz);
   const now = Date.now();
   for (const ws of wss.clients){
-    if (ws.readyState !== 1 || ws.quiz !== quiz.code || !ws.person) continue;
-    const v = quiz.view(ws.person.pid, now);
+    if (ws.readyState !== 1 || ws.quiz !== quiz.code) continue;
+    const v = ws.quizFan ? quiz.watch(now) : ws.person && quiz.view(ws.person.pid, now);
     if (v) send(ws, "quizme", v);
   }
 }
@@ -263,9 +263,18 @@ function onQuizJoin(ws, msg){
   send(ws, "quizme", quiz.view(ws.person.pid, Date.now()));
   if (!back) pushQuiz(quiz);                 // 몇 명 들어왔는지가 바뀌었다
 }
+/* 교실 앞 화면. 비번은 받되 명단에는 안 들어간다 */
+function onQuizWatch(ws, msg){
+  const quiz = quizzes.get(String(msg.code || "").toUpperCase());
+  if (!quiz) return send(ws, "error", {why: "noquiz"});
+  if (quiz.pin && msg.pin !== quiz.pin) return send(ws, "error", {why: "badpin"});
+  ws.quiz = quiz.code; ws.quizFan = true;
+  send(ws, "quizme", quiz.watch(Date.now()));
+}
 function onQuizLeave(ws){
   const quiz = ws.quiz && quizzes.get(ws.quiz);
   ws.quiz = null;
+  if (ws.quizFan){ ws.quizFan = false; return send(ws, "quizme", null); }
   send(ws, "quizme", null);
   if (!quiz || !ws.person) return;
   /* 팀을 짠 뒤에 빠지면 그 팀에 구멍이 난다. 명단은 그대로 둔다 */
@@ -802,6 +811,7 @@ wss.on("connection", ws => {
       case "cupboard":return onCupBoard(ws);
       case "quizzes": return send(ws, "quizzes", {quizzes: quizList()});
       case "quizjoin":return onQuizJoin(ws, msg);
+      case "quizwatch":return onQuizWatch(ws, msg);
       case "quizleave":return onQuizLeave(ws);
       case "quizsay": return onQuizSay(ws, msg);
       case "omrs":    return send(ws, "omrs", {omrs: omrList()});
