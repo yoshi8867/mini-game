@@ -193,6 +193,15 @@ body.portrait .bmsg.a{transform:none} body.portrait .bmsg.b{transform:rotate(180
 body.portrait .fans{left:auto;right:12px;top:12px;bottom:auto;transform:none}
 body.portrait.in-cup .fans{top:90px}
 .seeBtn{position:fixed;right:12px;top:12px;z-index:63}
+/* 대회가 접수 중이면 우상단에 뜨는 「대회 참가」 — 빨간 별딱지 */
+.cupFloat{position:fixed;right:10px;top:58px;z-index:64;border:0;cursor:pointer;
+  width:118px;height:118px;padding:0;background:#d8261b;color:#fff;
+  font:900 16px/1.15 'Gothic A1',system-ui,sans-serif;letter-spacing:-.02em;
+  clip-path:polygon(100.0% 50.0%,90.6% 55.8%,98.0% 64.1%,87.3% 67.0%,92.1% 77.0%,81.0% 76.8%,82.7% 87.8%,72.2% 84.5%,70.8% 95.5%,61.6% 89.3%,57.1% 99.5%,50.0% 91.0%,42.9% 99.5%,38.4% 89.3%,29.2% 95.5%,27.8% 84.5%,17.3% 87.8%,19.0% 76.8%,7.9% 77.0%,12.7% 67.0%,2.0% 64.1%,9.4% 55.8%,0.0% 50.0%,9.4% 44.2%,2.0% 35.9%,12.7% 33.0%,7.9% 23.0%,19.0% 23.2%,17.3% 12.2%,27.8% 15.5%,29.2% 4.5%,38.4% 10.7%,42.9% 0.5%,50.0% 9.0%,57.1% 0.5%,61.6% 10.7%,70.8% 4.5%,72.2% 15.5%,82.7% 12.2%,81.0% 23.2%,92.1% 23.0%,87.3% 33.0%,98.0% 35.9%,90.6% 44.2%);
+  filter:drop-shadow(0 3px 6px rgba(0,0,0,.45));animation:cupPop 1.6s ease-in-out infinite}
+.cupFloat[hidden]{display:none}
+@keyframes cupPop{0%,100%{transform:rotate(-6deg) scale(1)}50%{transform:rotate(6deg) scale(1.08)}}
+@media (prefers-reduced-motion:reduce){.cupFloat{animation:none}}
 body.portrait .seeBtn{top:10px}
 
 /* 대진표 */
@@ -530,6 +539,7 @@ body.ai .t1 .clock{display:none}        /* AI 차례에는 시계를 재지 않�
 </div>
 <div class="round" id="roundTag" hidden></div>
 <div class="fans" id="fansTag" hidden></div>
+<button class="cupFloat" id="cupFloat" hidden>대회<br>참가</button>
 <button class="hud-btn primary seeBtn" id="seeBtn" hidden>다른 대국 보기</button>
 <div class="see-scrim" id="seeScrim" hidden></div>
 <div class="see" id="see" hidden role="dialog" aria-label="대진표">
@@ -2049,6 +2059,7 @@ function showCups(){
    탈락하면 이 창이 뜬 채로 관전이 시작돼 아무것도 안 보였다.
    나가는 길은 아래 띠의 나가기 버튼이 맡는다. */
 function cupShow(){
+  cupFloat();
   const box = nel("cupBox"), on = !!cup && !cup.match && !SPECT();
   box.hidden = !on; nel("cupScrim").hidden = !on;
   if (!on) return;
@@ -2160,7 +2171,7 @@ function cupApply(){
 function netRecv(msg){
   switch (msg.t){
     case "me":    me = msg; showList(); break;   // 목록의 내 이름도 같이 바뀐다
-    case "cups":  cups = msg.cups || []; showCups(); break;
+    case "cups":  cups = msg.cups || []; showCups(); cupFloat(); break;
     case "cupme": {
       cup = msg && msg.code ? msg : null;
       cupSeat(cup ? cup.code : null);
@@ -2229,7 +2240,13 @@ function netRecv(msg){
       break;
   }
 }
-function netOpenPanel(v){ nel("net").hidden = !v; nel("netScrim").hidden = !v; }
+function netOpenPanel(v){ nel("net").hidden = !v; nel("netScrim").hidden = !v; cupFloat(); }
+/* 접수 중인 대회가 있고 내가 아직 안 들어갔으면 띄운다. 10초마다 서버에 묻는다 */
+function cupFloat(){
+  nel("cupFloat").hidden = !!cup || !nel("net").hidden || !cups.some(c => c.state === "open");
+}
+setInterval(() => { if (!cup) netConnect(() => netTell("cups")); }, 10000);
+setTimeout(() => { if (!cup) netConnect(() => netTell("cups")); }, 1500);
 
 /* 상대를 기다리는 동안 띄우는 한가운데 팝업 */
 let myPin = "";
@@ -2372,6 +2389,7 @@ nel("cupBtn").addEventListener("click", () => {
   showCups();
   netConnect(() => netTell("cups"));
 });
+nel("cupFloat").addEventListener("click", () => { netOpenPanel(true); nel("cupBtn").click(); });
 nel("cupBack").addEventListener("click", () => { forms({cups:true}); netSay(""); });
 nel("cupAsk").addEventListener("submit", e => {
   e.preventDefault();
