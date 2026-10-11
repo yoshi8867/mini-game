@@ -1,7 +1,7 @@
 <!doctype html><html lang="ko"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light">
-<title>돌림판 비딩</title>
+<title>룰렛 옥션</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@400;700;800&family=Gowun+Batang:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -44,7 +44,7 @@ button:disabled{opacity:.4;cursor:default}
 .hint{color:var(--chalk-dim);font-size:13px;margin:var(--s2) 0 0}
 .who{font-weight:700;color:var(--mark)}
 
-/* 고를 비딩 목록 */
+/* 고를 옥션 목록 */
 .pickrow{display:flex;align-items:center;gap:var(--s2);width:100%;
   padding:13px var(--s3);margin-bottom:8px;border-radius:8px;text-align:left}
 .pickrow.on{border-color:var(--mark);background:#fdf5e2}
@@ -231,7 +231,7 @@ button:disabled{opacity:.4;cursor:default}
 </style>
 
 <div class="wrap">
-  <h1 id="title">돌림판 비딩</h1>
+  <h1 id="title">룰렛 옥션</h1>
   <p class="sub" id="sub">기댓값이 다른 룰렛을 경매로 사 모읍니다.</p>
 
   <!-- ① 고르기 -->
@@ -289,7 +289,7 @@ button:disabled{opacity:.4;cursor:default}
 </div>
 
 <script>
-/* ═══ 돌림판 비딩 — 학생 화면 ═════════════════════════════════════════
+/* ═══ 룰렛 옥션 — 학생 화면 ═════════════════════════════════════════
    서버가 심판이다. 여기서 하는 일은 셋뿐 — 룰렛을 그리고, 값을 보내고,
    서버가 돌려준 순위를 옮긴다.
 
@@ -325,8 +325,8 @@ const SERVER = Q.get("server") || (
     ? "ws://" + (location.hostname || "127.0.0.1") + ":3000/ws"
     : "wss://mini-game-y8ve.onrender.com/ws");
 
-const ERR = {badpin:"비밀번호가 맞지 않습니다", nobid:"없는 비딩입니다",
-             closed:"이미 시작한 비딩입니다", full:"자리가 다 찼습니다",
+const ERR = {badpin:"비밀번호가 맞지 않습니다", nobid:"없는 옥션입니다",
+             closed:"이미 시작한 옥션입니다", full:"자리가 다 찼습니다",
              wait:"지금은 값을 받지 않습니다", low:"더 높게 불러야 합니다",
              broke:"가진 토큰보다 많습니다", watcher:"관전은 값을 부를 수 없습니다",
              already:"이미 냈습니다. 한 번 내면 못 바꿉니다",
@@ -338,14 +338,14 @@ const STATE = {open:"접수 중", plan:"작전타임", running:"경매 중",
                spin:"돌리는 중", done:"끝남"};
 
 let sock = null, me = null, rows = [], chose = null, asRep = true;
-/* 들어간 비딩. 메모리에만 두면 소켓이 끊겼다 붙는 것은 견뎌도 새로고침은 못
+/* 들어간 옥션. 메모리에만 두면 소켓이 끊겼다 붙는 것은 견뎌도 새로고침은 못
    견딘다. 서버는 이미 들어온 pid 를 비번 없이 받아 주니 코드만 들고 있으면 된다. */
 const SEAT = "bid-seat";
 const seat = {
   get(){ try { return localStorage.getItem(SEAT) || null; } catch (e) { return null; } },
   set(v){ try { v ? localStorage.setItem(SEAT, v) : localStorage.removeItem(SEAT); } catch (e) {} },
 };
-let joined = seat.get();                    /* 들어간 비딩 코드 */
+let joined = seat.get();                    /* 들어간 옥션 코드 */
 let V = null;                         /* 마지막으로 받은 내 모습 */
 let gotAt = 0;                        /* 그것을 받은 때 — 남은 시간을 여기서 센다 */
 let planShown = -1, was = null;       /* 작전타임마다 현황표를 한 번 띄운다 */
@@ -381,11 +381,11 @@ function connect(){
     else if (m.t === "bids"){ rows = m.bids; paintList(); }
     else if (m.t === "bidme"){ take(m.code ? m : null); if (m.code) offline(false); }
     else if (m.t === "bidgone"){ joined = null; take(null);
-                                 say("pickMsg", "비딩이 닫혔습니다.", "bad"); }
+                                 say("pickMsg", "옥션이 닫혔습니다.", "bad"); }
     else if (m.t === "error"){
       if (m.why === "nobid" && joined){
         joined = null; seat.set(null); take(null);
-        say("pickMsg", "비딩이 사라졌습니다. 서버가 다시 시작됐을 수 있습니다 — 선생님께 알려 주세요.", "bad");
+        say("pickMsg", "옥션이 사라졌습니다. 서버가 다시 시작됐을 수 있습니다 — 선생님께 알려 주세요.", "bad");
         return;
       }
       oops(m.why);
@@ -407,7 +407,7 @@ function oops(why){ say(joined ? "playMsg" : "pickMsg", ERR[why] || why, "bad");
 function paintList(){
   const box = el("list");
   if (!rows.length){
-    box.innerHTML = '<p class="hint" style="margin:0">열린 비딩이 없습니다. ' +
+    box.innerHTML = '<p class="hint" style="margin:0">열린 옥션이 없습니다. ' +
                     '선생님이 열면 여기에 뜹니다.</p>';
     chose = null; fitButtons(); return;
   }
