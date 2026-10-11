@@ -375,7 +375,7 @@ const STATE = {open:"접수 중", running:"진행 중", done:"끝남"};
 
 /* 서버가 안 붙었을 때 쓰는 진행표. 붙으면 서버 것으로 갈아 끼운다 */
 const PLAN0 = [
-  {m:0, t:"준비령", mark:true}, {m:4, t:"개별 힌트 공개", mark:false},
+  {m:0, t:"준비령", mark:true}, {m:4, t:"개별 힌트 공개", mark:true},
   {m:5, t:"본령", mark:true}, {m:10, t:"1차 공통 힌트 공개", mark:true},
   {m:15, t:"2차 공통 힌트 공개", mark:true}, {m:20, t:"3차 공통 힌트 공개", mark:true},
   {m:27, t:"착석 안내", mark:true, note:"종료까지 3분 남음"},
@@ -682,9 +682,11 @@ function paint(){
   /* 교사용은 진행표, 학생용은 답안지 */
   el("plan").hidden = !TEACH;
   el("sheet").hidden = TEACH || t < SIT;
+  /* 시작했으면 시각으로(21:05 시작이면 본령 21:10), 시작 전에는 몇 분째인지 */
+  const b1 = startWall();
   if (TEACH) el("plan").innerHTML = plan().map((p, i) =>
-    '<li class="' + (i === k ? "now" : i < k ? "past" : "") + '"><em>' + p.m +
-    '분</em><span>' + esc(p.t) + (p.note ? ' <span class="note">' + esc(p.note) + "</span>" : "") +
+    '<li class="' + (i === k ? "now" : i < k ? "past" : "") + '"><em>' +
+    (b1 == null ? p.m + '분' : hhmm(b1 + p.m * MIN)) + '</em><span>' + esc(p.t) + (p.note ? ' <span class="note">' + esc(p.note) + "</span>" : "") +
     "</span></li>").join("");
 
   el("left").textContent = t < END ? "마킹 " + mmss(END - t) : "마킹 종료";
