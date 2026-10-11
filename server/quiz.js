@@ -175,6 +175,14 @@ class Quiz {
     return {ok: true};
   }
 
+  /* 남은 문제를 건너뛰고 마지막 낱말(「끝」)로 간다. 지금 문제는 공개 없이 접는다 */
+  last(now){
+    if (this.state !== "running" || this.nth >= this.order.length - 1) return {err: "nothing"};
+    this.nth = this.order.length - 2;
+    this.next(now);
+    return {ok: true};
+  }
+
   /* 그 문제의 최고점 (초) */
   cap(){ return this.ask ? this.ask.word.length * MINUTE : 0; }
   /* 문제가 뜬 뒤 흐른 초 */

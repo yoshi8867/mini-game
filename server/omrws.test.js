@@ -196,12 +196,16 @@ async function admin(what, body){
 
   /* ─── 정답 공개 — 1번부터 3초에 하나씩 ─── */
   for (const c of kids) c.drain();
-  await admin("omrwarp", {code, m: 1});             // 29분
+  await admin("omrwarp", {code, m: 1});             // 29분 — 정답 공개(28분 30초) 뒤
   const first = await kids[0].next("omrme", 5000, m => m.key && m.key.length >= 1);
-  assert.strictEqual(first.key[0], KEY[0], "첫 정답이 틀리다");
-  assert.ok(first.key.length < QUESTIONS, "정답이 한꺼번에 다 왔다");
-  const second = await kids[0].next("omrme", STEP + 4000, m => m.key && m.key.length >= 2);
-  assert.strictEqual(second.key[1], KEY[1], "둘째 정답이 틀리다");
+  assert.deepStrictEqual(first.key, KEY.slice(0, first.key.length), "열린 정답이 틀리다");
+  /* 시계는 분 단위로만 옮겨진다 — 그 분의 27초를 넘겨 돌면 공개가 이미 다 끝나 있다.
+     하나씩 열리는 것은 omr.test.js 가 STEP 으로 본다 */
+  if (first.key.length < QUESTIONS){
+    const n = first.key.length;
+    const more = await kids[0].next("omrme", STEP + 4000, m => m.key && m.key.length > n);
+    assert.strictEqual(more.key[n], KEY[n], "다음 정답이 틀리다");
+  }
 
   /* ─── 점수 공개 ─── */
   for (const c of kids) c.drain();

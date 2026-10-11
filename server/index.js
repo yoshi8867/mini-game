@@ -594,6 +594,15 @@ function onAdmin(what, m, done, ip){
       pushQuiz(q);
       return done(200, {ok: true, quiz: q.full()});
     }
+    /* 남은 문제를 건너뛰고 「끝」으로 — 시간이 모자랄 때 */
+    case "quizlast": {
+      const q = quiz();
+      if (!q) return done(404, {ok: false, why: "noquiz"});
+      const r = q.last(Date.now());
+      if (r.err) return done(409, {ok: false, why: r.err});
+      pushQuiz(q);
+      return done(200, {ok: true, quiz: q.full()});
+    }
     case "quizclose": {
       const q = quiz();
       if (!q) return done(404, {ok: false, why: "noquiz"});

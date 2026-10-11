@@ -175,6 +175,19 @@ if (require.main === module){
                          "되살린 퀴즈가 이미 낸 오답을 잊었다");
   console.log("revive  맡겼다 되살려도 팀 · 문제 · 낱장 · 낸 오답이 그대로");
 }
+  /* ─── 「끝」으로 건너뛰기 ─────────────────────────────────────────── */
+{
+  const T = 1700000000000;
+  const a = filled(9); a.start(T);
+  assert.strictEqual(a.last(T + 1000).ok, true, "「끝」으로 못 건너뛴다");
+  assert.strictEqual(a.ask.word, a.order[a.order.length - 1], "마지막 낱말이 아니다");
+  assert.strictEqual(a.last(T + 2000).err, "nothing", "마지막에서 또 건너뛰었다");
+  const p0 = [...a.people.keys()][0];
+  assert.ok(a.say(p0, a.ask.word, T + 3000).right, "「끝」을 맞혀도 안 먹힌다");
+  for (let t = T + 3000; t < T + 60000 && a.state === "running"; t += 250) a.tick(t);
+  assert.strictEqual(a.state, "done", "「끝」을 맞혔는데 안 끝난다");
+  console.log("last    중간에 「끝」으로 건너뛰고, 맞히면 끝난다");
+}
 
 console.log("전부 통과");
 }

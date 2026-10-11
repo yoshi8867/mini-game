@@ -367,7 +367,7 @@ function paintPlay(){
   const v = V;
   if (!v) return;
   /* 몇 문제가 남았는지는 밝히지 않는다 — 「끝」을 맞히면 그때 안다 */
-  el("nth").textContent = v.state === "done" ? "끝" : "문제 " + v.nth;
+  el("nth").textContent = v.state === "done" ? "끝" : "";
   el("myteam").textContent = v.team ? v.team.name : "";
   el("sayBox").hidden = !v.ask;
   if (v.ask) el("text").focus();
