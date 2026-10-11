@@ -81,6 +81,7 @@ class Quiz {
     this.order = D.WORDS.slice();            // 판마다 제 것 — 끼워 넣기가 남의 판에 안 번진다
     this.nth   = -1;                         // 지금 몇 번째 문제인가
     this.off   = [];                         // 관리자가 끈 문제 (order 의 자리)
+    this.asked = [];                         // 실제로 낸 낱말 — 끝나면 다 보여 준다
     this.ask   = null;                        // {word, seed, sheets, at, page}
     this.reveal = null;                       // {at, word, by, got, from, to}
   }
@@ -94,7 +95,7 @@ class Quiz {
     return {v: 1, code: this.code, pin: this.pin, title: this.title,
             state: this.state, made: this.made, began: this.began, ended: this.ended,
             people: [...this.people.values()], teams: this.teams,
-            order: this.order, nth: this.nth, off: this.off, reveal: this.reveal,
+            order: this.order, nth: this.nth, off: this.off, asked: this.asked, reveal: this.reveal,
             ask: a && {word: a.word, seed: a.seed, at: a.at, page: a.page,
                        said: [...a.said].map(([k, set]) => [k, [...set]])}};
   }
@@ -104,7 +105,7 @@ class Quiz {
     (d.people || []).forEach(p => q.people.set(p.pid, p));
     q.teams = d.teams || [];
     q.order = d.order || D.WORDS.slice();
-    q.nth = d.nth; q.off = d.off || []; q.reveal = d.reveal || null;
+    q.nth = d.nth; q.off = d.off || []; q.asked = d.asked || []; q.reveal = d.reveal || null;
     const a = d.ask;
     q.ask = a ? {word: a.word, seed: a.seed, sheets: D.cut(a.word, a.seed),
                  at: a.at, page: a.page,
@@ -164,6 +165,7 @@ class Quiz {
       return false;
     }
     const word = this.order[this.nth];
+    this.asked.push(word);
     const seed = ((now & 0x7fffffff) ^ (this.nth * 2654435761)) >>> 0;
     this.ask = {word, seed, sheets: D.cut(word, seed), at: now, page: 0,
                 said: new Map()};            // 팀마다 이미 낸 오답
@@ -342,6 +344,7 @@ class Quiz {
                     left: Math.max(0, WHOLE + SHOW - (now - r.at))};
     }
     if (this.state !== "open") out.board = this.board();
+    if (this.state === "done") out.played = this.asked;   // 끝난 뒤에만 — 그 전엔 답이다
     return out;
   }
   info(){

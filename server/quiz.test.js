@@ -186,6 +186,9 @@ if (require.main === module){
   assert.ok(a.say(p0, a.ask.word, T + 3000).right, "「끝」을 맞혀도 안 먹힌다");
   for (let t = T + 3000; t < T + 60000 && a.state === "running"; t += 250) a.tick(t);
   assert.strictEqual(a.state, "done", "「끝」을 맞혔는데 안 끝난다");
+  const pl = a.watch(T + 60000).played;
+  assert.deepStrictEqual(pl, [a.order[0], "끝"], "나온 낱말 목록이 틀리다 — 건너뛴 것이 들어갔다");
+  assert.ok(!filled(9).watch(T).played, "끝나기 전에 낱말 목록이 나갔다");
   console.log("last    중간에 「끝」으로 건너뛰고, 맞히면 끝난다");
 }
   /* ─── 남은 문제 끄고 켜기 · 남은 예상 시간 ─────────────────────────── */

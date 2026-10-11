@@ -120,6 +120,11 @@ button:disabled{opacity:.4}
 .bdg.hit{background:var(--gold);color:#16171a}
 .bdg.miss{background:#f7dad7;color:var(--lose)}
 
+/* 끝난 뒤 — 나왔던 낱말을 가운데에 죽 늘어놓는다 */
+.played{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 14px;
+  margin-top:var(--s3);padding:var(--s3);font-size:15px;color:var(--chalk-dim)}
+body.teach .played{font-size:20px;gap:8px 20px}
+
 /* 교실 앞 화면 (?t=1) — 칠판에 띄운다. 넓게, 크게 */
 body.teach .wrap{max-width:1100px}
 body.teach .rankrow{padding:12px 14px}
@@ -386,6 +391,7 @@ function paintPlay(){
   el("nth").textContent = v.state === "done" ? "끝" : "";
   el("myteam").textContent = v.team ? v.team.name : "";
   el("sayBox").hidden = TEACH || !v.ask;
+  document.querySelector(".pit").hidden = v.state === "done";   /* 끝나면 낱말 목록이 그 자리에 */
   if (v.ask && !TEACH) el("text").focus();
   shout();
   ranks();
@@ -437,6 +443,12 @@ let film = null;
 function shout(){
   const v = V;
   const box = el("shout");
+  if (v.state === "done" && v.played){
+    if (film){ clearInterval(film); film = null; }
+    box.innerHTML = '<div class="played">' +
+      v.played.map(w => "<span>" + esc(w) + "</span>").join("") + "</div>";
+    return;
+  }
   if (!v.reveal){
     if (film){ clearInterval(film); film = null; }
     box.innerHTML = "";
