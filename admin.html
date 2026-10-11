@@ -368,6 +368,8 @@ function paint(j){
       acts.push(btn("start", c.code, "go", "대진 짜고 시작"));
       acts.push(btn("mock", c.code, "", "연습 참가자 넣기"));
     }
+    acts.push(btn("qr", c.code, "", "학생 QR"));
+    PINS[c.code] = [c.title, c.pin];
     acts.push(btn("close", c.code, "bad right", c.state === "running" ? "대회 중단" : "대회 닫기"));
 
     return '<div class="card">' +
@@ -474,6 +476,8 @@ function quizPaint(j){
       if (q.state === "running") acts.push(qbtn("quizaddnext", q.code, "", "다음 문제로 끼워 넣기"));
       acts.push(qbtn("quizaddend", q.code, "", "「끝」 앞에 넣기"));
     }
+    acts.push(qbtn("qr", q.code, "", "학생 QR"));
+    PINS[q.code] = [q.title, q.pin];
     acts.push(qbtn("quizclose", q.code, "bad right",
                    q.state === "running" ? "퀴즈 중단" : "퀴즈 닫기"));
 
@@ -556,6 +560,7 @@ function qboard(q){
 }
 
 async function qact(what, code){
+  if (what === "qr") return showQR("quiz.html", code);
   if (what === "quizclose" &&
       !confirm("퀴즈 " + code + " 를 닫습니다. 점수도 사라집니다. 닫을까요?")) return;
   if (what === "quizstart" &&
@@ -848,6 +853,7 @@ async function bact(what, code){
 }
 
 async function act(what, code){
+  if (what === "qr") return showQR("./", code);     // 대회는 쇼기 첫 화면에서 들어온다
   if (what === "close" &&
       !confirm("대회 " + code + " 를 닫습니다. 진행 중인 대국도 사라집니다. 닫을까요?"))
     return;
