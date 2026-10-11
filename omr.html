@@ -171,10 +171,12 @@ body.teach .nbody{font-size:26px}
 .code{display:flex;align-items:flex-end;height:26px;margin:0 2px 8px;gap:0}
 .code i{background:#1a1a1a;height:100%;flex:none}
 .code .gap{background:none}
-.rear .warn{border:1px solid var(--blue);padding:14px 18px;max-width:300px}
-.rear .warn h4{margin:0 0 8px;font:700 13px/1 'Gothic A1',sans-serif;
+.rear .warn{border:1px solid var(--blue);padding:28px 36px;max-width:640px}
+.rear .warn h4{margin:0 0 18px;font:700 22px/1 'Gowun Batang',serif;
   letter-spacing:.4em;text-indent:.4em;text-align:center}
-.rear .warn p{margin:0;font-size:11.5px;line-height:1.8;color:#5b4a1d}
+.rear .warn p{margin:0 0 10px;font:400 17px/1.85 'Gowun Batang',serif;color:#3d3214;
+  word-break:keep-all}
+.rear .warn b{color:#1a1a1a}
 
 /* ── 결과 ─────────────────────────────────────────────── */
 .result{display:flex;gap:var(--s2);flex-wrap:wrap;margin-top:var(--s3)}
@@ -286,8 +288,6 @@ body.teach .rankrow .pts{font-size:22px}
     <div class="ngone" id="ngone" hidden></div>
   </section>
 
-  <ol class="plan" id="plan" hidden></ol>
-
   <section id="sheet" hidden>
     <div class="sheetbar">
       <button id="hide">숨기기</button>
@@ -299,7 +299,7 @@ body.teach .rankrow .pts{font-size:22px}
         <div class="top">
           <div class="side">
             <div class="head"><div class="k">성명</div><div class="v" id="who2"></div></div>
-            <div class="head"><div class="k">과목명</div><div class="v">블라인드</div></div>
+            <div class="head"><div class="k">과목명</div><div class="v">블라인드 중간고사</div></div>
           </div>
           <div class="side">
             <div class="head">
@@ -317,14 +317,22 @@ body.teach .rankrow .pts{font-size:22px}
       </div></div>
       <div class="omr rear"><div class="paper">
         <div class="warn">
-          <h4>유 의 사 항</h4>
-          <p>1. 컴퓨터용 수성 사인펜만 사용할 것.<br>
-             2. 본 답안지를 칼로 긁거나 수정액을 칠하거나 구기지 말 것.<br>
-             3. 숨기기를 한 번 더 누르면 앞면이 보인다.</p>
+          <h4>응 시 안 내</h4>
+          <p>블라인드 중간고사는 총 20개 문항의 답안을 문제를 보지 않고 작성하는
+             게임입니다. 다른 사람에게 공개되지 않는 <b>개별 힌트</b> 1개와
+             <b>공통 힌트</b> 3개를 이용해 가능한 많은 점수를 획득해야 합니다.</p>
+          <p>각자 서로 다른 <b>개별 힌트</b>를 제공 받으므로 서로 간에 정보 거래를 통해
+             전체 답을 유추해야 합니다.</p>
+          <p>시험 시간은 총 25분입니다. 본령 직전 1분 동안 <b>개별 힌트</b>가 공개된 후
+             사라집니다. 본령이 울리면 자유롭게 대화할 수 있습니다.</p>
+          <p>종료령 3분 전에 각자 자리에 착석한 후 주어진 OMR 카드에 마킹합니다.
+             마킹 시간 동안에는 서로의 OMR 카드를 엿볼 수 없습니다.</p>
         </div>
       </div></div>
     </div></div></div>
   </section>
+
+  <ol class="plan" id="plan" hidden></ol>
 
   <section class="result" id="result" hidden></section>
   <div class="ranks" id="ranks" hidden></div>
@@ -411,7 +419,7 @@ const seat = {
 let joined = seat.get().code;
 let V = null;                         /* 마지막으로 받은 내 모습 */
 let gotAt = 0;                        /* 그것을 받은 때 — 그 뒤로는 화면이 센다 */
-let flipped = false, film = null;
+let flipped = false, turned = 0, film = null;
 
 const send = (t, o) => {
   if (sock && sock.readyState === 1) sock.send(JSON.stringify(Object.assign({t}, o || {})));
@@ -681,7 +689,16 @@ function paint(){
 
   /* 교사용은 진행표, 학생용은 답안지 */
   el("plan").hidden = !TEACH;
-  el("sheet").hidden = TEACH || t < SIT;
+  /* 답안지는 처음부터 뜬다. 준비령 동안은 뒷면(응시 안내)이 위로 오고,
+     착석 때 앞면으로 돌아온다 — 한 번씩만 돌리고 그 사이는 학생 손에 맡긴다.
+     교실 앞은 준비령 동안 뒷면만 띄운다. 마킹은 착석부터다 */
+  const BON = (plan().find(p => p.t === "본령") || {m: 3}).m * MIN;
+  el("sheet").hidden = TEACH && t >= BON;
+  el("hide").hidden = TEACH;
+  if (TEACH || (t < BON && turned < 1)){ turn(true); turned = 1; }
+  if (!TEACH && t >= SIT && turned < 2){ turn(false); turned = 2; }
+  document.querySelectorAll(".qr").forEach(r => r.classList.toggle("early", t < SIT));
+  el("guess").disabled = t < SIT || t >= END;
   /* 시작했으면 시각으로(21:05 시작이면 본령 21:10), 시작 전에는 몇 분째인지 */
   const b1 = startWall();
   if (TEACH) el("plan").innerHTML = plan().map((p, i) =>
@@ -689,8 +706,7 @@ function paint(){
     (b1 == null ? p.m + '분' : hhmm(b1 + p.m * MIN)) + '</em><span>' + esc(p.t) + (p.note ? ' <span class="note">' + esc(p.note) + "</span>" : "") +
     "</span></li>").join("");
 
-  el("left").textContent = t < END ? "마킹 " + mmss(END - t) : "마킹 종료";
-  el("guess").disabled = t >= END;
+  el("left").textContent = t < SIT ? "" : t < END ? "마킹 " + mmss(END - t) : "마킹 종료";
   document.querySelectorAll(".qr").forEach(r => r.classList.toggle("shut", t >= END));
 
   /* 정답 — 서버가 열어 준 만큼만 그린다 */
@@ -793,7 +809,8 @@ const band = q => { const r = (q - 1) % 20 + 1; return (r <= 5 || r >= 16) ? "y"
 el("grid").addEventListener("click", e => {
   const op = e.target.closest(".op"); if (!op) return;
   const row = op.closest(".qr"), q = +row.dataset.q, n = +op.dataset.n;
-  if (row.classList.contains("dead") || row.classList.contains("shut")) return;
+  if (row.classList.contains("dead") || row.classList.contains("shut") ||
+      row.classList.contains("early")) return;
   if (DEMO){                                 /* 리허설은 화면에서만 칠한다 */
     const same = op.classList.contains("on");
     row.querySelectorAll(".op.on").forEach(o => o.classList.remove("on"));
@@ -819,11 +836,12 @@ el("guess").addEventListener("change", () => {
   if (!online()){ pendingBet = n; return; }
   send("omrbet", {v: n});
 });
-el("hide").addEventListener("click", () => {
-  flipped = !flipped;
+function turn(back){
+  flipped = back;
   el("flip").classList.toggle("back", flipped);
-  el("hide").textContent = flipped ? "보기" : "숨기기";
-});
+  el("hide").textContent = flipped ? "뒤집기" : "숨기기";
+}
+el("hide").addEventListener("click", () => turn(!flipped));
 
 /* ── 고르기 단추 ──────────────────────────────────────────────────── */
 el("enter").addEventListener("click", enter);
