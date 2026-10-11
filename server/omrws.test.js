@@ -194,7 +194,7 @@ async function admin(what, body){
   assert.strictEqual(sheet.board.length, 6, "관리자 점수판이 안 떴다");
   assert.strictEqual(sheet.board[0].score, QUESTIONS * PER, "만점이 안 나왔다");
 
-  /* ─── 정답 공개 — 1번부터 5초에 하나씩 ─── */
+  /* ─── 정답 공개 — 1번부터 3초에 하나씩 ─── */
   for (const c of kids) c.drain();
   await admin("omrwarp", {code, m: 1});             // 29분
   const first = await kids[0].next("omrme", 5000, m => m.key && m.key.length >= 1);

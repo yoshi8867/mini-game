@@ -127,7 +127,7 @@ assert.strictEqual(o.bet(pid, 70, T0 + END).err, "late", "종료령 뒤에 예�
 assert.strictEqual(openedAt(END - 1), 0, "종료령 전에 정답이 열렸다");
 assert.strictEqual(openedAt(OPEN - 1), 0, "공개 전에 정답이 열렸다");
 assert.strictEqual(openedAt(OPEN), 1, "공개인데 첫 문제가 안 열렸다");
-assert.strictEqual(openedAt(OPEN + STEP * 3), 4, "5초에 하나씩이 아니다");
+assert.strictEqual(openedAt(OPEN + STEP * 3), 4, "3초에 하나씩이 아니다");
 assert.strictEqual(openedAt(OPEN + STEP * 100), QUESTIONS, "스무 개를 넘겼다");
 assert.strictEqual(o.view(pid, T0 + END).key, undefined, "종료령에 정답이 다 내려갔다");
 assert.deepStrictEqual(o.view(pid, T0 + OPEN + STEP * 2).key, KEY.slice(0, 3),
