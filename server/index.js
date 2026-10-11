@@ -594,6 +594,15 @@ function onAdmin(what, m, done, ip){
       pushQuiz(q);
       return done(200, {ok: true, quiz: q.full()});
     }
+    /* 진행 중에 낱말을 끼워 넣는다 — 바로 다음, 또는 「끝」 앞 */
+    case "quizadd": {
+      const q = quiz();
+      if (!q) return done(404, {ok: false, why: "noquiz"});
+      const r = q.add(m.word, m.at);
+      if (r.err) return done(409, {ok: false, why: r.err});
+      keep("quiz", q);
+      return done(200, {ok: true, quiz: q.full()});
+    }
     /* 아직 안 낸 문제를 끄고 켠다 */
     case "quiztoggle": {
       const q = quiz();

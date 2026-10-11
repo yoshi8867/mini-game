@@ -209,6 +209,29 @@ if (require.main === module){
   assert.deepStrictEqual(b.off, a.off, "되살린 퀴즈가 끈 문제를 잊었다");
   console.log("off     안 낸 문제를 끄면 건너뛰고, 예상 시간 " + Math.round(full / 60) + "분에서 줄어든다");
 }
+  /* ─── 진행 중에 끼워 넣기 ────────────────────────────────────────── */
+{
+  const T = 1700000000000;
+  const a = filled(9), other = filled(9);
+  const n = a.order.length;
+  a.toggle(3);                                      // 끈 자리는 밀려도 그 낱말을 따라간다
+  const w3 = a.order[3];
+  a.start(T);
+  assert.strictEqual(a.add("쀒뷁", "next").pos, 1, "다음 자리에 안 들어갔다");
+  assert.strictEqual(a.add("  웹툰 ", "end").pos, n, "「끝」 앞에 안 들어갔다");
+  assert.strictEqual(a.order[a.order.length - 1], "끝", "「끝」이 마지막이 아니다");
+  assert.strictEqual(a.order[a.off[0]], w3, "끈 문제가 엉뚱한 낱말로 옮겨 갔다");
+  assert.strictEqual(other.order.length, n, "남의 판에 끼워 넣어졌다");
+  ["", "abc", "다섯글자다", "가ㄱ"].forEach(w =>
+    assert.strictEqual(a.add(w, "next").err, "badword", JSON.stringify(w) + " 가 들어갔다"));
+  const p0 = [...a.people.keys()][0];
+  a.say(p0, a.ask.word, T + 1000);
+  a.tick(T + 8000);
+  assert.strictEqual(a.ask.word, "쀒뷁", "끼워 넣은 낱말이 다음에 안 나왔다");
+  assert.ok(a.ask.sheets.length === 3 && a.ask.sheets.some(s => s.some(r => /[1-9a-f]/.test(r))),
+            "끼워 넣은 낱말을 못 그렸다");
+  console.log("add     진행 중에 다음 / 「끝」 앞에 끼워 넣고, 돋움으로 그린다");
+}
 
 console.log("전부 통과");
 }

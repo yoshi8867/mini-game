@@ -341,6 +341,7 @@ const ERR = {badpin:"비밀번호는 숫자 네 자리입니다", busy:"너무 �
              notrunning:"아직 시작하지 않았습니다", notplan:"지금은 작전타임이 아닙니다",
              yours:"이미 그 팀이 최고가입니다", min:"1 이상이어야 합니다",
              notdone:"아직 돌릴 때가 아닙니다", nothing:"돌릴 룰렛이 없습니다",
+             badword:"한글 1~4글자만 넣을 수 있습니다",
              few:"사람이 모자랍니다 — 대회·옥션은 둘, 퀴즈는 여섯부터",
              started:"이미 시작했습니다", closed:"이미 시작했습니다",
              nothing:"지금은 넘길 문제가 없습니다", stale:"다시 들어와 주세요"};
@@ -469,6 +470,10 @@ function quizPaint(j){
       acts.push(qbtn("quizskip", q.code, "", "이 문제 넘기기"));
     if (q.state === "running" && q.nth < q.total)
       acts.push(qbtn("quizlast", q.code, "", "「끝」으로 건너뛰기"));
+    if (q.state !== "done"){
+      if (q.state === "running") acts.push(qbtn("quizaddnext", q.code, "", "다음 문제로 끼워 넣기"));
+      acts.push(qbtn("quizaddend", q.code, "", "「끝」 앞에 넣기"));
+    }
     acts.push(qbtn("quizclose", q.code, "bad right",
                    q.state === "running" ? "퀴즈 중단" : "퀴즈 닫기"));
 
@@ -558,6 +563,14 @@ async function qact(what, code){
   if (what === "quizlast" &&
       !confirm("남은 문제를 건너뛰고 마지막 문제 「끝」을 냅니다. 지금 문제는 공개 없이 넘어갑니다. 갈까요?")) return;
   const body = {code};
+  /* 낱말 끼워 넣기 — 입력칸을 카드에 두면 4초마다 다시 그릴 때 지워진다. 그래서 묻는다 */
+  if (what === "quizaddnext" || what === "quizaddend"){
+    const w = prompt("끼워 넣을 낱말 (한글 1~4글자)", "");
+    if (w === null || !w.trim()) return;
+    body.word = w.trim();
+    body.at = what === "quizaddnext" ? "next" : "end";
+    what = "quizadd";
+  }
   if (what === "quizmock"){
     const n = prompt("연습 참가자를 몇 명 넣을까요?", "20");
     if (n === null) return;

@@ -14,6 +14,10 @@ server/glyphs.js 에 박아 둔다. 그 뒤로는 서버도 화면도 **폰트�
     글씨가 아니라 **켜진 칸 목록**이라 낱장으로 가르기도 쉽다
   * 글자 하나가 16진수 56글자다. 문제 목록까지 합쳐도 4KB 가 안 된다
 
+문제 글자만이 아니라 **한글 11,172자 전부**를 굽는다. 관리자가 진행 중에
+폰에서 낱말을 끼워 넣어도 서버가 돋움 그대로 그릴 수 있게. 700KB 남짓이고
+서버에만 있다 — 화면으로는 낱장만 나간다.
+
 돌리는 데만 Pillow 와 돋움(gulim.ttc)이 든다 — 개발하는 자리에서만이다.
 찍혀 나온 glyphs.js 는 아무것도 안 든다.
 
@@ -67,7 +71,7 @@ def main():
     assert len(set(order)) == len(order), "같은 낱말이 두 번 있다"
     assert all(1 <= len(w) <= 4 for w in order), "1~4글자만 낼 수 있다"
 
-    chars = sorted({c for w in order for c in w})
+    chars = [chr(c) for c in range(0xAC00, 0xD7A4)]   # 가 ~ 힣
     seen = {c: dots(c) for c in chars}
 
     # 글자마다 따로 가운데를 맞추면 받침 있는 글자와 없는 글자의 밑줄이
@@ -104,7 +108,7 @@ def main():
         '\n'
         '   GRID   글자 하나 = %d줄 x 16진수 네 자리.\n'
         '          줄의 아래 %d비트를 쓰고, 맨 왼쪽 칸이 비트 %d 이다\n'
-        '   WORDS  낼 순서 그대로의 문제 목록 */\n'
+        '   WORDS  낼 순서 그대로의 문제 목록. GRID 는 한글 전부다 */\n'
         '"use strict";\n'
         '\n'
         'const GLYPHS = {\n'

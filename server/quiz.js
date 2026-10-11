@@ -78,7 +78,7 @@ class Quiz {
     this.ended = null;
     this.people = new Map();                 // pid → {pid, name, team}
     this.teams = [];                         // [{id, name, pids, score, full}]
-    this.order = D.WORDS;
+    this.order = D.WORDS.slice();            // 판마다 제 것 — 끼워 넣기가 남의 판에 안 번진다
     this.nth   = -1;                         // 지금 몇 번째 문제인가
     this.off   = [];                         // 관리자가 끈 문제 (order 의 자리)
     this.ask   = null;                        // {word, seed, sheets, at, page}
@@ -103,7 +103,7 @@ class Quiz {
     q.state = d.state; q.made = d.made; q.began = d.began; q.ended = d.ended;
     (d.people || []).forEach(p => q.people.set(p.pid, p));
     q.teams = d.teams || [];
-    q.order = d.order || D.WORDS;
+    q.order = d.order || D.WORDS.slice();
     q.nth = d.nth; q.off = d.off || []; q.reveal = d.reveal || null;
     const a = d.ask;
     q.ask = a ? {word: a.word, seed: a.seed, sheets: D.cut(a.word, a.seed),
@@ -193,6 +193,18 @@ class Quiz {
     const k = this.off.indexOf(i);
     if (k < 0) this.off.push(i); else this.off.splice(k, 1);
     return {ok: true};
+  }
+  /* 관리자가 낱말을 끼워 넣는다. at 이 "next" 면 바로 다음, 아니면 「끝」 앞.
+     한글 1~4글자만 — 점판이 넉 자까지만 화면에 들어간다 */
+  add(word, at){
+    word = tidy(word);
+    if (this.state === "done") return {err: "nothing"};
+    if (!/^[\uAC00-\uD7A3]{1,4}$/.test(word) || [...word].some(c => !D.GRID[c]))
+      return {err: "badword"};
+    const pos = at === "next" ? this.nth + 1 : this.order.length - 1;
+    this.order.splice(pos, 0, word);
+    this.off = this.off.map(i => i >= pos ? i + 1 : i);
+    return {ok: true, pos};
   }
   /* 남은 문제를 다 최고점까지 끌고 공개까지 본다면 몇 초 남았나 */
   rest(now){
