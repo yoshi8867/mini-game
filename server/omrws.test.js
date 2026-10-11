@@ -1,6 +1,6 @@
 /* node omrws.test.js — 블라인드 소켓 왕복 검사.
    서버를 실제로 띄우고 관리자가 열고, 여섯이 들어가 명제를 받고, 시계를
-   당겨 가며 마킹하고 채점까지 간다. 40분을 기다릴 수는 없으니 omrwarp 로
+   당겨 가며 마킹하고 채점까지 간다. 35분을 기다릴 수는 없으니 omrwarp 로
    건너뛴다. DB 는 끄고, 관리자 비번은 ADMIN_PW 로 넣는다. */
 "use strict";
 /* 진짜 판이 .env 에 있어도 검사는 연습판으로 돌린다 */
@@ -144,7 +144,7 @@ async function admin(what, body){
 
   /* 공통 힌트는 모두에게 같은 것이 간다 */
   for (const c of kids) c.drain();
-  await admin("omrwarp", {code, m: 11});            // 15분
+  await admin("omrwarp", {code, m: 6});             // 10분
   const hint = [];
   for (const c of kids) hint.push((await c.next("omrme", 5000, m => m.now && m.now.gone)).now.say);
   assert.strictEqual(new Set(hint).size, 1, "공통 힌트가 사람마다 다르다");
@@ -156,7 +156,7 @@ async function admin(what, body){
   assert.strictEqual((await kids[0].next("error")).why, "early", "착석 전에 마킹이 됐다");
 
   for (const c of kids) c.drain();
-  await admin("omrwarp", {code, m: 17});            // 32분 — 착석
+  await admin("omrwarp", {code, m: 17});            // 27분 — 착석
   for (const c of kids) await c.next("omrme", 5000, m => m.spent >= SIT);
 
   kids[0].drain();
@@ -183,7 +183,7 @@ async function admin(what, body){
 
   /* ─── 종료령 — 마킹이 닫힌다 ─── */
   for (const c of kids) c.drain();
-  await admin("omrwarp", {code, m: 3});             // 35분
+  await admin("omrwarp", {code, m: 3});             // 30분
   for (const c of kids) await c.next("omrme", 5000, m => m.spent >= END);
   kids[0].drain();
   kids[0].send("omrmark", {q: 2, n: 1});
@@ -196,7 +196,7 @@ async function admin(what, body){
 
   /* ─── 정답 공개 — 1번부터 5초에 하나씩 ─── */
   for (const c of kids) c.drain();
-  await admin("omrwarp", {code, m: 1});             // 36분
+  await admin("omrwarp", {code, m: 1});             // 31분
   const first = await kids[0].next("omrme", 5000, m => m.key && m.key.length >= 1);
   assert.strictEqual(first.key[0], KEY[0], "첫 정답이 틀리다");
   assert.ok(first.key.length < QUESTIONS, "정답이 한꺼번에 다 왔다");
@@ -205,7 +205,7 @@ async function admin(what, body){
 
   /* ─── 점수 공개 ─── */
   for (const c of kids) c.drain();
-  await admin("omrwarp", {code, m: 2});             // 38분
+  await admin("omrwarp", {code, m: 2});             // 33분
   const top = await kids[0].next("omrme", 5000, m => !!m.result);
   assert.strictEqual(top.result.score, QUESTIONS * PER, "만점이 아니다");
   assert.strictEqual(top.result.rank, 1, "1등이 아니다");
@@ -220,7 +220,7 @@ assert.strictEqual(grade(2, 21), 1, "스물하나 중 2등이 1등급이 아니�
 
   /* ─── 끝 ─── */
   for (const c of kids) c.drain();
-  await admin("omrwarp", {code, m: 3});             // 41분 → 40분에서 멎는다
+  await admin("omrwarp", {code, m: 3});             // 36분 → 35분에서 멎는다
   await kids[0].next("omrme", 5000, m => m.state === "done");
 
   const bye2 = await admin("omrclose", {code});

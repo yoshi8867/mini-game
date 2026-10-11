@@ -200,11 +200,11 @@ button:disabled{opacity:.4;cursor:not-allowed}
     <details style="margin-top:12px">
       <summary style="cursor:pointer;font-size:13px;color:var(--chalk-dim)">공통 힌트 바꾸기</summary>
       <div style="margin-top:10px;display:grid;gap:10px">
-        <div><label for="oh1">1차 — 15분</label>
+        <div><label for="oh1">1차 — 10분</label>
           <input id="oh1" maxlength="120" placeholder="비우면 기본 힌트가 나갑니다"></div>
-        <div><label for="oh2">2차 — 20분</label>
+        <div><label for="oh2">2차 — 15분</label>
           <input id="oh2" maxlength="120" placeholder="비우면 기본 힌트가 나갑니다"></div>
-        <div><label for="oh3">3차 — 25분</label>
+        <div><label for="oh3">3차 — 20분</label>
           <input id="oh3" maxlength="120" placeholder="비우면 기본 힌트가 나갑니다"></div>
       </div>
     </details>
@@ -590,7 +590,6 @@ function omrPaint(j){
         '<span>참가 비번 <b>' + esc(o.pin || "없음") + '</b></span>' +
         live +
       '</div>' +
-      ohints(o) +
       (o.board.length ? oboard(o) : owaiting(o)) +
       '<div class="acts">' + acts.join("") + '</div>' +
     '</div>';
@@ -602,11 +601,6 @@ function omrPaint(j){
 function obtn(what, code, cls, text){
   return '<button class="' + cls + '" data-do="' + what + '" data-code="' + code + '">' +
          text + '</button>';
-}
-/* 공통 힌트는 교실에서 읽어 줄 수도 있으니 미리 보여 둔다 */
-function ohints(o){
-  return '<div class="who" style="margin-top:12px">' + o.hints.map((h, i) =>
-    '<span>' + (i + 1) + '차 · ' + esc(h) + '</span>').join("") + '</div>';
 }
 function owaiting(o){
   if (!o.entrants.length)
@@ -657,7 +651,7 @@ async function oact(what, code){
   if (what === "omrclose" &&
       !confirm("블라인드 중간고사 " + code + " 를 닫습니다. 답안도 점수도 사라집니다. 닫을까요?")) return;
   if (what === "omrstart" &&
-      !confirm("여기서 참가가 마감되고 40분이 흐르기 시작합니다. 시작할까요?")) return;
+      !confirm("여기서 참가가 마감되고 35분이 흐르기 시작합니다. 시작할까요?")) return;
   const body = {code};
   if (what === "omrmock"){
     const n = prompt("연습 참가자를 몇 명 넣을까요?", "21");

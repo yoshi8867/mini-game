@@ -36,7 +36,7 @@ const STEP = 5000;                           // 정답 하나가 열리는 참
 const GONE = MIN;                            // 힌트가 남아 있는 참
 const CUT = [10, 34, 66, 90];                // 내신 5등급제 누적 비율
 
-/* 40분. 굵은 것만 게이지에 세모가 선다 */
+/* 35분. 굵은 것만 게이지에 세모가 선다 */
 const PLAN = [
   {m: 0,  mark: 1, t: "준비령",
    say: "준비령이 울렸습니다.\n자리에 앉아 기다립니다."},
@@ -44,23 +44,23 @@ const PLAN = [
    head: "나에게만 보이는 힌트"},
   {m: 5,  mark: 1, t: "본령",
    say: "본령이 울렸습니다.\n이제부터 자유롭게 이동하거나 대화해도 좋습니다."},
-  {m: 15, mark: 1, t: "1차 공통 힌트 공개", gone: 1, hint: 0,
+  {m: 10, mark: 1, t: "1차 공통 힌트 공개", gone: 1, hint: 0,
    head: "1차 공통 힌트"},
-  {m: 20, mark: 1, t: "2차 공통 힌트 공개", gone: 1, hint: 1,
+  {m: 15, mark: 1, t: "2차 공통 힌트 공개", gone: 1, hint: 1,
    head: "2차 공통 힌트"},
-  {m: 25, mark: 1, t: "3차 공통 힌트 공개", gone: 1, hint: 2,
+  {m: 20, mark: 1, t: "3차 공통 힌트 공개", gone: 1, hint: 2,
    head: "3차 공통 힌트"},
-  {m: 32, mark: 1, t: "착석 안내", note: "종료까지 3분 남음",
+  {m: 27, mark: 1, t: "착석 안내", note: "종료까지 3분 남음",
    say: "착석하기 바랍니다.\n이제부터 서로 대화할 수 없습니다.\n3분 간 OMR 카드에 답안 마킹이 가능합니다."},
-  {m: 35, mark: 1, t: "종료령",
+  {m: 30, mark: 1, t: "종료령",
    say: "종료령이 울렸습니다.\n답안은 자동으로 제출되었습니다."},
-  {m: 36, mark: 0, t: "정답 공개", note: "1번부터 5초마다 1개씩",
+  {m: 31, mark: 0, t: "정답 공개", note: "1번부터 5초마다 1개씩",
    say: "정답을 공개합니다."},
-  {m: 38, mark: 0, t: "점수 공개", note: "등수 · 등급 · 평균",
+  {m: 33, mark: 0, t: "점수 공개", note: "등수 · 등급 · 평균",
    say: "채점이 끝났습니다."},
 ];
-const SIT = 32 * MIN, END = 35 * MIN, OPEN = 36 * MIN, SCORE = 38 * MIN;
-const LEN = 40 * MIN;
+const SIT = 27 * MIN, END = 30 * MIN, OPEN = 31 * MIN, SCORE = 33 * MIN;
+const LEN = 35 * MIN;
 
 const shuffle = a => {                       // Fisher-Yates
   for (let i = a.length - 1; i > 0; i--){

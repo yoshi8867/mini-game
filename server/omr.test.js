@@ -87,9 +87,9 @@ const mine = o.people.get(who(0).pid).prop.text;
 const atSolo = o.view(who(0).pid, T0 + 4 * 60000 + 1000);
 assert.strictEqual(atSolo.now.say, mine, "내 명제가 안 뜬다");
 assert.ok(atSolo.now.left > 0 && atSolo.now.left <= 60000, "사라질 때까지가 안 센다");
-/* 4차 공통 힌트는 25분에 뜨고 26분에 사라진다 — 다음 단계는 32분이라 빈 참이 있다 */
-assert.ok(o.view(who(0).pid, T0 + 26 * 60000 - 1).now, "1분이 안 됐는데 힌트가 사라졌다");
-assert.strictEqual(o.view(who(0).pid, T0 + 26 * 60000).now, undefined,
+/* 4차 공통 힌트는 20분에 뜨고 21분에 사라진다 — 다음 단계는 27분이라 빈 참이 있다 */
+assert.ok(o.view(who(0).pid, T0 + 21 * 60000 - 1).now, "1분이 안 됐는데 힌트가 사라졌다");
+assert.strictEqual(o.view(who(0).pid, T0 + 21 * 60000).now, undefined,
   "1분이 지났는데 힌트가 남아 있다");
 assert.notStrictEqual(o.view(who(1).pid, T0 + 4 * 60000 + 1000).now.say, mine,
   "남의 명제가 내 화면에 왔다");
@@ -154,7 +154,7 @@ assert.strictEqual(top.result.score, 100, "결과 점수가 틀렸다");
 assert.strictEqual(top.result.rank, 1, "결과 등수가 틀렸다");
 assert.strictEqual(top.result.grade, 1, "만점인데 1등급이 아니다");
 assert.strictEqual(o.view(pid, T0 + SCORE - 1).result, undefined,
-  "38분 전에 점수가 나갔다");
+  "33분 전에 점수가 나갔다");
 
 /* 내신 5등급제 — 누적 10 · 34 · 66 · 90 % */
 assert.strictEqual(grade(1, 100), 1, "상위 1%가 1등급이 아니다");
@@ -173,8 +173,8 @@ assert.strictEqual(c.tick(T0 + 2000), false, "같은 단계인데 또 알린다"
 assert.strictEqual(c.tick(T0 + 5 * 60000), true, "본령을 안 알린다");
 assert.strictEqual(c.tick(T0 + 15 * 60000), true, "1차 공통 힌트를 안 알린다");
 assert.strictEqual(c.tick(T0 + OPEN + STEP), true, "정답이 열리는 것을 안 알린다");
-assert.strictEqual(c.tick(T0 + LEN), true, "40분인데 안 끝난다");
-assert.strictEqual(c.state, "done", "40분이 지났는데 running 이다");
+assert.strictEqual(c.tick(T0 + LEN), true, "35분인데 안 끝난다");
+assert.strictEqual(c.state, "done", "35분이 지났는데 running 이다");
 assert.strictEqual(c.tick(T0 + LEN + 1000), false, "끝났는데 또 알린다");
 
 /* ─── 단계 ─────────────────────────────────────────────────────────── */
@@ -202,16 +202,16 @@ if (require.main === module){
 {
   const a = filled(6); a.start(T0);
   const p0 = [...a.people.keys()][0];
-  a.mark(p0, 3, 2, T0 + 33 * 60000);
-  a.bet(p0, 70, T0 + 33 * 60000);
+  a.mark(p0, 3, 2, T0 + 28 * 60000);
+  a.bet(p0, 70, T0 + 28 * 60000);
   /* JSON 을 한 바퀴 돈다 — Neon 의 jsonb 에 들어갔다 나오는 것과 같다 */
   const b = Omr.revive(JSON.parse(JSON.stringify(a.snapshot())));
-  const at = T0 + 33 * 60000 + 5000;
+  const at = T0 + 28 * 60000 + 5000;
   assert.deepStrictEqual(b.view(p0, at), a.view(p0, at), "되살린 판의 내 모습이 다르다");
   assert.deepStrictEqual(b.watch(at), a.watch(at), "되살린 판의 교실 앞 모습이 다르다");
   assert.strictEqual(b.mark(p0, 4, 1, at).ok, true, "되살린 판에서 칠이 안 된다");
   /* 꺼져 있던 동안 흐른 시간도 따라잡는다 — 시작 시각을 절대 시각으로 들고 있다 */
-  assert.strictEqual(b.spent(T0 + 36 * 60000), 36 * 60000, "되살린 판의 시계가 멈춰 있었다");
+  assert.strictEqual(b.spent(T0 + 31 * 60000), 31 * 60000, "되살린 판의 시계가 멈춰 있었다");
   console.log("revive  맡겼다 되살려도 모습 · 답안 · 시계가 그대로");
 }
 
