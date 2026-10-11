@@ -39,6 +39,9 @@ button.go:hover{background:#e9d494;color:#17181a}
 button.bad{color:var(--lose);border-color:#4a2f2c}
 button.bad:hover{background:#2a1c1a;color:#d98079}
 button:disabled{opacity:.4;cursor:not-allowed}
+a.lnk{font:700 13.5px/1 'Gothic A1',system-ui,sans-serif;border-radius:999px;padding:12px 18px;
+  border:1px solid var(--wall-line);color:var(--wait);text-decoration:none;white-space:nowrap}
+a.lnk:hover{border-color:var(--wait)}
 .msg{margin:var(--s2) 0 0;font-size:13.5px;min-height:1.3em;color:var(--chalk-dim)}
 .msg.bad{color:var(--lose)} .msg.good{color:var(--win)}
 
@@ -568,6 +571,7 @@ function omrPaint(j){
     }
     if (o.state === "running") acts.push(obtn("omrwarp", o.code, "", "시계 옮기기"));
     acts.push(obtn("qr", o.code, "", "학생 QR"));
+    acts.push('<a class="lnk" target="_blank" href="' + esc(teachUrl()) + '">교실 앞 화면 ↗</a>');
     PINS[o.code] = [o.title, o.pin];
     acts.push(obtn("omrclose", o.code, "bad right",
                    o.state === "running" ? "블라인드 중간고사 중단" : "블라인드 중간고사 닫기"));
@@ -628,6 +632,12 @@ function oboard(o){
 }
 
 /* ─── 학생 QR ─── 학생 화면 주소를 크게. 서버를 바꿔 쓰고 있으면 그것도 싣는다 */
+/* 교실 앞 화면 — 판을 고르고 참가 비번을 넣으면 들어간다 */
+function teachUrl(){
+  const u = new URL("omr.html?t=1", location.href);
+  if (Q.get("server")) u.searchParams.set("server", Q.get("server"));
+  return u.href;
+}
 function showQR(page, code){
   const u = new URL(page, location.href);
   if (Q.get("server")) u.searchParams.set("server", Q.get("server"));
