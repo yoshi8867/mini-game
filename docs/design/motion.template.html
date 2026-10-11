@@ -1888,7 +1888,7 @@ function netRecv(msg){
       break;
     case "rooms": rows = msg.rooms || []; showList(); break;
     case "seated":
-      vs = "online"; mySide = msg.side; netCode = msg.code; netPly = 0;
+      vs = "online"; mySide = msg.side; netCode = msg.code; netPly = 0; shownPly = 0;
       try { sessionStorage.setItem("shogi-" + msg.code, msg.token); } catch (e) {}
       forms({}); netOpenPanel(false); netSay("");
       clockHold();                        // 상대가 올 때까지는 시계를 세워 둔다
@@ -1959,7 +1959,7 @@ function netSync(){
       && st.b.every((v, i) => mine.b[i] === v)
       && [0,1].every(s => st.hand[s].every((n, k) => mine.hand[s][k] === n));
     if (!same) netLoad(st);                 // 어긋났으면 화면을 버리고 다시 그린다
-    else { turn = st.turn; updateTurn(); }
+    else { turn = st.turn; updateTurn(); shownPly = st.ply; }   // 새 판(재대국)이면 0 으로 돌아온다
     paintNames();
     if (!st.ready){
       clockHold();
@@ -1983,7 +1983,7 @@ function netLoad(st){
   clockStop();
   cells = Array.from({length:ROWS}, () => Array(COLS).fill(null));
   hand = [[],[]]; sel = null; busy = false; over = false; seen = new Map();
-  turn = st.turn; first = st.first;
+  turn = st.turn; first = st.first; shownPly = st.ply;
   for (let i = 0; i < 12; i++){
     const v = st.b[i]; if (!v) continue;
     cells[(i/COLS)|0][i%COLS] = {t: TCHR[Math.abs(v)], s: v > 0 ? 0 : 1, el: null};
@@ -1998,8 +1998,17 @@ function netLoad(st){
   }));
   paintSkins(); updateCounts(); updateTurn();
 }
+/* 수는 한 줄로 세워 하나씩 그린다. 승격 · 잡기 연출(1초 남짓)이 도는 사이에
+   다음 수가 오면 전에는 두 연출이 겹쳐 돌았고, 늦게 끝난 쪽이 차례를 한 번 더
+   넘겨서 내 차례인데 상대 차례로 보였다 — 그대로 시간이 다 가 패배했다. */
+let netChain = Promise.resolve(), shownPly = 0;
 function netMoved(msg){
-  netPly = msg.ply; serverLeft = msg.left / 1000; busy = false;
+  netPly = msg.ply; serverLeft = msg.left / 1000;
+  netChain = netChain.then(() => netDraw(msg)).then(netSync, netSync);
+}
+function netDraw(msg){
+  if (msg.ply <= shownPly) return;          // 그새 판을 통째로 다시 받았다 — 이미 들어 있다
+  shownPly = msg.ply; busy = false;
   const m = msg.m, to = EG.to(m), tr = (to / COLS) | 0, tc = to % COLS;
   let done;
   if (EG.drop(m)){
@@ -2010,7 +2019,7 @@ function netMoved(msg){
     const mv = movesOf(fr, fc).find(x => x.r === tr && x.c === tc);
     done = mv && doMove(fr, fc, mv, false, true);
   }
-  Promise.resolve(done).then(netSync, netSync);   // 연출이 끝나면 밀린 소식을 본다
+  return done;                              // 연출이 끝나면 밀린 소식을 본다
 }
 function netOver(ov){
   finish(ov.winner);
