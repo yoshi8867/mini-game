@@ -490,6 +490,7 @@ function quizPaint(j){
         '<span>참가 비번 <b>' + esc(q.pin || "없음") + '</b></span>' +
         live +
       '</div>' +
+      qrest(q) +
       (q.state === "open" ? qwaiting(q) : qboard(q)) +
       '<div class="acts">' + acts.join("") + '</div>' +
     '</div>';
@@ -497,6 +498,26 @@ function quizPaint(j){
 
   box.querySelectorAll("button[data-do]").forEach(b =>
     b.addEventListener("click", () => qact(b.dataset.do, b.dataset.code)));
+  box.querySelectorAll("[data-tog]").forEach(b =>
+    b.addEventListener("click", async () => {
+      const j = await call("quiztoggle", {code: b.dataset.code, i: +b.dataset.tog});
+      if (!j.ok) return alert(ERR[j.why] || j.why);
+      refresh();
+    }));
+}
+/* 아직 안 낸 문제 — 눌러서 끄고 켠다. 「끝」은 늘 남는다.
+   남은 예상 시간은 남은 문제를 다 최고점(글자 × 1분)까지 끌고 공개까지 본 값이다 */
+function qrest(q){
+  if (q.state === "done" || !q.rest || !q.rest.length) return "";
+  const last = q.rest.length - 1;
+  return '<p class="hint" style="margin-top:12px">남은 문제 ' +
+      (q.rest.length - q.rest.filter(r => r.off).length) + '개 · 남은 예상 <b>' +
+      clock(q.left) + '</b> <span style="opacity:.7">(누르면 끄고 켭니다)</span></p>' +
+    '<div class="who">' + q.rest.map((r, k) => k === last
+      ? '<span class="top">' + esc(r.word) + '</span>'
+      : '<span class="' + (r.off ? "out" : "") + '" style="cursor:pointer" data-code="' +
+        esc(q.code) + '" data-tog="' + r.i + '">' + esc(r.word) + '</span>').join("") +
+    '</div>';
 }
 function qbtn(what, code, cls, text){
   return '<button class="' + cls + '" data-do="' + what + '" data-code="' + code + '">' +

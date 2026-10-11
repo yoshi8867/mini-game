@@ -80,6 +80,7 @@ class Quiz {
     this.teams = [];                         // [{id, name, pids, score, full}]
     this.order = D.WORDS;
     this.nth   = -1;                         // 지금 몇 번째 문제인가
+    this.off   = [];                         // 관리자가 끈 문제 (order 의 자리)
     this.ask   = null;                        // {word, seed, sheets, at, page}
     this.reveal = null;                       // {at, word, by, got, from, to}
   }
@@ -93,7 +94,7 @@ class Quiz {
     return {v: 1, code: this.code, pin: this.pin, title: this.title,
             state: this.state, made: this.made, began: this.began, ended: this.ended,
             people: [...this.people.values()], teams: this.teams,
-            order: this.order, nth: this.nth, reveal: this.reveal,
+            order: this.order, nth: this.nth, off: this.off, reveal: this.reveal,
             ask: a && {word: a.word, seed: a.seed, at: a.at, page: a.page,
                        said: [...a.said].map(([k, set]) => [k, [...set]])}};
   }
@@ -103,7 +104,7 @@ class Quiz {
     (d.people || []).forEach(p => q.people.set(p.pid, p));
     q.teams = d.teams || [];
     q.order = d.order || D.WORDS;
-    q.nth = d.nth; q.reveal = d.reveal || null;
+    q.nth = d.nth; q.off = d.off || []; q.reveal = d.reveal || null;
     const a = d.ask;
     q.ask = a ? {word: a.word, seed: a.seed, sheets: D.cut(a.word, a.seed),
                  at: a.at, page: a.page,
@@ -156,6 +157,7 @@ class Quiz {
   next(now){
     this.reveal = null;
     this.nth++;
+    while (this.off.includes(this.nth) && this.nth < this.order.length - 1) this.nth++;
     if (this.nth >= this.order.length){
       this.ask = null;
       this.state = "done"; this.ended = now;
@@ -181,6 +183,25 @@ class Quiz {
     this.nth = this.order.length - 2;
     this.next(now);
     return {ok: true};
+  }
+
+  /* 아직 안 낸 문제를 끄고 켠다. 마지막 「끝」은 못 끈다 — 그게 있어야 끝난 줄 안다 */
+  toggle(i){
+    i = i | 0;
+    if (this.state === "done" || i <= this.nth || i >= this.order.length - 1)
+      return {err: "nothing"};
+    const k = this.off.indexOf(i);
+    if (k < 0) this.off.push(i); else this.off.splice(k, 1);
+    return {ok: true};
+  }
+  /* 남은 문제를 다 최고점까지 끌고 공개까지 본다면 몇 초 남았나 */
+  rest(now){
+    const per = w => w.length * MINUTE + (WHOLE + SHOW) / 1000;
+    let s = 0;
+    if (this.reveal) s += Math.max(0, WHOLE + SHOW - (now - this.reveal.at)) / 1000;
+    else if (this.ask) s += Math.max(0, this.cap() - this.spent(now)) + (WHOLE + SHOW) / 1000;
+    this.order.forEach((w, i) => { if (i > this.nth && !this.off.includes(i)) s += per(w); });
+    return Math.round(s);
   }
 
   /* 그 문제의 최고점 (초) */
@@ -313,6 +334,10 @@ class Quiz {
       spent: this.ask && !this.reveal ? this.spent(now || Date.now()) : null,
       cap: this.cap(),
       revealing: !!this.reveal,
+      /* 아직 안 낸 문제들과 켜고 끈 것, 남은 예상 시간 (초) */
+      rest: this.order.map((w, i) => ({i, word: w, off: this.off.includes(i)}))
+                      .filter(r => r.i > this.nth),
+      left: this.state === "done" ? 0 : this.rest(now || Date.now()),
       entrants: [...this.people.values()].map(p => ({name: p.name, team: p.team})),
       board: this.state === "open" ? [] : this.board(),
     });

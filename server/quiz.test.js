@@ -188,6 +188,27 @@ if (require.main === module){
   assert.strictEqual(a.state, "done", "「끝」을 맞혔는데 안 끝난다");
   console.log("last    중간에 「끝」으로 건너뛰고, 맞히면 끝난다");
 }
+  /* ─── 남은 문제 끄고 켜기 · 남은 예상 시간 ─────────────────────────── */
+{
+  const T = 1700000000000;
+  const a = filled(9);
+  const n = a.order.length;
+  const full = a.full(T).left;
+  assert.strictEqual(a.toggle(1).ok, true, "2번을 못 끈다");
+  assert.strictEqual(a.toggle(n - 1).err, "nothing", "「끝」이 꺼졌다");
+  const w = a.order[1];
+  assert.strictEqual(a.full(T).left, full - (w.length * 60 + 7), "끈 문제만큼 예상 시간이 안 준다");
+  assert.ok(a.full(T).rest.find(r => r.i === 1).off, "끈 것이 꺼진 것으로 안 나온다");
+  a.start(T);                                       // 1번이 뜬다
+  const p0 = [...a.people.keys()][0];
+  a.say(p0, a.ask.word, T + 1000);
+  a.tick(T + 1000 + 7000);                          // 공개가 끝나면 다음 — 꺼진 2번은 건너뛴다
+  assert.strictEqual(a.nth, 2, "꺼진 문제를 건너뛰지 않았다");
+  assert.strictEqual(a.toggle(1).err, "nothing", "지나간 문제를 켰다");
+  const b = Quiz.revive(JSON.parse(JSON.stringify(a.snapshot())));
+  assert.deepStrictEqual(b.off, a.off, "되살린 퀴즈가 끈 문제를 잊었다");
+  console.log("off     안 낸 문제를 끄면 건너뛰고, 예상 시간 " + Math.round(full / 60) + "분에서 줄어든다");
+}
 
 console.log("전부 통과");
 }
