@@ -335,7 +335,7 @@ body.teach .rankrow .pts{font-size:22px}
   <span class="tag">리허설</span>
   <button id="play2">▶</button>
   <button id="rate">×60</button>
-  <input type="range" id="scrub" min="0" max="2100" step="1" value="0">
+  <input type="range" id="scrub" min="0" max="1980" step="1" value="0">
 </div>
 
 <script>
@@ -375,13 +375,13 @@ const STATE = {open:"접수 중", running:"진행 중", done:"끝남"};
 
 /* 서버가 안 붙었을 때 쓰는 진행표. 붙으면 서버 것으로 갈아 끼운다 */
 const PLAN0 = [
-  {m:0, t:"준비령", mark:true}, {m:4, t:"개별 힌트 공개", mark:true},
-  {m:5, t:"본령", mark:true}, {m:10, t:"1차 공통 힌트 공개", mark:true},
-  {m:15, t:"2차 공통 힌트 공개", mark:true}, {m:20, t:"3차 공통 힌트 공개", mark:true},
-  {m:27, t:"착석 안내", mark:true, note:"종료까지 3분 남음"},
-  {m:30, t:"종료령", mark:true},
-  {m:31, t:"정답 공개", mark:false, note:"1번부터 5초마다 1개씩"},
-  {m:33, t:"점수 공개", mark:false, note:"등수 · 등급 · 평균"}];
+  {m:0, t:"준비령", mark:true}, {m:2, t:"개별 힌트 공개", mark:true},
+  {m:3, t:"본령", mark:true}, {m:8, t:"1차 공통 힌트 공개", mark:true},
+  {m:13, t:"2차 공통 힌트 공개", mark:true}, {m:18, t:"3차 공통 힌트 공개", mark:true},
+  {m:25, t:"착석 안내", mark:true, note:"종료까지 3분 남음"},
+  {m:28, t:"종료령", mark:true},
+  {m:29, t:"정답 공개", mark:false, note:"1번부터 5초마다 1개씩"},
+  {m:31, t:"점수 공개", mark:false, note:"등수 · 등급 · 평균"}];
 const DEMOKEY = [5,2,5,2,1,5,3,2,5,5,1,3,3,2,5,3,3,2,5,5];
 
 let sock = null, rows = [], chose = null;
@@ -597,7 +597,7 @@ function paintMarks(){
     const txt = "<b>" + esc(p.t) + "</b>" +
       (base ? '<span class="at">(' + hhmm(base + p.m * MIN) + ")</span>" : "");
     return '<div class="mk' + (i === 0 ? " lead" : "") + '" data-m="' + p.m +
-           '" style="left:' + (p.m / 35 * 100) + '%"><s class="stem"></s>' +
+           '" style="left:' + (p.m / 33 * 100) + '%"><s class="stem"></s>' +
            (up ? txt + "<i></i>" : "<i></i>" + txt) + "</div>";
   };
   el("marksUp").innerHTML = row.map((p, i) => upper(i) ? cell(p, i) : "").join("");
@@ -649,9 +649,9 @@ addEventListener("resize", unclash);
 function paint(){
   document.body.classList.toggle("teach", TEACH);
   paintMarks();
-  const t = spent(), len = (V && V.len) || 35 * MIN;
+  const t = spent(), len = (V && V.len) || 33 * MIN;
   head(t, len);
-  const SIT = (V && V.sit) || 27 * MIN, END = (V && V.end) || 30 * MIN;
+  const SIT = (V && V.sit) || 25 * MIN, END = (V && V.end) || 28 * MIN;
   el("fill").style.width = (t / len * 100) + "%";
   el("hand").style.left = Math.min(100, t / len * 100) + "%";
   el("mmss").textContent = hms(nowWall());     /* 흐른 시간이 아니라 지금 시각 */
@@ -737,9 +737,9 @@ function head(t, len){
                   String(d.getMinutes()).padStart(2, "0");
   /* 시험 시간은 본령부터 종료령까지다. 준비령과 채점은 시험이 아니다 */
   const base = b0 == null ? Date.now() - t : b0;
-  const bon = (plan().find(p => p.t === "본령") || {m: 5}).m * MIN;
+  const bon = (plan().find(p => p.t === "본령") || {m: 3}).m * MIN;
   const from = new Date(base + bon),
-        to = new Date(base + ((V && V.end) || 30 * MIN));
+        to = new Date(base + ((V && V.end) || 28 * MIN));
   const bits = [];
   if (V.name) bits.push("<b>" + esc(V.name) + "</b>");
   bits.push((from.getMonth() + 1) + "/" + from.getDate() +
@@ -832,7 +832,7 @@ el("pin").addEventListener("keydown", e => { if (e.key === "Enter") enter(); });
 /* ── 리허설 — 서버 없이 ?demo=1 로 혼자 돌려 본다 ──────────────────── */
 let demo = 0, timer = null, rate = 60;
 function demoOpen(){
-  const t = demo - 31 * MIN;
+  const t = demo - 29 * MIN;
   return t < 0 ? 0 : Math.min(20, Math.floor(t / 5000) + 1);
 }
 const DEMOSAY = {
@@ -855,7 +855,7 @@ function demoNotice(t){
 }
 const CROWD = [85,80,75,75,70,70,70,65,65,60,60,55,55,50,50,45,40,40,35,30];
 function demoResult(t, hits){
-  if (t < 33 * MIN) return null;
+  if (t < 31 * MIN) return null;
   const score = hits * 5, all = CROWD.concat([score]);
   const rank = 1 + CROWD.filter(s => s > score).length;
   const pct = rank / all.length * 100;
@@ -875,8 +875,8 @@ if (DEMO){
   el("play2").addEventListener("click", () => {
     if (timer) return stop();
     timer = setInterval(() => {
-      demo = Math.min(35 * MIN, demo + rate * 250); scrub.value = demo / 1000; paint();
-      if (demo >= 35 * MIN) stop();
+      demo = Math.min(33 * MIN, demo + rate * 250); scrub.value = demo / 1000; paint();
+      if (demo >= 33 * MIN) stop();
     }, 250);
     el("play2").textContent = "❚❚"; el("play2").classList.add("on");
   });
