@@ -226,6 +226,7 @@ button.go{font:700 14px/1 'Gothic A1',sans-serif;cursor:pointer;border-radius:99
 .rankrow .pts{font:700 16px/1 'JetBrains Mono',monospace;flex:none}
 body.teach .rankrow{font-size:20px;padding:12px 2px}
 body.teach .rankrow .pts{font-size:22px}
+.rankrow .pts small{font-size:.62em;font-weight:400;color:var(--dim-2)}
 
 /* ── 리허설 막대 (서버에 붙이면 지운다) ───────────────────── */
 .rehearse{position:fixed;left:0;right:0;bottom:0;z-index:9;display:flex;gap:var(--s2);
@@ -389,7 +390,7 @@ const PLAN0 = [
   {m:25, t:"착석 안내", mark:true, note:"종료까지 3분 남음"},
   {m:28, t:"종료령", mark:true},
   {m:28.5, t:"정답 공개", mark:false, note:"1번부터 3초마다 1개씩"},
-  {m:31, t:"점수 공개", mark:false, note:"등수 · 등급 · 평균"}];
+  {m:30, t:"점수 공개", mark:false, note:"등수 · 등급 · 평균"}];
 const DEMOKEY = [5,2,5,2,1,5,3,2,5,5,1,3,3,2,5,3,3,2,5,5];
 
 let sock = null, rows = [], chose = null;
@@ -739,7 +740,9 @@ function paint(){
     '<div class="rankrow"><span class="place">' + p.rank + '위</span>' +
     '<span class="tname">' + esc(p.name) + '</span>' +
     '<span class="pill">' + p.grade + '등급</span>' +
-    '<span class="pts">' + p.score + '점</span></div>').join("");
+    '<span class="pts">' + p.score + '점' +
+      (p.guess == null ? "" : ' <small>(예상 ' + p.guess + '점)</small>') +
+    '</span></div>').join("");
   fit();
 }
 /* 머리글 — 코드, 날짜, 그리고 시작·끝 시각. 시각은 흐른 참에서 거꾸로 센다 */
@@ -873,7 +876,7 @@ function demoNotice(t){
 }
 const CROWD = [85,80,75,75,70,70,70,65,65,60,60,55,55,50,50,45,40,40,35,30];
 function demoResult(t, hits){
-  if (t < 31 * MIN) return null;
+  if (t < 30 * MIN) return null;
   const score = hits * 5, all = CROWD.concat([score]);
   const rank = 1 + CROWD.filter(s => s > score).length;
   const pct = rank / all.length * 100;

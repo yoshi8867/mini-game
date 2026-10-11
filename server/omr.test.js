@@ -154,7 +154,7 @@ assert.strictEqual(top.result.score, 100, "결과 점수가 틀렸다");
 assert.strictEqual(top.result.rank, 1, "결과 등수가 틀렸다");
 assert.strictEqual(top.result.grade, 1, "만점인데 1등급이 아니다");
 assert.strictEqual(o.view(pid, T0 + SCORE - 1).result, undefined,
-  "31분 전에 점수가 나갔다");
+  "30분 전에 점수가 나갔다");
 
 /* 내신 5등급제 — 누적 10 · 34 · 66 · 90 % */
 assert.strictEqual(grade(1, 100), 1, "상위 1%가 1등급이 아니다");
@@ -213,6 +213,19 @@ if (require.main === module){
   /* 꺼져 있던 동안 흐른 시간도 따라잡는다 — 시작 시각을 절대 시각으로 들고 있다 */
   assert.strictEqual(b.spent(T0 + 31 * 60000), 31 * 60000, "되살린 판의 시계가 멈춰 있었다");
   console.log("revive  맡겼다 되살려도 모습 · 답안 · 시계가 그대로");
+}
+  /* ─── 연습 참가자는 아무렇게나 칠해 낸다 · 점수는 마지막 정답 30초 뒤 ── */
+{
+  const a = filled(3);
+  const p0 = [...a.people.keys()][0];
+  a.scribble(p0);
+  const me = a.people.get(p0);
+  assert.strictEqual(Object.keys(me.marks).length, QUESTIONS, "연습 참가자가 다 안 칠했다");
+  assert.ok(Object.values(me.marks).every(n => n >= 1 && n <= 5), "1~5 밖을 칠했다");
+  assert.ok(me.guess % PER === 0 && me.guess >= 0 && me.guess <= 100, "예상점수가 이상하다");
+  const last = OPEN + (QUESTIONS - 1) * STEP;
+  assert.ok(SCORE - last >= 30000 && SCORE - last < 40000, "마지막 정답과 점수 사이가 30초 남짓이 아니다");
+  console.log("mock    연습 참가자 20칸 · 예상점수 · 점수는 마지막 정답 " + (SCORE - last) / 1000 + "초 뒤");
 }
 
 console.log("전부 통과");

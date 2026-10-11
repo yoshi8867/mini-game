@@ -664,9 +664,12 @@ function onAdmin(what, m, done, ip){
       let n = m.n | 0;
       if (n < 1) n = 1;
       if (o.people.size + n > OMR_MAX) n = OMR_MAX - o.people.size;
-      for (let i = 0; i < n; i++)
-        o.join(players.get("mock-" + o.code + "-" + Date.now().toString(36) +
-                           "-" + i + "-" + Math.random().toString(36).slice(2, 8)));
+      for (let i = 0; i < n; i++){
+        const p = players.get("mock-" + o.code + "-" + Date.now().toString(36) +
+                              "-" + i + "-" + Math.random().toString(36).slice(2, 8));
+        o.join(p);
+        o.scribble(p.pid);                  // 아무렇게나 칠해 둔다 — 등급이 갈리는 것을 보려고
+      }
       keep("omr", o);
       return done(200, {ok: true, omr: o.full()});
     }

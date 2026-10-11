@@ -56,10 +56,10 @@ const PLAN = [
    say: "종료령이 울렸습니다.\n답안은 자동으로 제출되었습니다.\n30초 후 채점이 진행됩니다."},
   {m: 28.5, mark: 0, t: "정답 공개", note: "1번부터 3초마다 1개씩",
    say: "정답을 공개합니다."},
-  {m: 31, mark: 0, t: "점수 공개", note: "등수 · 등급 · 평균",
+  {m: 30, mark: 0, t: "점수 공개", note: "등수 · 등급 · 평균",
    say: "채점이 끝났습니다."},
 ];
-const SIT = 25 * MIN, END = 28 * MIN, OPEN = 28.5 * MIN, SCORE = 31 * MIN;
+const SIT = 25 * MIN, END = 28 * MIN, OPEN = 28.5 * MIN, SCORE = 30 * MIN;
 const LEN = 33 * MIN;
 
 const shuffle = a => {                       // Fisher-Yates
@@ -206,6 +206,15 @@ class Omr {
     return {ok: true, guess: v};
   }
 
+  /* 연습 참가자 — 스무 칸을 1~5 아무거나로 채우고, 예상점수도 아무렇게나.
+     시각을 안 따진다. 사람이 아니니 착석을 기다릴 까닭이 없다 */
+  scribble(pid){
+    const me = this.people.get(pid);
+    if (!me) return;
+    for (let q = 1; q <= QUESTIONS; q++) me.marks[q] = 1 + ((Math.random() * CHOICES) | 0);
+    me.guess = PER * ((Math.random() * (QUESTIONS + 1)) | 0);
+  }
+
   /* ─── 채점 ───────────────────────────────────────────────────────── */
   hits(me){
     let n = 0;
@@ -309,7 +318,7 @@ class Omr {
     if (t >= SCORE || this.state === "done"){
       const tal = this.tally();
       out.board = tal.list.map(p => ({name: p.name, score: p.score,
-                                      rank: p.rank, grade: p.grade}));
+                                      rank: p.rank, grade: p.grade, guess: p.guess}));
       out.avg = tal.avg;
     }
     return out;

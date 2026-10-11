@@ -205,7 +205,7 @@ async function admin(what, body){
 
   /* ─── 점수 공개 ─── */
   for (const c of kids) c.drain();
-  await admin("omrwarp", {code, m: 2});             // 31분
+  await admin("omrwarp", {code, m: 2});             // 30분 넘어
   const top = await kids[0].next("omrme", 5000, m => !!m.result);
   assert.strictEqual(top.result.score, QUESTIONS * PER, "만점이 아니다");
   assert.strictEqual(top.result.rank, 1, "1등이 아니다");
