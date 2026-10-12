@@ -185,6 +185,14 @@ class Bid {
     if (this.teams.length < 2) return {err: "few"};
     now = now || Date.now();
     this.order = shuffle(WHEELS.map(w => w.id)).slice(0, LOTS);
+    /* 마지막 경매에는 받기 싫은 룰렛(음수)을 두지 않는다. 맨 끝에 걸렸으면
+       그 앞의 가장 가까운 좋은 룰렛과 자리를 바꾼다 */
+    const last = this.order.length - 1;
+    if (byId[this.order[last]].bad){
+      let k = last - 1;
+      while (k >= 0 && byId[this.order[k]].bad) k--;
+      if (k >= 0) [this.order[k], this.order[last]] = [this.order[last], this.order[k]];
+    }
     this.began = now;
     this.rest(now);                    // 첫 묶음 앞에도 작전타임이 있다
     return {ok: true, teams: this.teams.length, lots: this.order.length};

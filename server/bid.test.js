@@ -436,3 +436,18 @@ function open(n, opt){
 }
 
 console.log("\n전부 통과");
+
+/* ─── 마지막 경매에는 받기 싫은 룰렛이 안 나온다 ─── */
+{
+  let badLast = 0, badSeen = 0;
+  for (let i = 0; i < 2000; i++){
+    const b = open(4);
+    assert.ok(b.start(1e12).ok, "시작이 안 된다");
+    if (byId[b.order[b.order.length - 1]].bad) badLast++;
+    badSeen += b.order.filter(id => byId[id].bad).length;
+    assert.strictEqual(new Set(b.order).size, LOTS, "자리를 바꾸다 룰렛이 겹쳤다");
+  }
+  assert.strictEqual(badLast, 0, "마지막 경매에 받기 싫은 룰렛이 " + badLast + "번 나왔다");
+  assert.ok(badSeen > 0, "받기 싫은 룰렛이 아예 안 나온다");
+  console.log("last    마지막 경매는 늘 좋은 룰렛 (2000판)");
+}
