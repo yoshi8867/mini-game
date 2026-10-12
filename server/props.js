@@ -76,22 +76,43 @@ const BUILT_COMMON = [
 /* ─── 진짜 판은 밖에서 들어온다 ──────────────────────────────────────
    OMR_PROPS 에 {KEY, PROPS, DROP, COMMON} 을 JSON 으로 넣는다. 없거나
    깨졌으면 위에 적힌 연습판으로 간다 — 교실이 멎는 것보다는 낫다 */
+/* 세트 하나가 성한지 본다. 관리 화면에서 올리는 세트도 여기를 지난다 —
+   교실에서 터지면 늦다. 성하면 {set} 을, 아니면 {why} 를 돌려준다 */
+const QUESTIONS = 20;
+function checkSet(j){
+  const bad = why => ({why});
+  if (!j || typeof j !== "object") return bad("세트가 JSON 객체가 아니다");
+  if (!Array.isArray(j.KEY) || j.KEY.length !== QUESTIONS) return bad("KEY 는 20개여야 한다");
+  if (!j.KEY.every(n => Number.isInteger(n) && n >= 1 && n <= 5)) return bad("KEY 에 1~5 아닌 것이 있다");
+  if (!Array.isArray(j.PROPS) || j.PROPS.length < 2) return bad("PROPS 가 둘도 안 된다");
+  if (!j.PROPS.every(p => p && p.id && typeof p.text === "string" && p.text.trim()))
+    return bad("PROPS 에 id 나 text 가 빈 것이 있다");
+  const ids = new Set(j.PROPS.map(p => String(p.id)));
+  if (ids.size !== j.PROPS.length) return bad("PROPS 의 id 가 겹친다");
+  if (!Array.isArray(j.COMMON) || j.COMMON.length !== 3) return bad("COMMON(공통 힌트)은 3개여야 한다");
+  if (!j.COMMON.every(c => c && typeof c.text === "string" && c.text.trim()))
+    return bad("COMMON 에 text 가 빈 것이 있다");
+  const drop = Array.isArray(j.DROP) ? j.DROP.map(String) : [];
+  const stray = drop.find(id => !ids.has(id));
+  if (stray) return bad("DROP 의 " + stray + " 가 PROPS 에 없다");
+  return {set: {
+    KEY: j.KEY.slice(),
+    PROPS: j.PROPS.map(p => ({id: String(p.id), star: !!p.star, text: p.text.trim().slice(0, 200),
+                              cells: Array.isArray(p.cells) ? p.cells : []})),
+    DROP: drop,
+    COMMON: j.COMMON.map((c, i) => ({id: String(c.id || "C" + (i + 1)), text: c.text.trim().slice(0, 120),
+                                    cells: Array.isArray(c.cells) ? c.cells : []})),
+  }};
+}
 function brought(){
   const raw = process.env.OMR_PROPS;
   if (!raw || !raw.trim()) return null;
   let j;
   try { j = JSON.parse(raw); }
   catch (e){ console.error("OMR_PROPS 가 JSON 이 아니다 — 연습판으로 간다"); return null; }
-  const ok = j && Array.isArray(j.KEY) && Array.isArray(j.PROPS) &&
-             Array.isArray(j.COMMON) && Array.isArray(j.DROP) &&
-             j.KEY.length && j.PROPS.length >= 2 &&
-             j.KEY.every(n => n >= 1 && n <= 5) &&
-             j.PROPS.every(p => p && p.id && p.text) &&
-             j.COMMON.every(c => c && c.id && c.text);
-  if (!ok){ console.error("OMR_PROPS 모양이 틀렸다 — 연습판으로 간다"); return null; }
-  j.PROPS.forEach(p => { p.star = !!p.star; p.cells = p.cells || []; });
-  j.COMMON.forEach(c => { c.cells = c.cells || []; });
-  return j;
+  const r = checkSet(j);
+  if (!r.set){ console.error("OMR_PROPS 모양이 틀렸다 (" + r.why + ") — 연습판으로 간다"); return null; }
+  return r.set;
 }
 const LIVE = brought();
 const CUSTOM = !!LIVE;                       // 진짜 판으로 돌고 있는가
@@ -101,10 +122,16 @@ const DROP   = CUSTOM ? LIVE.DROP   : BUILT_DROP;
 const COMMON = CUSTOM ? LIVE.COMMON : BUILT_COMMON;
 const HINTS  = COMMON.map(c => c.text);
 
-function deal(n){
-  const cut = Math.max(0, PROPS.length - n);
-  const gone = new Set(DROP.slice(0, cut));
-  return PROPS.filter(p => !gone.has(p.id));
+/* 기본 세트 — OMR_PROPS 에 든 진짜 판, 없으면 위의 연습판.
+   관리 화면에서 올린 세트는 Neon 에 있고, 판을 열 때 고른다 */
+const BASE = {id: "base", name: CUSTOM ? "기본 세트" : "연습 세트",
+              KEY, PROPS, DROP, COMMON};
+
+function deal(n, set){
+  set = set || BASE;
+  const cut = Math.max(0, set.PROPS.length - n);
+  const gone = new Set((set.DROP || []).slice(0, cut));
+  return set.PROPS.filter(p => !gone.has(p.id));
 }
 
-module.exports = {KEY, PROPS, DROP, COMMON, HINTS, deal, CUSTOM};
+module.exports = {KEY, PROPS, DROP, COMMON, HINTS, deal, CUSTOM, BASE, checkSet, QUESTIONS};

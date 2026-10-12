@@ -24,11 +24,10 @@
    ══════════════════════════════════════════════════════════════════════ */
 "use strict";
 const {okPin} = require("./room.js");        // 비번 모양은 대국과 같은 규칙이다
-const {KEY, PROPS, HINTS, deal} = require("./props.js");
+const {KEY, PROPS, deal, BASE, QUESTIONS} = require("./props.js");
 
 const MIN = 60 * 1000;
 const MAX_ENTRANTS = 48;
-const QUESTIONS = KEY.length;                // 쓰는 문제는 20번까지
 const PRINTED = 40;                          // 종이에 찍혀 있는 칸은 40번까지
 const CHOICES = 5;
 const PER = 5;                               // 한 문제 5점
@@ -103,8 +102,11 @@ class Omr {
     this.code  = code;
     this.pin   = okPin(opt.pin) ? opt.pin : null;
     this.title = String(opt.title || "블라인드").slice(0, 40);
-    /* 공통 힌트는 관리자가 바꿔 넣을 수 있다. 빈 칸은 기본값으로 둔다 */
-    this.hints = HINTS.map((h, i) => {
+    /* 문제 세트. 판마다 제 것을 통째로 든다 — 정답 · 명제 · 공통 힌트.
+       반마다 다른 세트를 내면 옆 반의 스포가 안 통한다 */
+    this.set = opt.set || BASE;
+    /* 공통 힌트는 관리자가 바꿔 넣을 수 있다. 빈 칸은 세트의 것으로 둔다 */
+    this.hints = this.set.COMMON.map(c => c.text).map((h, i) => {
       const got = opt.hints && opt.hints[i];
       return got ? String(got).slice(0, 120) : h;
     });
@@ -120,15 +122,15 @@ class Omr {
   /* 서버가 다시 떠도 판이 이어지게 통째로 적어 둘 모습. 시작 시각을 절대
      시각으로 들고 있으니, 되살린 판은 꺼져 있던 동안 흐른 시간까지 그대로
      따라잡는다. 명제는 글까지 통째로 둔다 — 그사이 OMR_PROPS 가 바뀌어도
-     이미 나눠 준 패는 그대로여야 한다. */
+     이미 나눠 준 패는 그대로여야 한다. 세트도 통째로 둔다 — 정답이 거기 있다 */
   snapshot(){
-    return {v: 1, code: this.code, pin: this.pin, title: this.title,
+    return {v: 1, code: this.code, pin: this.pin, title: this.title, set: this.set,
             hints: this.hints, state: this.state, made: this.made,
             began: this.began, ended: this.ended,
             people: [...this.people.values()]};
   }
   static revive(d){
-    const o = new Omr(d.code, {pin: d.pin, title: d.title, hints: d.hints});
+    const o = new Omr(d.code, {pin: d.pin, title: d.title, hints: d.hints, set: d.set});
     o.state = d.state; o.made = d.made; o.began = d.began; o.ended = d.ended;
     (d.people || []).forEach(p => o.people.set(p.pid, {
       pid: p.pid, name: p.name, prop: p.prop || null,
@@ -157,7 +159,7 @@ class Omr {
     if (list.length < 2) return {err: "few"};
 
     /* 사람이 적으면 ☆ 부터 빠진다. 많으면 돌려 가며 겹쳐 준다 */
-    const cards = shuffle(deal(list.length).slice());
+    const cards = shuffle(deal(list.length, this.set).slice());
     shuffle(list).forEach((p, i) => { p.prop = cards[i % cards.length]; });
 
     this.state = "running";
@@ -227,7 +229,7 @@ class Omr {
   /* ─── 채점 ───────────────────────────────────────────────────────── */
   hits(me){
     let n = 0;
-    for (let q = 1; q <= QUESTIONS; q++) if (me.marks[q] === KEY[q - 1]) n++;
+    for (let q = 1; q <= QUESTIONS; q++) if (me.marks[q] === this.set.KEY[q - 1]) n++;
     return n;
   }
   points(me){ return this.hits(me) * PER; }
@@ -307,7 +309,7 @@ class Omr {
     const says = this.notice(t, me);
     if (says) out.now = says;
     const open = openedAt(t);             // 정답은 열린 만큼만 나간다
-    if (open) out.key = KEY.slice(0, open);
+    if (open) out.key = this.set.KEY.slice(0, open);
     if (t >= SCORE || this.state === "done"){
       const tal = this.tally();
       const mine = tal.list.find(p => p.pid === pid);
@@ -327,7 +329,7 @@ class Omr {
     const says = this.notice(t, null);
     if (says) out.now = says;
     const open = openedAt(t);
-    if (open) out.key = KEY.slice(0, open);
+    if (open) out.key = this.set.KEY.slice(0, open);
     if (t >= SCORE || this.state === "done"){
       const tal = this.tally();
       out.board = tal.list.map(p => ({name: p.name, score: p.score, raw: p.raw, bonus: p.bonus,
@@ -350,6 +352,7 @@ class Omr {
     const tal = this.state === "open" ? null : this.tally();
     return Object.assign(this.info(), {
       pin: this.pin,
+      set: this.set.name,                    // 어느 세트로 연 판인가 — 관리자만 본다
       hints: this.hints,
       step: k < 0 ? null : PLAN[k].t,
       opened: openedAt(t),

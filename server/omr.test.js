@@ -192,6 +192,36 @@ assert.strictEqual(bonus(null, 60), 0, "예상을 안 썼는데 가점이 있다
   assert.deepStrictEqual([r.raw, r.bonus, r.score], [60, 7, 67], "내 결과에 채점 · 가점 · 총점이 없다");
 }
 
+/* ─── 문제 세트 — 판마다 제 세트를 든다 ───────────────────────────── */
+{
+  const {checkSet} = require("./props.js");
+  const mine = {KEY: KEY.map(n => n % 5 + 1),                 // 정답이 다른 세트
+                PROPS: [{id: "X1", text: "가"}, {id: "X2", text: "나"}, {id: "X3", star: true, text: "다"}],
+                DROP: ["X3"],
+                COMMON: [{text: "공1"}, {text: "공2"}, {text: "공3"}]};
+  assert.ok(checkSet(mine).set, "성한 세트를 안 받는다");
+  assert.ok(checkSet(Object.assign({}, mine, {KEY: [1, 2]})).why, "정답 둘짜리를 받았다");
+  assert.ok(checkSet(Object.assign({}, mine, {KEY: KEY.map(() => 6)})).why, "6번 답을 받았다");
+  assert.ok(checkSet(Object.assign({}, mine, {COMMON: [{text: "하나"}]})).why, "공통 힌트 하나를 받았다");
+  assert.ok(checkSet(Object.assign({}, mine, {DROP: ["Z9"]})).why, "없는 명제를 빼라는 세트를 받았다");
+  const set = Object.assign({id: "S1", name: "2판"}, checkSet(mine).set);
+  const s = new Omr("SETX", {pin: "1234", set});
+  for (let i = 0; i < 2; i++) s.join(players.get("pid-set-" + i));
+  s.start(T0);
+  assert.deepStrictEqual(s.hints, ["공1", "공2", "공3"], "세트의 공통 힌트가 아니다");
+  assert.strictEqual(s.full(T0).set, "2판", "관리자에게 세트 이름이 안 간다");
+  const cards = [...s.people.values()].map(p => p.prop.id).sort();
+  assert.deepStrictEqual(cards, ["X1", "X2"], "둘이면 ☆ X3 이 빠져야 한다: " + cards);
+  const p0 = [...s.people.keys()][0];
+  for (let q = 1; q <= QUESTIONS; q++) s.mark(p0, q, set.KEY[q - 1], T0 + SIT);
+  assert.strictEqual(s.points(s.people.get(p0)), 100, "세트의 정답으로 채점하지 않았다");
+  assert.deepStrictEqual(s.view(p0, T0 + LEN).key, set.KEY, "열리는 정답이 세트의 것이 아니다");
+  const back = Omr.revive(JSON.parse(JSON.stringify(s.snapshot())));
+  assert.strictEqual(back.points(back.people.get(p0)), 100, "되살린 판이 세트를 잃었다");
+  assert.strictEqual(back.full(T0).set, "2판", "되살린 판의 세트 이름이 없다");
+  console.log("set     세트마다 정답 · 명제 · 공통 힌트 · 되살리기");
+}
+
 /* ─── 시계 ─────────────────────────────────────────────────────────── */
 const c = filled(21); c.start(T0);
 assert.strictEqual(c.tick(T0 + 1000), true, "첫 단계를 안 알린다");

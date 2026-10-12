@@ -128,9 +128,13 @@ function create(hooks){
     /* 검사는 서버에서 한다. 페이지에서 하면 소스를 열어 건너뛴다 */
     if (url.slice(0, 7) === "/admin/"){
       if (req.method !== "POST") return done(405, {ok: false, why: "post only"});
-      return readBody(req, 4000, m => {
+      /* 문제 세트만 크다 — 명제 스물몇 줄에 정답까지. 나머지는 작게 막아 둔다 */
+      const cap = url === "/admin/omrsetput" ? 64000 : 4000;
+      return readBody(req, cap, m => {
         if (!m || typeof m !== "object") return done(400, {ok: false, why: "bad"});
-        hooks.admin(url.slice(7), m, done, clientIP(req));
+        const r = hooks.admin(url.slice(7), m, done, clientIP(req));
+        if (r && r.catch) r.catch(e => { console.warn("관리  " + url + " 실패:", e.message);
+                                         done(500, {ok: false, why: "server"}); });
       });
     }
 

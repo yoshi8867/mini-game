@@ -58,6 +58,18 @@ create table if not exists live (
   data     jsonb       not null,
   saved_at timestamptz not null default now()
 );
+
+-- 블라인드 문제 세트. 정답이 들어 있다 — 저장소는 공개라 여기 둔다.
+-- 관리자만 올리고 지운다. 기본 세트(OMR_PROPS)는 data 없이 쓴 기록만 남긴다.
+create table if not exists omr_sets (
+  id         text        primary key,
+  name       text        not null,
+  data       jsonb,
+  made       timestamptz not null default now(),
+  used_at    timestamptz,
+  used_title text,
+  used_n     int         not null default 0
+);
 `;
 
 /* 처음 쓸 때 한 번만 스키마를 맞춘다. 실패하면 이후로는 조용히 꺼진다. */
@@ -170,6 +182,53 @@ async function loadLive(maxAgeMs){
   } catch (e){ console.warn("db   판 되살리기 실패:", e.message); return []; }
 }
 
+/* ─── 블라인드 문제 세트 ───────────────────────────────────────────── */
+/* 목록에는 정답을 싣지 않는다. 몇 줄인지만 센다 */
+async function listSets(){
+  if (!pool || broken || !(await init())) return null;
+  try {
+    const r = await pool.query(
+      `select id, name, made, used_at, used_title, used_n,
+              coalesce(jsonb_array_length(data->'PROPS'), 0)  as props,
+              coalesce(jsonb_array_length(data->'COMMON'), 0) as common
+         from omr_sets order by made`);
+    return r.rows;
+  } catch (e){ console.warn("db   세트 목록 실패:", e.message); return null; }
+}
+async function getSet(id){
+  if (!pool || broken || !(await init())) return null;
+  try {
+    const r = await pool.query("select id, name, data from omr_sets where id = $1 and data is not null", [id]);
+    return r.rows[0] || null;
+  } catch (e){ console.warn("db   세트 읽기 실패:", e.message); return null; }
+}
+async function putSet(id, name, data){
+  if (!pool || broken || !(await init())) return false;
+  try {
+    await pool.query(
+      `insert into omr_sets (id, name, data) values ($1, $2, $3)
+       on conflict (id) do update set name = $2, data = $3`, [id, name, JSON.stringify(data)]);
+    return true;
+  } catch (e){ console.warn("db   세트 올리기 실패:", e.message); return false; }
+}
+async function dropSet(id){
+  if (!pool || broken || !(await init())) return false;
+  try { await pool.query("delete from omr_sets where id = $1", [id]); return true; }
+  catch (e){ console.warn("db   세트 지우기 실패:", e.message); return false; }
+}
+/* 어느 반에 언제 냈는지. 기본 세트는 data 없는 줄로 남긴다 */
+async function useSet(id, name, title){
+  if (!pool || broken || !(await init())) return false;
+  try {
+    await pool.query(
+      `insert into omr_sets (id, name, used_at, used_title, used_n) values ($1, $2, now(), $3, 1)
+       on conflict (id) do update set used_at = now(), used_title = $3,
+                                      used_n = omr_sets.used_n + 1`, [id, name, title]);
+    return true;
+  } catch (e){ console.warn("db   세트 사용 기록 실패:", e.message); return false; }
+}
+
 const enabled = () => !!pool && !broken;
 
-module.exports = {init, saveGame, count, stats, enabled, keepLive, dropLive, loadLive};
+module.exports = {init, saveGame, count, stats, enabled, keepLive, dropLive, loadLive,
+                  listSets, getSet, putSet, dropSet, useSet};

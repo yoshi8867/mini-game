@@ -26,6 +26,7 @@ const {Quiz, MAX_ENTRANTS: QUIZ_MAX} = require("./quiz.js");
 const {Bid, MAX_ENTRANTS: BID_MAX} = require("./bid.js");
 const bidbots = require("./bidbots.js");
 const {Omr, MAX_ENTRANTS: OMR_MAX} = require("./omr.js");
+const {BASE: OMR_BASE, checkSet} = require("./props.js");
 
 const PORT = process.env.PORT || 3000;
 
@@ -659,10 +660,48 @@ function onAdmin(what, m, done, ip){
       if (!okPin(m.pin)) return done(400, {ok: false, why: "badpin"});
       const code = newCode(c => cups.has(c) || rooms.has(c) || quizzes.has(c) ||
                                 bids.has(c) || omrs.has(c));
-      const o = new Omr(code, {pin: m.pin, title: m.title, hints: m.hints});
-      omrs.set(code, o);
-      keep("omr", o);
-      return done(200, {ok: true, omr: o.full()});
+      /* 세트를 고른다. 없으면 기본 세트 — Neon 이 잠들어 있어도 시험은 열린다 */
+      const want = String(m.set || "base");
+      const pick = want === "base" ? Promise.resolve(null) : db.getSet(want);
+      return pick.then(row => {
+        if (want !== "base" && !row) return done(404, {ok: false, why: "noset"});
+        if (omrs.has(code)) return done(409, {ok: false, why: "busy"});
+        const set = row ? Object.assign({id: row.id, name: row.name}, row.data) : OMR_BASE;
+        const o = new Omr(code, {pin: m.pin, title: m.title, hints: m.hints, set});
+        omrs.set(code, o);
+        keep("omr", o);
+        db.useSet(set.id, set.name, o.title).catch(() => {});
+        done(200, {ok: true, omr: o.full()});
+      });
+    }
+    /* ─── 블라인드 문제 세트 ─── 정답이 든 것은 관리자에게도 안 내려보낸다 */
+    case "omrsets": {
+      return db.listSets().then(rows => {
+        const base = (rows || []).find(r => r.id === "base") || {};
+        const up = (rows || []).filter(r => r.id !== "base");
+        const row = r => ({id: r.id, name: r.name, props: r.props, common: r.common,
+                           made: r.made, usedAt: r.used_at, usedTitle: r.used_title,
+                           usedN: r.used_n | 0});
+        done(200, {ok: true, db: !!rows, sets: [
+          Object.assign(row(base), {id: "base", name: OMR_BASE.name, base: true,
+                                    props: OMR_BASE.PROPS.length, common: OMR_BASE.COMMON.length}),
+          ...up.map(row)]});
+      });
+    }
+    case "omrsetput": {
+      const name = String(m.name || "").trim().slice(0, 40);
+      if (!name) return done(400, {ok: false, why: "noname"});
+      const r = checkSet(m.set);
+      if (!r.set) return done(400, {ok: false, why: "badset", detail: r.why});
+      const id = "S" + Date.now().toString(36).toUpperCase();
+      return db.putSet(id, name, r.set).then(ok => ok
+        ? done(200, {ok: true, id, props: r.set.PROPS.length})
+        : done(503, {ok: false, why: "nodb"}));
+    }
+    case "omrsetdel": {
+      const id = String(m.id || "");
+      if (!id || id === "base") return done(400, {ok: false, why: "noset"});
+      return db.dropSet(id).then(ok => done(ok ? 200 : 503, {ok}));
     }
     /* 누르는 순간 28분이 흐르기 시작한다. 멈춤도 되감기도 없다 */
     case "omrstart": {

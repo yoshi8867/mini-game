@@ -21,3 +21,6 @@ tools/answers.js
 # 출제 화면 — 새 판을 짜는 연장. 로컬에만 둔다
 maker.html
 docs/design/maker.template.html
+
+# 블라인드 문제 세트 — 정답이 들어 있다. Neon 에 올리고 원본은 로컬에만
+server/sets/

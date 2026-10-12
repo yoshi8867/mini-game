@@ -27,6 +27,16 @@ input{width:100%;background:var(--wall);color:var(--chalk);
   border:1px solid var(--wall-line);border-radius:6px;padding:11px 12px;
   font:400 15px/1 'Gothic A1',system-ui,sans-serif}
 input:focus{outline:none;border-color:var(--mark)}
+select{width:100%;background:var(--wall);color:var(--chalk);
+  border:1px solid var(--wall-line);border-radius:6px;padding:10px 12px;
+  font:400 15px/1.2 'Gothic A1',system-ui,sans-serif}
+/* 문제 세트 목록 — 한 줄에 하나 */
+.sets{display:grid;gap:6px;margin-top:var(--s2)}
+.sets .set{display:flex;gap:var(--s2);align-items:center;flex-wrap:wrap;
+  padding:8px 10px;border-radius:6px;background:var(--wall);font-size:13px}
+.sets .set b{font-size:14px}
+.sets .set small{color:var(--chalk-dim)}
+.sets .set button{padding:7px 12px;margin-left:auto}
 input.pin{font-family:'JetBrains Mono',monospace;letter-spacing:.3em}
 .row{display:flex;gap:var(--s2);align-items:flex-end;flex-wrap:wrap}
 .row>div{flex:1;min-width:130px}
@@ -200,15 +210,32 @@ a.lnk:hover{border-color:var(--wait)}
       </div>
       <button class="go" type="submit">열기</button>
     </div>
+    <!-- 반마다 다른 세트를 내면 옆 반의 스포가 안 통한다 -->
+    <div style="margin-top:12px">
+      <label for="oset">문제 세트</label>
+      <select id="oset"><option value="base">기본 세트</option></select>
+    </div>
+    <details style="margin-top:12px">
+      <summary style="cursor:pointer;font-size:13px;color:var(--chalk-dim)">문제 세트 관리 — 올리기 · 지우기 · 어느 반에 냈나</summary>
+      <div class="sets" id="osetList"></div>
+      <div class="row" style="margin-top:10px">
+        <div style="flex:1"><label for="osetName">새 세트 이름</label>
+          <input id="osetName" maxlength="40" placeholder="예: 2판"></div>
+        <div style="flex:2"><label for="osetFile">세트 파일 (.json)</label>
+          <input id="osetFile" type="file" accept=".json,application/json"></div>
+        <button type="button" id="osetPut">올리기</button>
+      </div>
+      <p class="msg" id="osetMsg">정답이 든 파일입니다. Neon 에만 저장되고 화면으로는 다시 내려오지 않습니다.</p>
+    </details>
     <details style="margin-top:12px">
       <summary style="cursor:pointer;font-size:13px;color:var(--chalk-dim)">공통 힌트 바꾸기</summary>
       <div style="margin-top:10px;display:grid;gap:10px">
         <div><label for="oh1">1차 — 7분</label>
-          <input id="oh1" maxlength="120" placeholder="비우면 기본 힌트가 나갑니다"></div>
+          <input id="oh1" maxlength="120" placeholder="비우면 세트의 힌트가 나갑니다"></div>
         <div><label for="oh2">2차 — 11분</label>
-          <input id="oh2" maxlength="120" placeholder="비우면 기본 힌트가 나갑니다"></div>
+          <input id="oh2" maxlength="120" placeholder="비우면 세트의 힌트가 나갑니다"></div>
         <div><label for="oh3">3차 — 15분</label>
-          <input id="oh3" maxlength="120" placeholder="비우면 기본 힌트가 나갑니다"></div>
+          <input id="oh3" maxlength="120" placeholder="비우면 세트의 힌트가 나갑니다"></div>
       </div>
     </details>
     <p class="msg" id="omakeMsg">학생들은 <b>omr.html</b> 로 들어옵니다. 교실 앞에는 <b>omr.html?t=1</b> 을 띄웁니다.</p>
@@ -318,6 +345,7 @@ function enter(){
   el("bmaker").hidden = false; el("omaker").hidden = false;
   say("gateMsg", "");
   refresh();
+  loadSets();
   clearInterval(timer);
   timer = setInterval(refresh, 4000);       // 대회 중에는 저절로 따라간다
 }
@@ -345,7 +373,9 @@ const ERR = {badpin:"비밀번호는 숫자 네 자리입니다", busy:"너무 �
              badword:"한글 1~4글자만 넣을 수 있습니다",
              few:"사람이 모자랍니다 — 대회·옥션은 둘, 퀴즈는 여섯부터",
              started:"이미 시작했습니다", closed:"이미 시작했습니다",
-             nothing:"지금은 넘길 문제가 없습니다", stale:"다시 들어와 주세요"};
+             nothing:"지금은 넘길 문제가 없습니다", stale:"다시 들어와 주세요",
+             noset:"없는 문제 세트입니다", noname:"세트 이름을 넣어 주세요",
+             nodb:"DB 에 닿지 않아 저장하지 못했습니다", badset:"세트 모양이 틀렸습니다"};
 
 /* ─── 현황 ─── */
 async function refresh(){
@@ -602,11 +632,58 @@ el("omaker").addEventListener("submit", async e => {
   if (pin.length !== 4) return say("omakeMsg", "참가 비밀번호는 숫자 네 자리입니다.", "bad");
   say("omakeMsg", "여는 중입니다…");
   const hints = [el("oh1").value.trim(), el("oh2").value.trim(), el("oh3").value.trim()];
-  const j = await call("omropen", {pin, title: el("otitle").value.trim(), hints});
+  const j = await call("omropen", {pin, title: el("otitle").value.trim(), hints,
+                                    set: el("oset").value});
   if (!j.ok) return say("omakeMsg", ERR[j.why] || j.why, "bad");
-  say("omakeMsg", "블라인드 중간고사 " + j.omr.code + " 를 열었습니다. 학생은 omr.html, 교실 앞은 omr.html?t=1 입니다.", "good");
+  say("omakeMsg", "블라인드 중간고사 " + j.omr.code + " 를 「" + j.omr.set + "」로 열었습니다. " +
+                  "학생은 omr.html, 교실 앞은 omr.html?t=1 입니다.", "good");
   el("opin").value = "";
-  refresh();
+  refresh(); loadSets();
+});
+
+/* ─── 문제 세트 ─── 목록에는 이름과 줄 수, 마지막으로 낸 반만 온다. 정답은 안 온다 */
+const day = s => { if (!s) return ""; const d = new Date(s);
+  return (d.getMonth() + 1) + "/" + d.getDate() + " " +
+         String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); };
+async function loadSets(){
+  const j = await call("omrsets");
+  if (!j.ok) return;
+  const pick = el("oset"), was = pick.value;
+  pick.innerHTML = j.sets.map(s =>
+    '<option value="' + esc(s.id) + '">' + esc(s.name) +
+    (s.usedAt ? " — 마지막: " + day(s.usedAt) + " " + esc(s.usedTitle || "") : " — 아직 안 냄") +
+    '</option>').join("");
+  if (j.sets.some(s => s.id === was)) pick.value = was;
+  el("osetList").innerHTML = j.sets.map(s =>
+    '<div class="set"><b>' + esc(s.name) + '</b>' +
+    '<small>개별 ' + s.props + ' · 공통 ' + s.common + '</small>' +
+    '<small>' + (s.usedAt ? day(s.usedAt) + " · " + esc(s.usedTitle || "") + " · " + s.usedN + "번 냄"
+                          : "아직 안 냄") + '</small>' +
+    (s.base ? '<small>Render 의 OMR_PROPS</small>'
+            : '<button class="bad" type="button" data-del="' + esc(s.id) + '">지우기</button>') +
+    '</div>').join("") +
+    (j.db ? "" : '<p class="hint">DB 에 닿지 않습니다 — 기본 세트만 쓸 수 있습니다.</p>');
+  el("osetList").querySelectorAll("button[data-del]").forEach(b =>
+    b.addEventListener("click", async () => {
+      const s = j.sets.find(x => x.id === b.dataset.del);
+      if (!confirm("「" + s.name + "」 세트를 지웁니다. 되돌릴 수 없습니다. 지울까요?")) return;
+      const r = await call("omrsetdel", {id: s.id});
+      say("osetMsg", r.ok ? "지웠습니다." : (ERR[r.why] || r.why), r.ok ? "good" : "bad");
+      loadSets();
+    }));
+}
+el("osetPut").addEventListener("click", async () => {
+  const name = el("osetName").value.trim(), f = el("osetFile").files[0];
+  if (!name) return say("osetMsg", "세트 이름을 넣어 주세요.", "bad");
+  if (!f) return say("osetMsg", "세트 파일(.json)을 골라 주세요.", "bad");
+  let set;
+  try { set = JSON.parse(await f.text()); }
+  catch (e){ return say("osetMsg", "JSON 파일이 아닙니다.", "bad"); }
+  const j = await call("omrsetput", {name, set});
+  if (!j.ok) return say("osetMsg", (ERR[j.why] || j.why) + (j.detail ? " — " + j.detail : ""), "bad");
+  say("osetMsg", "「" + name + "」을 올렸습니다 — 개별 명제 " + j.props + "줄.", "good");
+  el("osetName").value = ""; el("osetFile").value = "";
+  loadSets();
 });
 
 function omrPaint(j){
@@ -641,6 +718,7 @@ function omrPaint(j){
       '<div class="facts">' +
         '<span>참가 <b>' + o.people + '</b>명</span>' +
         '<span>참가 비번 <b>' + esc(o.pin || "없음") + '</b></span>' +
+        '<span>세트 <b>' + esc(o.set || "기본 세트") + '</b></span>' +
         live +
       '</div>' +
       (o.board.length ? oboard(o) : owaiting(o)) +
