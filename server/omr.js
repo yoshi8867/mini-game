@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════════════════════════════════════
-   블라인드 — 40분짜리 OMR 명제 퀴즈의 심판.
+   블라인드 — 28분짜리 OMR 명제 퀴즈의 심판.
 
    20문제 5지선다인데 문제 지문이 없다. 정답 배열 자체가 퍼즐이고, 학생은
    그 배열에 관한 명제 **한 줄**만 받는다. 서로 거래하고 속이며 스무 칸을
@@ -7,7 +7,7 @@
 
    여기서 정한 것들:
 
-   · **시계가 전부다.** 관리자가 시작을 누른 순간부터 40분이 흐르고, 모든
+   · **시계가 전부다.** 관리자가 시작을 누른 순간부터 28분이 흐르고, 모든
      단계는 거기서 계산된다. 멈춤도 되감기도 없다 — 교실의 종과 같다.
    · **내 명제는 나에게만, 그것도 1분만 나간다.** 공개 참이 지나면 서버가
      더 보내지 않는다. 소스를 열어도 남의 명제는 없다.
@@ -36,7 +36,7 @@ const STEP = 3000;                           // 정답 하나가 열리는 참
 const GONE = MIN;                            // 힌트가 남아 있는 참
 const CUT = [10, 34, 66, 90];                // 내신 5등급제 누적 비율
 
-/* 33분. 굵은 것만 게이지에 세모가 선다 */
+/* 28분. 굵은 것만 게이지에 세모가 선다 */
 const PLAN = [
   {m: 0,  mark: 1, t: "준비령",
    say: "준비령이 울렸습니다.\n자리에 앉아 기다립니다."},
@@ -44,23 +44,23 @@ const PLAN = [
    head: "나에게만 보이는 힌트"},
   {m: 3,  mark: 1, t: "본령",
    say: "본령이 울렸습니다.\n이제부터 자유롭게 이동하거나 대화해도 좋습니다."},
-  {m: 8, mark: 1, t: "1차 공통 힌트 공개", gone: 1, hint: 0,
+  {m: 7, mark: 1, t: "1차 공통 힌트 공개", gone: 1, hint: 0,
    head: "1차 공통 힌트"},
-  {m: 13, mark: 1, t: "2차 공통 힌트 공개", gone: 1, hint: 1,
+  {m: 11, mark: 1, t: "2차 공통 힌트 공개", gone: 1, hint: 1,
    head: "2차 공통 힌트"},
-  {m: 18, mark: 1, t: "3차 공통 힌트 공개", gone: 1, hint: 2,
+  {m: 15, mark: 1, t: "3차 공통 힌트 공개", gone: 1, hint: 2,
    head: "3차 공통 힌트"},
-  {m: 25, mark: 1, t: "착석 안내", note: "종료까지 3분 남음",
+  {m: 20, mark: 1, t: "착석 안내", note: "종료까지 3분 남음",
    say: "착석하기 바랍니다.\n이제부터 서로 대화할 수 없습니다.\n3분 간 OMR 카드에 답안 마킹이 가능합니다."},
-  {m: 28, mark: 1, t: "종료령",
+  {m: 23, mark: 1, t: "종료령",
    say: "종료령이 울렸습니다.\n답안은 자동으로 제출되었습니다.\n30초 후 채점이 진행됩니다."},
-  {m: 28.5, mark: 0, t: "정답 공개", note: "1번부터 3초마다 1개씩",
+  {m: 23.5, mark: 0, t: "정답 공개", note: "1번부터 3초마다 1개씩",
    say: "정답을 공개합니다."},
-  {m: 30, mark: 0, t: "점수 공개", note: "등수 · 등급 · 평균",
+  {m: 25, mark: 0, t: "점수 공개", note: "등수 · 등급 · 평균",
    say: "채점이 끝났습니다."},
 ];
-const SIT = 25 * MIN, END = 28 * MIN, OPEN = 28.5 * MIN, SCORE = 30 * MIN;
-const LEN = 33 * MIN;
+const SIT = 20 * MIN, END = 23 * MIN, OPEN = 23.5 * MIN, SCORE = 25 * MIN;
+const LEN = 28 * MIN;
 
 const shuffle = a => {                       // Fisher-Yates
   for (let i = a.length - 1; i > 0; i--){
@@ -80,6 +80,15 @@ function stepAt(t){
 function openedAt(t){
   if (t < OPEN) return 0;
   return Math.min(QUESTIONS, Math.floor((t - OPEN) / STEP) + 1);
+}
+/* 예상 점수를 맞힌 가점. 오차는 가점 받기 전, 채점한 점수와 잰다.
+   오차 0 → +7 · 5 이내 → +5 · 10 이내 → +3 · 그 밖은 없다. 총점은 만점을 못 넘는다 */
+const BONUS = [[0, 7], [5, 5], [10, 3]];
+function bonus(guess, raw){
+  if (guess === null || guess === undefined) return 0;
+  const d = Math.abs(guess - raw);
+  for (const [off, add] of BONUS) if (d <= off) return add;
+  return 0;
 }
 /* 누적 백분위로 등급을 매긴다 */
 function grade(rank, n){
@@ -222,10 +231,13 @@ class Omr {
     return n;
   }
   points(me){ return this.hits(me) * PER; }
-  /* 등수와 평균은 응시자 전체에서 나온다 */
+  /* 등수와 평균은 응시자 전체에서 나온다. 가점까지 더한 총점으로 센다 */
   tally(){
-    const all = [...this.people.values()].map(p => ({
-      pid: p.pid, name: p.name, score: this.points(p), guess: p.guess}));
+    const all = [...this.people.values()].map(p => {
+      const raw = this.points(p), add = bonus(p.guess, raw);
+      return {pid: p.pid, name: p.name, raw, bonus: add,
+              score: Math.min(QUESTIONS * PER, raw + add), guess: p.guess};
+    });
     all.sort((a, b) => b.score - a.score);
     const n = all.length || 1;
     const sum = all.reduce((s, p) => s + p.score, 0);
@@ -299,7 +311,8 @@ class Omr {
     if (t >= SCORE || this.state === "done"){
       const tal = this.tally();
       const mine = tal.list.find(p => p.pid === pid);
-      out.result = {score: mine.score, rank: mine.rank, grade: mine.grade,
+      out.result = {score: mine.score, raw: mine.raw, bonus: mine.bonus, guess: mine.guess,
+                    rank: mine.rank, grade: mine.grade,
                     avg: tal.avg, people: tal.people};
     }
     return out;
@@ -317,7 +330,7 @@ class Omr {
     if (open) out.key = KEY.slice(0, open);
     if (t >= SCORE || this.state === "done"){
       const tal = this.tally();
-      out.board = tal.list.map(p => ({name: p.name, score: p.score,
+      out.board = tal.list.map(p => ({name: p.name, score: p.score, raw: p.raw, bonus: p.bonus,
                                       rank: p.rank, grade: p.grade, guess: p.guess}));
       out.avg = tal.avg;
     }
@@ -344,14 +357,14 @@ class Omr {
         name: p.name, prop: p.prop ? p.prop.id : null,
         marked: Object.keys(p.marks).length})),
       board: tal && t >= END
-        ? tal.list.map(p => ({name: p.name, score: p.score, rank: p.rank,
-                              grade: p.grade, guess: p.guess}))
+        ? tal.list.map(p => ({name: p.name, score: p.score, raw: p.raw, bonus: p.bonus,
+                              rank: p.rank, grade: p.grade, guess: p.guess}))
         : [],
       avg: tal && t >= END ? tal.avg : null,
     });
   }
 }
 
-module.exports = {Omr, PLAN, KEY, PROPS, stepAt, openedAt, grade,
+module.exports = {Omr, PLAN, KEY, PROPS, stepAt, openedAt, grade, bonus, BONUS,
                   MAX_ENTRANTS, QUESTIONS, PRINTED, PER, STEP, GONE,
                   SIT, END, OPEN, SCORE, LEN, CUT};
