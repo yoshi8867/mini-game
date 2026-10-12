@@ -323,7 +323,7 @@ const Q = new URLSearchParams(location.search);
 const SERVER = Q.get("server") || (
   /^(localhost|127\.|192\.168\.|10\.)/.test(location.hostname)
     ? "ws://" + (location.hostname || "127.0.0.1") + ":3000/ws"
-    : "wss://mini-game-y8ve.onrender.com/ws");
+    : "wss://class-live-62tz.onrender.com/ws");
 
 const ERR = {badpin:"비밀번호가 맞지 않습니다", nobid:"없는 옥션입니다",
              closed:"이미 시작한 옥션입니다", full:"자리가 다 찼습니다",

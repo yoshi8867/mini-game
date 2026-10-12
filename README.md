@@ -218,7 +218,7 @@ python tools/page-check.py        # index.html 과 admin.html 을 헤드리스�
 
 ### 어디에 붙는가
 
-클라이언트는 기본적으로 `wss://mini-game-y8ve.onrender.com/ws` 를 본다.
+클라이언트는 기본적으로 `wss://class-live-62tz.onrender.com/ws` 를 본다.
 로컬에서는 `ws://<호스트>:3000/ws` 로 간다. 둘 다 아닐 때는 주소 뒤에 붙인다:
 
 ```
