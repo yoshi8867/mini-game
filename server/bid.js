@@ -60,6 +60,9 @@ const MAX_ENTRANTS = 48;
 const TOKENS = 50;                 // 팀마다 처음 쥐는 토큰
 const LOTS   = 18;                 // 스물넷 중 경매에 나오는 수
 const BLOCK  = 6;                  // 작전타임 한 번에 경매 몇 개
+/* 미니 — 시간이 모자랄 때. 스물넷 중 무작위 열다섯만 판에 올리고(경매 현황도
+   그 열다섯만 보인다), 그중 열둘을 부친다. 경매 넷마다 작전타임이다 */
+const MINI = {pool: 15, lots: 12, block: 4};
 const PLAN   = 180000;             // 작전타임 (3분)
 const SECS   = 20;                 // 최소 노출 — 아무 일 없어도 이만큼은 보여 준다
 const MINSECS = 10, MAXSECS = 120;
@@ -88,6 +91,13 @@ class Bid {
     this.title = String(opt.title || "돌림판 비딩").slice(0, 40);
     this.secs  = Math.min(MAXSECS, Math.max(MINSECS, (opt.secs | 0) || SECS));
     this.plan  = opt.plan === 0 ? 0 : (opt.plan | 0) || PLAN;
+    this.mini  = !!opt.mini;
+    this.lots  = this.mini ? MINI.lots : LOTS;
+    this.block = this.mini ? MINI.block : BLOCK;
+    /* 이 판에 올라오는 룰렛. 미니는 여는 순간 열다섯을 뽑아 둔다 —
+       시작 전에도 경매 현황에 그 열다섯이 보인다 */
+    this.pool  = this.mini ? shuffle(WHEELS.map(w => w.id)).slice(0, MINI.pool).sort((a, b) => a - b)
+                           : WHEELS.map(w => w.id);
     this.state = "open";               // open | plan | running | spin | done
     this.made  = Date.now();
     this.began = null;
@@ -115,7 +125,7 @@ class Bid {
     const L = this.lot;
     return {v: 1, code: this.code, pin: this.pin, title: this.title,
             secs: this.secs, plan: this.plan, state: this.state, made: this.made,
-            began: this.began, ended: this.ended,
+            began: this.began, ended: this.ended, mini: this.mini, pool: this.pool,
             people: [...this.people.values()], teams: this.teams,
             order: this.order, sold: this.sold, paid: this.paid, nth: this.nth,
             lot: L && Object.assign({}, L, {seals: [...L.seals]}),
@@ -123,8 +133,9 @@ class Bid {
             spinAt: this.spinAt, shown: this.shown};
   }
   static revive(d){
-    const b = new Bid(d.code, {pin: d.pin, title: d.title, secs: d.secs, plan: d.plan});
-    ["state", "made", "began", "ended", "teams", "order", "sold", "paid", "nth",
+    const b = new Bid(d.code, {pin: d.pin, title: d.title, secs: d.secs, plan: d.plan,
+                               mini: d.mini});
+    ["state", "made", "began", "ended", "teams", "order", "sold", "paid", "nth", "pool",
      "planAt", "round", "spins", "spinAt", "shown"].forEach(k => {
       if (d[k] !== undefined) b[k] = d[k];
     });
@@ -184,7 +195,7 @@ class Bid {
     if (this.state !== "open") return {err: "started"};
     if (this.teams.length < 2) return {err: "few"};
     now = now || Date.now();
-    this.order = shuffle(WHEELS.map(w => w.id)).slice(0, LOTS);
+    this.order = shuffle(this.pool.slice()).slice(0, this.lots);
     /* 마지막 경매에는 받기 싫은 룰렛(음수)을 두지 않는다. 맨 끝에 걸렸으면
        그 앞의 가장 가까운 좋은 룰렛과 자리를 바꾼다 */
     const last = this.order.length - 1;
@@ -222,7 +233,7 @@ class Bid {
       this.lot = null; this.state = "spin"; this.round = -1;
       return this.turn(now);
     }
-    if ((this.nth + 1) % BLOCK === 0) return this.rest(now);
+    if ((this.nth + 1) % this.block === 0) return this.rest(now);
     this.open(now);
   }
 
@@ -436,10 +447,11 @@ class Bid {
       return row;
     });
   }
-  /* 「경매 현황」 — 스물넷을 통째로. 나간 것, 지금 걸린 것, 아직인 것 */
+  /* 「경매 현황」 — 판에 올라온 것을 통째로(보통 스물넷, 미니는 열다섯).
+     나간 것, 지금 걸린 것, 아직인 것 */
   sheet(){
     const live = this.lot && !this.lot.done ? this.lot.wheel.id : 0;
-    return WHEELS.map(w => {
+    return this.pool.map(id => byId[id]).map(w => {
       const who = this.sold[w.id];
       const at = w.id === live ? "now"
                : (w.id in this.sold) ? "done" : "left";
@@ -457,8 +469,8 @@ class Bid {
     const w = lot.wheel;
     return {
       nth: this.nth + 1, total: this.order.length,
-      block: Math.floor(this.nth / BLOCK) + 1,
-      blocks: Math.ceil(this.order.length / BLOCK),
+      block: Math.floor(this.nth / this.block) + 1,
+      blocks: Math.ceil(this.order.length / this.block),
       wheel: {id: w.id, cells: w.cells, ev: w.ev}, bad: lot.bad,
       price: lot.price, who: lot.who,
       whose: lot.who === null ? null : this.teams[lot.who].name,
@@ -492,8 +504,9 @@ class Bid {
     if (this.state === "plan")
       out.plan = {left: Math.max(0, this.plan - (now - this.planAt)),
                   ms: this.plan,
-                  block: Math.floor((this.nth + 1) / BLOCK) + 1,
-                  blocks: Math.ceil(this.order.length / BLOCK)};
+                  block: Math.floor((this.nth + 1) / this.block) + 1,
+                  blocks: Math.ceil(this.order.length / this.block),
+                  per: this.block};
     if (this.state === "running"){
       out.lot = this.lotView(now);
       /* 내가 낸 값은 나만 본다 */
@@ -517,8 +530,8 @@ class Bid {
   info(){
     return {code: this.code, title: this.title, state: this.state,
             open: !this.pin, people: this.people.size, teams: this.teams.length,
-            secs: this.secs, plan: this.plan,
-            nth: this.nth + 1, total: this.order.length || LOTS,
+            secs: this.secs, plan: this.plan, mini: this.mini,
+            nth: this.nth + 1, total: this.order.length || this.lots,
             made: this.made, began: this.began, ended: this.ended};
   }
   full(now){
@@ -534,5 +547,5 @@ class Bid {
   }
 }
 
-module.exports = {Bid, MAX_ENTRANTS, TOKENS, LOTS, BLOCK, PLAN, SECS,
+module.exports = {Bid, MAX_ENTRANTS, TOKENS, LOTS, BLOCK, MINI, PLAN, SECS,
                   MINSECS, MAXSECS, QUIET, SEAL, CAPMS, SHOW, OPEN, SPIN, HOLD};

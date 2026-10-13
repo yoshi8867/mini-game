@@ -265,8 +265,13 @@ a.lnk:hover{border-color:var(--wait)}
       </div>
       <button class="go" type="submit">열기</button>
     </div>
+    <!-- 시간이 모자랄 때 -->
+    <label style="display:flex;gap:8px;align-items:center;margin-top:12px;cursor:pointer;font-size:13.5px;color:var(--chalk)">
+      <input id="bmini" type="checkbox" style="width:auto">
+      미니 — 무작위 15개 중 12개만 경매, 경매 4개마다 작전타임 (작전타임은 1분으로)
+    </label>
     <p class="msg" id="bmakeMsg">조 대표는 <b>bid.html</b> 로 들어옵니다.
-      작전타임 뒤 경매 여섯, 그것을 세 번 돌면 열여덟 품목이 끝납니다.
+      작전타임 뒤 경매 여섯, 그것을 세 번 돌면 열여덟 품목이 끝납니다 — 미니는 넷씩 세 번, 열둘.
       품목은 <b>10초 동안 조용하면</b> 마감되고, 최소 노출 시간만큼은 반드시 보여 줍니다.</p>
   </form>
 
@@ -812,6 +817,12 @@ async function oact(what, code){
 }
 
 /* ─── 룰렛 옥션 ─── */
+/* 미니를 고르면 작전타임을 1분으로 맞춰 준다. 손으로 바꾼 값은 존중한다 */
+el("bmini").addEventListener("change", e => {
+  const v = el("bplan").value.trim();
+  if (e.target.checked && (v === "3" || v === "")) el("bplan").value = "1";
+  if (!e.target.checked && v === "1") el("bplan").value = "3";
+});
 el("bmaker").addEventListener("submit", async e => {
   e.preventDefault();
   const pin = el("bpin").value.replace(/[^0-9]/g, "");
@@ -820,7 +831,7 @@ el("bmaker").addEventListener("submit", async e => {
   const mins = Math.max(0, Math.min(10, parseInt(el("bplan").value, 10) || 0));
   say("bmakeMsg", "여는 중입니다…");
   const j = await call("bidopen", {pin, title: el("btitle").value.trim(),
-                                   secs, plan: mins * 60000});
+                                   secs, plan: mins * 60000, mini: el("bmini").checked});
   if (!j.ok) return say("bmakeMsg", ERR[j.why] || j.why, "bad");
   say("bmakeMsg", "옥션 " + j.bid.code + " 를 열었습니다. 조 대표는 bid.html 로 들어옵니다.", "good");
   el("bpin").value = "";
@@ -875,6 +886,7 @@ function bidPaint(j){
         '<span>대표 <b>' + b.teams + '</b>팀 · 들어온 사람 <b>' + b.people + '</b>명</span>' +
         '<span>참가 비번 <b>' + esc(b.pin || "없음") + '</b></span>' +
         '<span>최소 노출 <b>' + b.secs + '</b>초 · 침묵 10초면 마감</span>' +
+        (b.mini ? '<span><b>미니</b> · 15개 중 12개 · 4개마다 작전타임</span>' : '') +
         live +
       '</div>' +
       (b.state === "open" ? bwaiting(b) : bboard(b)) +

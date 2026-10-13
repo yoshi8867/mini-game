@@ -530,7 +530,7 @@ function planView(box){
   box.innerHTML =
     '<div class="plan"><div class="label">작전타임</div>' +
     '<div class="count" id="planCount">' + clock(p.left / 1000) + '</div>' +
-    '<div class="say">다음은 ' + p.block + '번째 묶음입니다 · 경매 여섯 개<br>' +
+    '<div class="say">다음은 ' + p.block + '번째 묶음입니다 · 경매 ' + (p.per || 6) + '개<br>' +
     '조끼리 상의하세요. <b>경매 현황</b>에서 아직 안 나온 룰렛을 볼 수 있습니다.</div></div>';
 }
 
@@ -868,7 +868,7 @@ function nowLine(){
     n.className = "nowline";
     if (V && V.state === "plan" && V.plan){
       n.innerHTML = '작전타임 <b id="sheetLeft">' + clock(V.plan.left / 1000) + '</b> · ' +
-        '다음은 ' + V.plan.block + '번째 묶음, 경매 여섯 개입니다. ' +
+        '다음은 ' + V.plan.block + '번째 묶음, 경매 ' + (V.plan.per || 6) + '개입니다. ' +
         '아직 안 나온 룰렛을 보고 무엇을 노릴지 정하세요.';
       n.hidden = false;
       return;

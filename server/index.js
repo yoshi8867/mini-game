@@ -753,7 +753,8 @@ function onAdmin(what, m, done, ip){
       if (bids.size >= MAX_CUPS) return done(409, {ok: false, why: "busy"});
       if (!okPin(m.pin)) return done(400, {ok: false, why: "badpin"});
       const code = newCode(c => cups.has(c) || rooms.has(c) || quizzes.has(c) || bids.has(c));
-      const b = new Bid(code, {pin: m.pin, title: m.title, secs: m.secs, plan: m.plan});
+      const b = new Bid(code, {pin: m.pin, title: m.title, secs: m.secs, plan: m.plan,
+                               mini: !!m.mini});
       bids.set(code, b);
       keep("bid", b);
       return done(200, {ok: true, bid: b.full()});

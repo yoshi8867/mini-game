@@ -1,7 +1,7 @@
 /* 돌림판 비딩 검사. 시계는 넣어 준다 — 기다리지 않고 끝까지 돌려 본다 */
 "use strict";
 const assert = require("assert");
-const {Bid, TOKENS, LOTS, BLOCK, SECS, QUIET, SEAL, SHOW, OPEN, SPIN, HOLD} = require("./bid.js");
+const {Bid, TOKENS, LOTS, BLOCK, MINI, SECS, QUIET, SEAL, SHOW, OPEN, SPIN, HOLD} = require("./bid.js");
 
 /* 결과를 보여 주는 참은 품목에 따라 다르다. 검사에서는 넉넉한 쪽으로 넘긴다 */
 const PAST = Math.max(SHOW, OPEN);
@@ -450,4 +450,41 @@ console.log("\n전부 통과");
   assert.strictEqual(badLast, 0, "마지막 경매에 받기 싫은 룰렛이 " + badLast + "번 나왔다");
   assert.ok(badSeen > 0, "받기 싫은 룰렛이 아예 안 나온다");
   console.log("last    마지막 경매는 늘 좋은 룰렛 (2000판)");
+}
+
+/* ─── 미니 — 무작위 열다섯 중 열둘, 넷마다 작전타임 ─── */
+{
+  const b = new Bid("MINI", {mini: true, plan: 60000});
+  for (let i = 0; i < 5; i++) b.join(who(i), true);
+  assert.strictEqual(b.pool.length, MINI.pool, "판에 오른 룰렛이 열다섯이 아니다");
+  assert.strictEqual(new Set(b.pool).size, MINI.pool, "판에 오른 룰렛이 겹친다");
+  assert.strictEqual(b.sheet().length, MINI.pool, "시작 전 경매 현황이 열다섯이 아니다");
+  let t = 1000;
+  assert.ok(b.start(t).ok, "미니가 시작이 안 된다");
+  assert.strictEqual(b.order.length, MINI.lots, "경매가 열둘이 아니다");
+  assert.ok(b.order.every(id => b.pool.includes(id)), "판에 없는 룰렛이 경매에 나왔다");
+  assert.ok(!byId[b.order[b.order.length - 1]].bad, "미니도 마지막은 좋은 룰렛이어야 한다");
+  assert.strictEqual(b.info().total, MINI.lots, "관리 화면의 품목 수가 틀리다");
+  b.tick(t += b.plan);
+  let rests = 0;
+  for (let i = 0; i < MINI.lots; i++){
+    assert.strictEqual(b.state, "running", (i + 1) + "번째가 경매가 아니다");
+    if (i === 0) assert.strictEqual(b.lotView(t).blocks, 3, "묶음이 셋이 아니다");
+    b.lot.done = {at: t, team: null, price: 0, why: "none"};
+    b.tick(t += PAST);
+    if (b.state === "plan"){
+      rests++;
+      assert.strictEqual((i + 1) % MINI.block, 0, (i + 1) + "개 뒤에 작전타임이 왔다");
+      const v = b.view(b.teams[0].pid, t);
+      assert.strictEqual(v.plan.per, MINI.block, "작전타임 안내의 경매 수가 넷이 아니다");
+      b.tick(t += b.plan);
+    }
+  }
+  assert.strictEqual(rests, 2, "중간 작전타임이 두 번이 아니다");
+  assert.ok(b.state === "spin" || b.state === "done", "열둘 뒤에 끝나지 않는다: " + b.state);
+  const back = Bid.revive(JSON.parse(JSON.stringify(b.snapshot())));
+  assert.deepStrictEqual(back.pool, b.pool, "되살린 미니가 열다섯을 잊었다");
+  assert.strictEqual(back.mini && back.lots === MINI.lots && back.block === MINI.block, true,
+                     "되살린 판이 미니가 아니다");
+  console.log("mini    무작위 15 중 12 · 넷마다 작전타임 · 되살려도 미니");
 }

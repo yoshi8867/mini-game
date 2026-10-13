@@ -13,7 +13,8 @@
 "use strict";
 
 const {WHEELS} = require("./wheels.js");
-const {TOKENS, LOTS} = require("./bid.js");
+const {TOKENS} = require("./bid.js");
+const {byId} = require("./wheels.js");
 
 const isBot = pid => typeof pid === "string" && pid.slice(0, 5) === "mock-";
 
@@ -33,8 +34,10 @@ function memo(lot){
    나올 양수 룰렛의 기댓값 합으로 나눈 값이 곧 시장가다. 0.7 은 음수 경매가
    태워 없앨 몫을 어림한 것이다. */
 function rate(bid){
-  const pool = WHEELS.filter(w => w.ev > 0).reduce((n, w) => n + w.ev, 0) *
-               LOTS / WHEELS.length;
+  /* 판에 올라온 것 중 경매에 나올 몫. 미니는 열다섯 중 열둘이다 */
+  const up = (bid.pool || WHEELS.map(w => w.id)).map(id => byId[id]);
+  const pool = up.filter(w => w.ev > 0).reduce((n, w) => n + w.ev, 0) *
+               (bid.lots || up.length) / up.length;
   if (!pool) return .2;
   return TOKENS * Math.max(2, bid.teams.length) * .7 / pool;
 }
