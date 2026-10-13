@@ -286,8 +286,8 @@ function onQuizSay(ws, msg){
   const quiz = ws.quiz && quizzes.get(ws.quiz);
   if (!quiz || !ws.person) return send(ws, "error", {why: "noquiz"});
   const r = quiz.say(ws.person.pid, msg.text, Date.now());
-  if (r.err) return send(ws, "error", {why: r.err});
-  if (!r.right) send(ws, "quizmiss", {lost: r.lost || 0, again: !!r.again});
+  if (r.err) return send(ws, "error", {why: r.err, left: r.left});
+  if (!r.right) send(ws, "quizmiss", {lost: r.lost || 0, again: !!r.again, cool: r.cool});
   pushQuiz(quiz);                            // 점수가 바뀌었으니 다 다시 그린다
 }
 

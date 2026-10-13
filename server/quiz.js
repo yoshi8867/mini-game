@@ -44,6 +44,8 @@ const WHOLE = 2000;               // 정답 공개 — 성한 글씨를 붉게 �
 const SHOW = 5000;                 // 그 뒤 세 낱장을 0.5초마다 돌리는 참
 const QUICK = 500;                 // 공개할 때 낱장이 바뀌는 참
 const SAYGAP = 800;                // 한 사람이 답을 낼 수 있는 간격
+const COOL   = 60000;              // 틀리면 그 문제에서 이만큼 못 낸다 — 오답 연타로
+                                   // 팀 점수를 깎는 장난을 막는다
 
 const shuffle = a => {             // Fisher-Yates
   for (let i = a.length - 1; i > 0; i--){
@@ -234,6 +236,9 @@ class Quiz {
     if (!this.ask || this.reveal) return {err: "wait"};
     const me = this.people.get(pid);
     if (!me || me.team === null) return {err: "stranger"};
+    /* 틀린 사람은 그 문제에서 1분 쉰다. 다음 문제로 넘어가면 풀린다 */
+    const left = this.cooling(me, now);
+    if (left) return {err: "cool", left};
     if (now - (me.said || 0) < SAYGAP) return {err: "slow"};
     me.said = now;
 
@@ -244,12 +249,13 @@ class Quiz {
 
     if (said !== this.ask.word){
       /* 같은 오답을 두 번 내도 한 번만 깎는다 */
+      me.cool = {nth: this.nth, until: now + COOL};
       const seen = this.ask.said.get(team.id) || new Set();
-      if (seen.has(said)) return {ok: true, right: false, again: true};
+      if (seen.has(said)) return {ok: true, right: false, again: true, cool: COOL};
       seen.add(said); this.ask.said.set(team.id, seen);
       me.miss++;
       team.score -= MISS;
-      return {ok: true, right: false, lost: MISS, team: team.id};
+      return {ok: true, right: false, lost: MISS, team: team.id, cool: COOL};
     }
 
     const cap = this.cap();
@@ -263,6 +269,13 @@ class Quiz {
     this.reveal = {at: now, word: this.ask.word, by: team.id, who: me.name,
                    got, topped, from: was[team.id], to: nowRanks[team.id]};
     return {ok: true, right: true, got, team: team.id};
+  }
+
+  /* 이 문제에서 아직 쉬어야 하는 참 (ms). 없으면 0 */
+  cooling(me, now){
+    const c = me.cool;
+    if (!c || c.nth !== this.nth || !this.ask || this.reveal) return 0;
+    return Math.max(0, c.until - now);
   }
 
   /* ─── 시계 ───────────────────────────────────────────────────────── */
@@ -317,6 +330,8 @@ class Quiz {
     delete out.fan;
     out.name = me.name;
     out.nth = this.nth + 1;
+    const cool = this.cooling(me, now);      // 새로고침해도 쉬는 시간이 이어진다
+    if (cool) out.cool = cool;
     if (me.team !== null){
       const t = this.teams[me.team];
       out.team = {id: t.id, name: t.name, full: t.full, mates: this.folk(t.id)};

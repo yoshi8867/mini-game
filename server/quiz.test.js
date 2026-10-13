@@ -69,18 +69,29 @@ const other = q.teams[1].pids[0];
 let s = q.say(other, "아무거나", T0 + 5000);
 assert.ok(s.ok && !s.right, "오답이 안 틀렸다고 나온다");
 assert.strictEqual(q.teams[1].score, -MISS, "오답이 20초 안 깎였다");
-/* 같은 오답을 또 내도 한 번만 깎는다 */
-s = q.say(other, "아무거나", T0 + 7000);
+/* 틀린 사람은 그 문제에서 1분 쉰다 — 오답 연타로 팀 점수를 깎는 장난을 막는다 */
+assert.strictEqual(s.cool, 60000, "오답에 쉬는 시간이 안 붙었다");
+s = q.say(other, "딴것", T0 + 6000);
+assert.strictEqual(s.err, "cool", "쉬는 중에 답이 먹혔다");
+assert.strictEqual(s.left, 59000, "남은 쉬는 시간이 틀렸다");
+assert.strictEqual(q.view(other, T0 + 6000).cool, 59000, "새로고침하면 쉬는 시간을 잊는다");
+assert.strictEqual(q.view(q.teams[1].pids[1], T0 + 6000).cool, undefined, "팀원까지 쉬게 했다");
+assert.strictEqual(q.teams[1].score, -MISS, "쉬는 중의 답이 점수를 건드렸다");
+/* 같은 오답을 팀원이 또 내도 한 번만 깎는다 — 그 팀원도 쉰다 */
+const mate = q.teams[1].pids[1], third = q.teams[1].pids[2];
+s = q.say(mate, "아무거나", T0 + 7000);
 assert.strictEqual(s.again, true, "같은 오답이 또 먹혔다");
+assert.strictEqual(s.cool, 60000, "같은 오답을 낸 사람은 안 쉰다");
 assert.strictEqual(q.teams[1].score, -MISS, "같은 오답에 두 번 깎였다");
 /* 연타는 흘린다 */
-assert.strictEqual(q.say(other, "딴것", T0 + 7100).err, "slow", "연타가 먹혔다");
+q.say(third, "", T0 + 7050);
+assert.strictEqual(q.say(third, "딴것", T0 + 7100).err, "slow", "연타가 먹혔다");
 /* 띄어쓰기는 눈감아 준다 */
 assert.strictEqual(tidy(" 청출 어람 "), "청출어람");
 
 /* ─── 정답 ───────────────────────────────────────────────────── */
 /* 오답으로 꼴류에 서 있는 팀이 30초 만에 맞혔다 — 3인팀이니 그대로 30점 */
-s = q.say(other, " " + word + " ", T0 + 30000);
+s = q.say(third, " " + word + " ", T0 + 30000);
 assert.ok(s.right, "정답이 안 맞았다고 나온다");
 assert.strictEqual(s.got, 30, "30초가 안 들어왔다");
 assert.strictEqual(q.teams[1].score, 30 - MISS, "점수가 안 올랐다");

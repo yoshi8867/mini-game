@@ -287,6 +287,7 @@ function connect(){
     else if (m.t === "quizgone"){ joined = null; take(null);
                                   say("pickMsg", "퀴즈가 닫혔습니다.", "bad"); }
     else if (m.t === "quizmiss"){ miss(m); }
+    else if (m.t === "error" && m.why === "cool"){ coolFor(m.left); }
     else if (m.t === "error"){
       /* 들고 있던 퀴즈가 서버에 없다 — 서버가 다시 떴거나 닫혔다. 죽은 화면을
          붙들고 있게 두지 않는다 */
@@ -351,17 +352,35 @@ el("send").addEventListener("click", submit);
 el("text").addEventListener("keydown", e => {
   if (e.key === "Enter"){ e.preventDefault(); submit(); }
 });
-/* 틀렸다 — 입력칸이 잠깐 붉어진다. 숫자로 말하지 않는다 */
+/* 틀렸다 — 입력칸이 잠깐 붉어지고, 그 문제에서 1분 쉰다. 오답을 연달아
+   내서 팀 점수를 깎는 장난을 막으려는 것이다. 막는 것은 서버가 하고,
+   화면은 남은 초를 센다 */
 function miss(m){
   el("sayBox").classList.add("miss");
   setTimeout(() => el("sayBox").classList.remove("miss"), 700);
-  say("playMsg", m.again ? "아까 낸 답입니다." : "틀렸습니다 — 20초 깎였습니다.", "bad");
-  setTimeout(() => say("playMsg", ""), 2000);
+  coolFor(m.cool);
 }
+let coolUntil = 0, coolShown = false;
+function coolFor(ms){
+  if (!ms) return;
+  coolUntil = Date.now() + ms;
+  paintCool();
+}
+function paintCool(){
+  const ms = coolUntil - Date.now(), on = ms > 0;
+  const left = Math.max(1, Math.floor(ms / 1000));   // 59 · 58 · … · 1
+  el("text").disabled = on; el("send").disabled = on;
+  if (on){ say("playMsg", "오답입니다. 쿨타임 " + left + "초", "bad"); coolShown = true; }
+  else if (coolShown){ say("playMsg", ""); coolShown = false; coolUntil = 0; }
+}
+setInterval(paintCool, 250);
 
 /* ── ② ③ 들어온 뒤 ───────────────────────────────────────────────── */
 function take(v){
   V = v; gotAt = Date.now();
+  /* 서버가 쉬는 시간을 알려 준다. 안 알려 주면 다음 문제로 넘어갔거나 끝났다 */
+  coolUntil = v && v.cool ? gotAt + v.cool : 0;
+  paintCool();
   seat.set(v ? v.code : null);
   if (!v){
     joined = null;
