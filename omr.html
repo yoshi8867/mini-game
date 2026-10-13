@@ -566,6 +566,10 @@ function marks(mk){
 /* 흐른 참 — 받은 뒤로는 여기서 센다. 서버는 단계가 바뀔 때만 말해 준다 */
 const spent = () => DEMO ? demo : (V ? V.spent + (Date.now() - gotAt) : 0);
 const plan  = () => (V && V.plan) || PLAN0;
+/* 시험 전체 길이. 바늘도, 채움도, 눈금도 **이 하나로** 나눈다 — 눈금만
+   따로 33분으로 나누고 있어서 시간표를 28분으로 줄였을 때 눈금이 바늘과
+   어긋났다 */
+const total = () => (V && V.len) || 28 * MIN;
 const key   = () => DEMO ? DEMOKEY.slice(0, demoOpen()) : ((V && V.key) || []);
 
 /* ── 그리기 ───────────────────────────────────────────────────────── */
@@ -600,7 +604,7 @@ const upper = i => i % 2 === 0 && i > 0;
 let drewPlan = "";
 function paintMarks(){
   const base = startWall();
-  const sig = JSON.stringify(plan()) + "|" + (base ? Math.floor(base / 60000) : "");
+  const sig = JSON.stringify(plan()) + "|" + total() + "|" + (base ? Math.floor(base / 60000) : "");
   if (sig === drewPlan) return;
   drewPlan = sig;
   const row = marksRow();
@@ -609,7 +613,7 @@ function paintMarks(){
     const txt = "<b>" + esc(p.t) + "</b>" +
       (base ? '<span class="at">(' + hhmm(base + p.m * MIN) + ")</span>" : "");
     return '<div class="mk' + (i === 0 ? " lead" : "") + '" data-m="' + p.m +
-           '" style="left:' + (p.m / 33 * 100) + '%"><s class="stem"></s>' +
+           '" style="left:' + (p.m * MIN / total() * 100) + '%"><s class="stem"></s>' +
            (up ? txt + "<i></i>" : "<i></i>" + txt) + "</div>";
   };
   el("marksUp").innerHTML = row.map((p, i) => upper(i) ? cell(p, i) : "").join("");
@@ -661,7 +665,7 @@ addEventListener("resize", unclash);
 function paint(){
   document.body.classList.toggle("teach", TEACH);
   paintMarks();
-  const t = spent(), len = (V && V.len) || 28 * MIN;
+  const t = spent(), len = total();
   head(t, len);
   const SIT = (V && V.sit) || 20 * MIN, END = (V && V.end) || 23 * MIN;
   el("fill").style.width = (t / len * 100) + "%";
