@@ -1008,14 +1008,22 @@ function ceremony(){
 function finale(){
   const t = [0, 1, 2, 3, 4, 5].filter(x => V.teams[x].ps.length).map(x => { const c = teamMedals(x); return {team: x, g: c[0], s: c[1], b: c[2]}; })
     .sort((a, b) => b.g - a.g || b.s - a.s || b.b - a.b);
-  const pod = t.slice(0, 3).map((r, i) => `<div class="step p${i}"><div class="who">${tname(r.team)}<br>금 ${r.g} · 은 ${r.s} · 동 ${r.b}</div><div class="block">${i + 1}</div></div>`).join("");
-  const byEv = V.events.map((e, i) => `<tr><td>${i + 1}. ${e}</td>${[0, 1, 2].map(p => { const ms = V.medals.filter(x => x.ev === i && x.place === p);
-    return `<td>${ms.map(m => (m.who ? esc(m.name) + " · " : "") + tname(m.team)).join("<br>") || "—"}</td>`; }).join("")}</tr>`).join("");
-  const place = (i, team) => V.ranks[i] ? V.ranks[i].indexOf(team) + 1 + "위" : "—";
-  $("stage").innerHTML = `<h2 class="title">종합 발표</h2><p class="sub">금메달 수, 같으면 은메달, 같으면 동메달 순.</p>
-    <div class="podium">${pod}</div>
-    <table class="t"><tr><th>팀</th><th>금</th><th>은</th><th>동</th>${V.events.map((_, i) => `<th>${i + 1}종목</th>`).join("")}</tr>${t.map(r => `<tr class="${meP() && r.team === V.me.team ? "me" : ""}"><td>${tname(r.team)}</td><td>${r.g}</td><td>${r.s}</td><td>${r.b}</td>${V.events.map((_, i) => `<td>${place(i, r.team)}</td>`).join("")}</tr>`).join("")}</table>
-    <table class="t"><tr><th>종목</th><th>금</th><th>은</th><th>동</th></tr>${byEv}</table>`;
+  const mine = meP() ? V.me.team : null;
+  const won = (ev, team) => V.medals.filter(m => m.ev === ev && m.team === team).sort((a, b) => a.place - b.place)
+    .map(m => `<span class="medal sm ${MEDAL[m.place]}">${MEDAL_TXT[m.place]}</span>`).join("") || "—";
+  /* 사람마다 누적 메달 (팀 메달 + 1종목 개인 메달). 같으면 개인 메달 많은 쪽 */
+  const people = V.teams.flatMap(x => x.ps.map(p => { const ms = medalsOf(p.pid, x.t), c = [0, 0, 0]; ms.forEach(m => c[m.place]++);
+    return {pid: p.pid, name: p.name, team: x.t, c, own: ms.filter(m => m.who).length}; }))
+    .sort((a, b) => b.c[0] - a.c[0] || b.c[1] - a.c[1] || b.c[2] - a.c[2] || b.own - a.own);
+  const ours = people.filter(p => p.team === mine), mvp = people.slice(0, 3);
+  const row = (p, lead) => `<tr class="${meP() && p.pid === V.me.pid ? "me" : ""}">${lead}<td>${medalCount(p.c)}</td></tr>`;
+  $("stage").innerHTML = `<div class="res-head"><h2 class="title">종합 발표</h2></div><p class="sub">누적 메달 — 금메달 수, 같으면 은메달, 같으면 동메달 순.</p>
+    <table class="t" style="white-space:nowrap"><tr><th>순위</th><th>팀</th>${V.events.map((_, i) => `<th>${i + 1}종목</th>`).join("")}<th>누적 메달</th></tr>
+      ${t.map((r, i) => `<tr class="${r.team === mine ? "me" : ""}"><td>${i + 1}</td><td>${tname(r.team)}</td>${V.events.map((_, e) => `<td>${won(e, r.team)}</td>`).join("")}<td>${medalCount([r.g, r.s, r.b])}</td></tr>`).join("")}</table>
+    <div class="sheet">
+      ${mine === null ? "<div></div>" : `<div><h3>우리 팀 · ${tname(mine)}</h3><table class="t"><tr><th>이름</th><th>누적 메달</th></tr>${ours.map(p => row(p, `<td>${pname(p.pid, p.name)}</td>`)).join("")}</table></div>`}
+      <div><h3>MVP — 누적 메달이 가장 많은 셋</h3><table class="t"><tr><th></th><th>이름</th><th>팀</th><th>누적 메달</th></tr>${mvp.map((p, i) => row(p, `<td>${i + 1}</td><td>👑 ${pname(p.pid, p.name)}</td><td>${tname(p.team)}</td>`)).join("")}</table></div>
+    </div>`;
 }
 
 gate();
