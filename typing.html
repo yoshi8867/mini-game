@@ -308,7 +308,7 @@ function connect(){
   sock.onmessage = e => {
     let m; try { m = JSON.parse(e.data); } catch (x) { return; }
     if (m.t === "me") $("myname").textContent = TEACH ? "교사 화면" : "나: " + m.name;
-    else if (m.t === "typings"){ rows = m.typings; if (!joined) gate(); }
+    else if (m.t === "typings"){ rows = m.typings; if (!joined && !TEACH) $("list") ? paintList() : gate(); }   // 칸을 다시 지으면 치던 글자와 모바일 자판이 날아간다
     else if (m.t === "typeme"){
       if (!m.code){ seat(null); V = null; return gate(); }
       skew = m.now - Date.now(); seat(m.code); V = m; draw();
@@ -362,14 +362,18 @@ function gate(why){
   }
   if (TEACH) return teacherGate(why);
   $("stage").innerHTML = `<div class="gate"><h2 class="title">타자 올림픽</h2><p class="sub">선생님이 연 대회를 골라 비밀번호를 넣습니다.</p>
-    <div id="list">${rows.length ? "" : `<p class="sub">아직 열린 대회가 없습니다. 선생님이 열면 저절로 뜹니다.</p>`}</div>
+    <div id="list"></div>
     <label>비밀번호 (숫자 네 자리)</label><input id="pin" inputmode="numeric" maxlength="4" autocomplete="off">
     <div class="row" style="margin-top:var(--s3)"><button class="go" id="enter">들어가기</button></div><p class="msg ${why ? "bad" : ""}" id="msg">${esc(why || "")}</p></div>`;
-  if (!chose && rows.length === 1) chose = rows[0].code;
-  $("list").insertAdjacentHTML("beforeend", rows.map(r => `<button class="pickrow ${chose === r.code ? "on" : ""}" data-code="${esc(r.code)}"><span class="t">${esc(r.title)}</span><span class="sub" style="margin:0">${r.people}명 · ${{open: "팀 고르는 중", running: "진행 중", done: "끝남"}[r.state]}</span></button>`).join(""));
-  $("list").onclick = e => { const b = e.target.closest("[data-code]"); if (b){ chose = b.dataset.code; gate(); } };
+  paintList();
+  $("list").onclick = e => { const b = e.target.closest("[data-code]"); if (b){ chose = b.dataset.code; paintList(); } };
   const enter = () => { if (!chose) return say("들어갈 대회를 골라 주세요.", "bad"); say("들어가는 중입니다…"); send("typejoin", {code: chose, pin: $("pin").value.replace(/\D/g, "")}); };
   $("enter").onclick = enter; $("pin").onkeydown = e => { if (e.key === "Enter") enter(); };
+}
+function paintList(){
+  if (!chose && rows.length === 1) chose = rows[0].code;
+  $("list").innerHTML = rows.length ? rows.map(r => `<button class="pickrow ${chose === r.code ? "on" : ""}" data-code="${esc(r.code)}"><span class="t">${esc(r.title)}</span><span class="sub" style="margin:0">${r.people}명 · ${{open: "팀 고르는 중", running: "진행 중", done: "끝남"}[r.state]}</span></button>`).join("")
+    : `<p class="sub">아직 열린 대회가 없습니다. 선생님이 열면 저절로 뜹니다.</p>`;
 }
 async function teacherGate(why){
   $("stage").innerHTML = `<div class="gate"><h2 class="title">교사 화면 — 타자 올림픽</h2>
