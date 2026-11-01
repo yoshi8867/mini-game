@@ -120,6 +120,11 @@ assert.strictEqual(g.state, "done");
 assert.strictEqual(g.ph.k, "finale");
 /* 여섯 판 동안 모든 팀이 다른 다섯 팀을 다 만났다 */
 assert.strictEqual(new Set(seen).size, 15, "안 만난 팀이 있다");
+/* 종합 MVP — 셋, 팀마다 한 명, 득점 합 순 */
+const mv = g.view(null, now).mvp;
+assert.strictEqual(mv.length, 3, "MVP 가 셋이 아니다");
+assert.strictEqual(new Set(mv.map(x => x.team)).size, 3, "한 팀에서 MVP 가 둘 나왔다");
+assert.ok(mv[0].sum >= mv[1].sum && mv[1].sum >= mv[2].sum, "MVP 가 득점 순이 아니다");
 
 /* ×2 는 지는 팀의 가장 약한 학생에게만 */
 const x2 = [];

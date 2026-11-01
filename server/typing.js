@@ -68,6 +68,13 @@ const shuffle = a => {
   return a;
 };
 /* 풀리그(원형 배치): 짝수 팀이면 n-1 판, 판마다 모든 팀이 한 경기, 모든 쌍이 정확히 한 번 */
+/* 종합 MVP — 네 종목 개인 득점 합으로 줄 세워, 팀마다 한 명만 셋 */
+function mvp(rec, teamOf){
+  const seen = new Set();
+  return Object.entries(rec).map(([pid, v]) => ({pid, team: teamOf(pid), ev: v, sum: +v.reduce((a, b) => a + (b || 0), 0).toFixed(1)}))
+    .sort((a, b) => b.sum - a.sum)
+    .filter(x => x.team != null && !seen.has(x.team) && seen.add(x.team)).slice(0, 3);
+}
 function roundRobin(teams){
   const a = teams.slice(), n = a.length, out = [];
   for (let r = 0; r < n - 1; r++){
@@ -119,6 +126,7 @@ class Typing {
     this.medals = [];                        // {ev, place, team, who?, game?}
     this.ranks = [];                         // ranks[종목] = 그 종목 팀 순서
     this.res = null;                         // 종목 결과
+    this.rec = {};                           // pid → 종목마다 개인 득점 — 종합 MVP
     this.picks = {};                         // 1종목 조 고르기 pid → 어휘 번호
     this.e1 = null;                          // {g, groups, gone, acc}
     this.lg = null;                          // {k, results, stat}
@@ -129,14 +137,14 @@ class Typing {
   snapshot(){
     const o = {v: 1};
     for (const k of ["code", "pin", "title", "state", "made", "lobby", "teams", "sched", "ev", "ph",
-                     "medals", "ranks", "res", "picks", "e1", "lg", "races"]) o[k] = this[k];
+                     "medals", "ranks", "res", "rec", "picks", "e1", "lg", "races"]) o[k] = this[k];
     o.people = [...this.people.values()];
     return o;
   }
   static revive(d){
     const g = new Typing(d.code, {pin: d.pin, title: d.title});
     for (const k of ["state", "made", "lobby", "teams", "sched", "ev", "ph", "medals", "ranks",
-                     "res", "picks", "e1", "lg", "races"]) if (d[k] !== undefined) g[k] = d[k];
+                     "res", "rec", "picks", "e1", "lg", "races"]) if (d[k] !== undefined) g[k] = d[k];
     (d.people || []).forEach(p => g.people.set(p.pid, p));
     return g;
   }
@@ -304,6 +312,7 @@ class Typing {
   }
   ceremony(now, order){
     this.ranks[this.ev] = order;
+    this.res.rows.forEach(r => { (this.rec[r.pid] = this.rec[r.pid] || [])[this.ev] = +r.key.toFixed(1); });
     this.ph = {k: "ceremony", ev: this.ev, until: now + RESULT * 1000};
     return {ok: true};
   }
@@ -470,6 +479,7 @@ class Typing {
         if (r.kind === "table" && me) out.mine.goal = r.goals[pid];
       }
     }
+    if (k === "finale") out.mvp = mvp(this.rec, id => (this.people.get(id) || {}).team).map(x => Object.assign(x, {name: name(x.pid)}));
     if (k === "ceremony" && this.res) out.res = Object.assign({}, this.res, {
       rows: this.res.rows.map(x => Object.assign({}, x, {name: name(x.pid), team: (this.people.get(x.pid) || {}).team}))});
     return out;
