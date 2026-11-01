@@ -68,10 +68,13 @@ const shuffle = a => {
   return a;
 };
 /* 풀리그(원형 배치): 짝수 팀이면 n-1 판, 판마다 모든 팀이 한 경기, 모든 쌍이 정확히 한 번 */
-/* 종합 MVP — 네 종목 개인 득점 합으로 줄 세워, 팀마다 한 명만 셋 */
+/* 종합 MVP — 종목마다 득점을 그 종목 평균으로 나눠(평균 = 100) 더하고, 팀마다 한 명만 셋 */
 function mvp(rec, teamOf){
-  const seen = new Set();
-  return Object.entries(rec).map(([pid, v]) => ({pid, team: teamOf(pid), ev: v, sum: +v.reduce((a, b) => a + (b || 0), 0).toFixed(1)}))
+  const seen = new Set(), rows = Object.values(rec);
+  const avg = [0, 1, 2, 3].map(e => { const xs = rows.map(v => v[e]).filter(x => x !== undefined && x !== null);
+    return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0; });
+  return Object.entries(rec).map(([pid, v]) => ({pid, team: teamOf(pid), ev: v,
+      sum: Math.round(v.reduce((n, x, e) => n + (x && avg[e] ? x / avg[e] * 100 : 0), 0))}))
     .sort((a, b) => b.sum - a.sum)
     .filter(x => x.team != null && !seen.has(x.team) && seen.add(x.team)).slice(0, 3);
 }

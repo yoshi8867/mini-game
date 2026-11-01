@@ -1020,7 +1020,7 @@ function finale(){
       ${t.map((r, i) => `<tr class="${r.team === mine ? "me" : ""}"><td>${i + 1}</td><td>${tname(r.team)}</td>${V.events.map((_, e) => `<td>${won(e, r.team)}</td>`).join("")}<td>${medalCount([r.g, r.s, r.b])}</td></tr>`).join("")}</table>
     <div class="sheet">
       ${mine === null ? "<div></div>" : `<div><h3>우리 팀 · ${tname(mine)}</h3><table class="t"><tr><th>이름</th><th>누적 메달</th></tr>${ours.map(p => row(p, `<td>${pname(p.pid, p.name)}</td>`)).join("")}</table></div>`}
-      <div><h3>MVP — 네 종목 득점 합, 팀마다 한 명</h3><table class="t" style="white-space:nowrap"><tr><th></th><th>이름</th><th>팀</th>${V.events.map((_, i) => `<th>${i + 1}종목</th>`).join("")}<th>합계</th></tr>${(V.mvp || []).map((p, i) => `<tr class="${meP() && p.pid === V.me.pid ? "me" : ""}"><td>${i + 1}</td><td>👑 ${pname(p.pid, p.name)}</td><td>${tname(p.team)}</td>${V.events.map((_, e) => `<td>${p.ev[e] ?? "—"}</td>`).join("")}<td><b>${p.sum}</b></td></tr>`).join("")}</table></div>
+      <div><h3>MVP — 팀마다 한 명</h3><p class="sub">종목마다 그 종목 평균을 100으로 환산해 더한 점수로 줄 세운다.</p><table class="t" style="white-space:nowrap"><tr><th></th><th>이름</th><th>팀</th>${V.events.map((_, i) => `<th>${i + 1}종목</th>`).join("")}<th>환산 합계</th></tr>${(V.mvp || []).map((p, i) => `<tr class="${meP() && p.pid === V.me.pid ? "me" : ""}"><td>${i + 1}</td><td>👑 ${pname(p.pid, p.name)}</td><td>${tname(p.team)}</td>${V.events.map((_, e) => `<td>${p.ev[e] ?? "—"}</td>`).join("")}<td><b>${p.sum}</b></td></tr>`).join("")}</table></div>
     </div>`;
 }
 
