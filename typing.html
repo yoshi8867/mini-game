@@ -481,7 +481,23 @@ const KEYS_E4 = [
   [["Shift", "Tab"]], "앞 칸으로",
   [["Ctrl", "A"]], "칸 안의 글자를 모두 선택",
   [["Ctrl", "X"], ["Ctrl", "V"]], "잘라 내기 · 붙여 넣기",
+  [["↑"], ["↓"], ["←"], ["→"]], "옆 칸으로 (좌우는 글자 끝에서)",
 ];
+/* 표 칸 이동 — 칸에 들어가면 커서는 글자 맨 끝, 방향키로 옆 칸. 게임과 연습이 같이 쓴다 */
+const MOVE = {ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1]};
+function gridKeys(box){
+  box.addEventListener("keydown", e => {
+    if (e.key === "Enter") return e.preventDefault();
+    const d = MOVE[e.key], el = e.target;
+    if (!d || e.isComposing || e.shiftKey) return;
+    const s = el.selectionStart, n = el.value.length;
+    if (d[1] && (s !== el.selectionEnd || (d[1] < 0 && s > 0) || (d[1] > 0 && s < n))) return;
+    const to = box.querySelector(`[data-r="${+el.dataset.r + d[0]}"][data-c="${+el.dataset.c + d[1]}"]`);
+    e.preventDefault();
+    if (to) to.focus();
+  });
+  box.addEventListener("focusin", e => setTimeout(() => { const n = e.target.value.length; e.target.setSelectionRange(n, n); }, 0));
+}
 const kb = combos => combos.map(c => c.map(k => `<kbd>${k}</kbd>`).join(`<span class="plus">+</span>`)).join(` <span class="plus">/</span> `);
 const keyList = list => `<div class="keys">${list.reduce((h, x, i) => i % 2 ? h + `<div class="key"><span>${kb(list[i - 1])}</span><span class="what">${x}</span></div>` : h, "")}</div>`;
 function intro(){
@@ -495,9 +511,9 @@ function intro(){
   else body = `<p class="sub">표의 칸을 옮겨 다니며 고친다. 마우스보다 키보드가 빠르다.</p>${keyList(KEYS_E4)}
     <div class="practice"><h3>연습 — Tab 으로 '비고' 칸에 가서 Ctrl + A, Ctrl + X 로 잘라 아래 빈 칸에 Ctrl + V</h3>
       <table class="grid" id="pr4" style="max-width:640px"><colgroup><col style="width:30%"><col></colgroup>
-      <tr><td class="head"><input value="제품명" readonly></td><td class="head"><input value="비고" readonly></td></tr>
-      <tr><td><input value="산업용 제습기"></td><td><input value="재고 확인 바람."></td></tr>
-      <tr><td><input value="고속 문서 세단기"></td><td><input value=""></td></tr></table><p class="toast" id="prOk"></p></div>`;
+      <tr><td class="head"><input value="제품명" readonly data-r="0" data-c="0"></td><td class="head"><input value="비고" readonly data-r="0" data-c="1"></td></tr>
+      <tr><td><input value="산업용 제습기" data-r="1" data-c="0"></td><td><input value="재고 확인 바람." data-r="1" data-c="1"></td></tr>
+      <tr><td><input value="고속 문서 세단기" data-r="2" data-c="0"></td><td><input value="" data-r="2" data-c="1"></td></tr></table><p class="toast" id="prOk"></p></div>`;
   $("stage").innerHTML = head + body;
   if (TEACH) $("tgo").onclick = () => act("go");
   if (e === 2){
@@ -511,6 +527,7 @@ function intro(){
     const t = $("pr4");
     t.oninput = () => { const v = [...t.querySelectorAll("input")].map(x => x.value);
       $("prOk").textContent = v[3] === "" && v[5] === "재고 확인 바람." ? "잘했다! 그대로 옮겨졌다" : ""; $("prOk").className = "toast good"; };
+    gridKeys(t);
     t.querySelectorAll("input")[2].focus();
   }
 }
@@ -938,18 +955,7 @@ function playTable(){
     paint();
   });
   paint();
-  const MOVE = {ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1]};
-  $("mine").addEventListener("keydown", e => {
-    if (e.key === "Enter") return e.preventDefault();
-    const d = MOVE[e.key], el = e.target;
-    if (!d || e.isComposing || e.shiftKey) return;
-    const s = el.selectionStart, n = el.value.length;
-    if (d[1] && (s !== el.selectionEnd || (d[1] < 0 && s > 0) || (d[1] > 0 && s < n))) return;
-    const to = $("mine").querySelector(`[data-r="${+el.dataset.r + d[0]}"][data-c="${+el.dataset.c + d[1]}"]`);
-    e.preventDefault();
-    if (to) to.focus();
-  });
-  $("mine").addEventListener("focusin", e => setTimeout(() => { const n = e.target.value.length; e.target.setSelectionRange(n, n); }, 0));
+  gridKeys($("mine"));
   $("mine").querySelector("input").focus();
   const frame = () => {
     $("hU").textContent = fmt1(ourScore()); $("hO").textContent = fmt1(theirScore()); $("hC").textContent = myScore().got;
