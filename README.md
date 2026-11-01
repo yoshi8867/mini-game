@@ -9,9 +9,10 @@
 | [`bid.html`](https://yoshi8867.github.io/mini-game/bid.html) | 룰렛 경매 | WS |
 | [`quiz.html`](https://yoshi8867.github.io/mini-game/quiz.html) | 단어 맞히기 | WS |
 | [`omr.html`](https://yoshi8867.github.io/mini-game/omr.html) | 블라인드 중간고사 | WS |
+| [`typing.html`](https://yoshi8867.github.io/mini-game/typing.html) | 타자 올림픽 (교사는 `?t=1`) | WS |
 | [`admin.html`](https://yoshi8867.github.io/mini-game/admin.html) | 운영 — 대회를 열고 닫는다 | HTTP |
 
-넷 다 운영자가 돌리는 **대회 게임**이다. 화면은 깃헙 페이지스, 판정은
+모두 운영자가 돌리는 **대회 게임**이다. 화면은 깃헙 페이지스, 판정은
 `server/`(Node) 가 Render 에서, 기록은 Neon 에 남는다.
 
 ### acorn/ — 도토리 게임
@@ -387,3 +388,20 @@ python docs/design/build.py omr ../../omr.html
 `server/props.js` 가 `shared/` 가 아닌 것은 일부러다. 정답도 남의 명제도
 화면으로 내려가지 않아야 한다. 규칙 전문과 정한 까닭은
 [`docs/블라인드.md`](docs/블라인드.md). 서버 없이 보려면 `omr.html?demo=1`.
+
+---
+
+## 타자 올림픽
+
+다섯 번째 판이다. 여섯 팀이 **단어 개인전 · 문장 팀전 · 문장 편집 팀전 · 표
+편집 팀전** 네 종목을 치르고 메달을 모은다. 모두 시간제이고, 판정(먼저 친
+사람)과 시계는 서버가 갖는다. 규칙 전문과 정한 까닭은 [`docs/타자.md`](docs/타자.md).
+
+| | |
+|---|---|
+| 교사 | `typing.html?t=1` — 관리자 비밀번호로 들어가 대회를 열고, 교실 앞에 띄운 채 「다음」을 누르며 진행한다 |
+| 학생 | `typing.html` — 대회를 골라 비밀번호를 넣고 팀을 고른다 |
+| 문제 | 1종목 어휘 `server/typing-words.js`, 2종목 인용문 `server/typing-quotes.js`, 3종목 문장 `server/typing-data.js`. 4종목 표 과제는 화면이 만든다 |
+
+`typing.html` 은 빌드하지 않는 한 장짜리다. 서버 시험은 `node typing.test.js`
+(네 종목 한 바퀴), `node typingws.test.js` (소켓 왕복).

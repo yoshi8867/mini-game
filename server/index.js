@@ -27,6 +27,7 @@ const {Bid, MAX_ENTRANTS: BID_MAX} = require("./bid.js");
 const bidbots = require("./bidbots.js");
 const {Omr, MAX_ENTRANTS: OMR_MAX} = require("./omr.js");
 const {BASE: OMR_BASE, checkSet} = require("./props.js");
+const {Typing, MAX_ENTRANTS: TYPE_MAX} = require("./typing.js");
 
 const PORT = process.env.PORT || 3000;
 
@@ -39,6 +40,7 @@ const MAX_CUPS = 20;
 const quizzes = new Map();               // 한글 퀴즈. 이것도 메모리에만 둔다
 const omrs    = new Map();                // 블라인드. 마찬가지다
 const bids    = new Map();               // 돌림판 비딩. 마찬가지다
+const typings = new Map();               // 타자 올림픽. 마찬가지다
 const EMPTY_TTL = 10 * 60 * 1000;        // 아무도 없는 대국은 10분 뒤 치운다
 const MAX_ROOMS = 200;
 
@@ -329,7 +331,8 @@ function unkeep(kind, code){
 const KINDS = [["cup", "대회", () => Tourney, () => cups],
                ["omr", "블라인드", () => Omr, () => omrs],
                ["quiz", "퀴즈", () => Quiz, () => quizzes],
-               ["bid", "비딩", () => Bid, () => bids]];
+               ["bid", "비딩", () => Bid, () => bids],
+               ["typing", "타자", () => Typing, () => typings]];
 async function revive(){
   const all = await db.loadLive(LIVE_TTL);
   for (const [kind, name, cls, box] of KINDS){
@@ -451,6 +454,67 @@ function onOmrBet(ws, msg){
 /* ─── 돌림판 비딩 ─────────────────────────────────────────────────────
    퀴즈와 같은 창구다. 다른 것은 조마다 **대표 한 명만** 값을 부른다는 것.
    나머지는 관전이다. 심판은 bid.js 이고, 여기서는 알리는 일만 한다. */
+/* ─── 타자 올림픽 ─────────────────────────────────────────────────────
+   심판은 typing.js 다. 판정(먼저 친 사람)과 시계는 서버가 갖고, 여기서는
+   알리는 일만 한다. 내 경기의 문제만 내려간다 — 남의 경기는 점수만.
+   교실 앞(교사) 화면은 명단에 안 들어가고 전체를 본다. */
+function pushTyping(g){
+  keep("typing", g);
+  const now = Date.now();
+  for (const ws of wss.clients){
+    if (ws.readyState !== 1 || ws.typing !== g.code) continue;
+    send(ws, "typeme", g.view(ws.typeFan ? null : ws.person && ws.person.pid, now));
+  }
+}
+function typeList(){
+  const out = [...typings.values()].map(g => ({code: g.code, title: g.title, state: g.state, people: g.people.size}));
+  out.sort((a, b) => (a.state === b.state ? 0 : a.state === "open" ? -1 : 1));
+  return out;
+}
+function onTypeJoin(ws, msg){
+  if (!ws.person) return send(ws, "error", {why: "nohello"});
+  const g = typings.get(String(msg.code || "").toUpperCase());
+  if (!g) return send(ws, "error", {why: "notype"});
+  const back = g.people.has(ws.person.pid);      // 새로고침 — 비번 없이 돌아온다
+  if (!back){
+    if (g.pin && msg.pin !== g.pin) return send(ws, "error", {why: "badpin"});
+    const r = g.join(ws.person);
+    if (r.err) return send(ws, "error", {why: r.err});
+  }
+  ws.typing = g.code; ws.typeFan = false;
+  send(ws, "typeme", g.view(ws.person.pid, Date.now()));
+  if (!back) pushTyping(g);
+}
+function onTypeWatch(ws, msg){
+  const g = typings.get(String(msg.code || "").toUpperCase());
+  if (!g) return send(ws, "error", {why: "notype"});
+  if (g.pin && msg.pin !== g.pin) return send(ws, "error", {why: "badpin"});
+  ws.typing = g.code; ws.typeFan = true;
+  send(ws, "typeme", g.view(null, Date.now()));
+}
+function onTypeLeave(ws){
+  const g = ws.typing && typings.get(ws.typing);
+  const fan = ws.typeFan;
+  ws.typing = null; ws.typeFan = false;
+  send(ws, "typeme", null);
+  if (!g || fan || !ws.person) return;
+  if (g.quit(ws.person.pid)) pushTyping(g);       // 시작 전에만 빠진다
+}
+/* 학생이 하는 일 — 팀 고르기, 조 고르기, 친 글자, 다 고친 표 */
+function onTypeDo(ws, msg){
+  const g = ws.typing && typings.get(ws.typing);
+  if (!g || !ws.person || ws.typeFan) return send(ws, "error", {why: "notype"});
+  const pid = ws.person.pid, now = Date.now();
+  let r;
+  if (msg.t === "typeteam") r = g.setTeam(pid, msg.team);
+  else if (msg.t === "typetheme") r = g.setTheme(pid, msg.i);
+  else if (msg.t === "typeclaim") r = g.claim(pid, msg.i, msg.text, now);
+  else r = g.tableDone(pid, msg.tier, now);
+  if (r.err) return send(ws, "typemiss", {why: r.err, i: msg.i});
+  if (r.val) send(ws, "typegot", {val: r.val, i: msg.i});
+  pushTyping(g);
+}
+
 function pushBid(bid){
   keep("bid", bid);
   const now = Date.now();
@@ -808,6 +872,54 @@ function onAdmin(what, m, done, ip){
       keep("bid", b);
       return done(200, {ok: true, bid: b.full()});
     }
+    /* ─── 타자 올림픽 ─── */
+    case "typeopen": {
+      if (typings.size >= MAX_CUPS) return done(409, {ok: false, why: "busy"});
+      if (!okPin(m.pin)) return done(400, {ok: false, why: "badpin"});
+      const code = newCode(c => cups.has(c) || rooms.has(c) || quizzes.has(c) ||
+                                bids.has(c) || omrs.has(c) || typings.has(c));
+      const g = new Typing(code, {pin: m.pin, title: m.title});
+      typings.set(code, g);
+      keep("typing", g);
+      return done(200, {ok: true, typing: g.full()});
+    }
+    case "typelist":
+      return done(200, {ok: true, typings: [...typings.values()].map(g => g.full()).sort((a, b) => b.made - a.made)});
+    /* 교사가 진행하는 것 — 마감, 다시 열기, 옮기기, 시작, 다음, 연습 참가자 */
+    case "typeact": {
+      const g = typings.get(String(m.code || "").toUpperCase());
+      if (!g) return done(404, {ok: false, why: "notype"});
+      const now = Date.now();
+      let r;
+      switch (m.act){
+        case "close":  r = g.close(); break;
+        case "reopen": r = g.reopen(); break;
+        case "move":   r = g.move(String(m.pid || ""), m.team); break;
+        case "start":  r = g.start(); break;
+        case "go":     r = g.go(now); break;
+        case "mock": {
+          let n = Math.max(1, Math.min(m.n | 0 || 1, TYPE_MAX - g.people.size));
+          for (let i = 0; i < n; i++)
+            g.join(players.get("mock-" + g.code + "-" + Date.now().toString(36) + "-" + i +
+                               "-" + Math.random().toString(36).slice(2, 8)), true);
+          r = {ok: true};
+          break;
+        }
+        default: r = {err: "unknown"};
+      }
+      if (r.err) return done(409, {ok: false, why: r.err});
+      pushTyping(g);
+      return done(200, {ok: true, typing: g.full()});
+    }
+    case "typeclose": {
+      const g = typings.get(String(m.code || "").toUpperCase());
+      if (!g) return done(404, {ok: false, why: "notype"});
+      for (const ws of wss.clients)
+        if (ws.typing === g.code){ ws.typing = null; send(ws, "typegone", {}); }
+      typings.delete(g.code);
+      unkeep("typing", g.code);
+      return done(200, {ok: true});
+    }
     default:
       return done(404, {ok: false, why: "unknown"});
   }
@@ -824,7 +936,7 @@ const server = httpSide.create({
       if (r.ready && !r.over) playing++;
     }
     return {rooms: rooms.size, players: people, playing, cups: cups.size,
-            quizzes: quizzes.size, bids: bids.size, omrs: omrs.size};
+            quizzes: quizzes.size, bids: bids.size, omrs: omrs.size, typings: typings.size};
   },
   admin: (what, m, done, ip) => onAdmin(what, m, done, ip),
 });
@@ -832,7 +944,7 @@ const wss = new WebSocketServer({server, path: "/ws"});
 
 wss.on("connection", ws => {
   ws.alive = true; ws.room = null; ws.side = null; ws.person = null;
-  ws.cup = null; ws.fan = null; ws.quiz = null; ws.bid = null; ws.omr = null; ws.omrFan = false;
+  ws.cup = null; ws.fan = null; ws.quiz = null; ws.bid = null; ws.omr = null; ws.typing = null; ws.typeFan = false; ws.omrFan = false;
   ws.on("pong", () => { ws.alive = true; });
 
   ws.on("message", raw => {
@@ -865,6 +977,14 @@ wss.on("connection", ws => {
       case "bidleave":return onBidLeave(ws);
       case "bidup":
       case "bidseal": return onBidSay(ws, msg);
+      case "typings": return send(ws, "typings", {typings: typeList()});
+      case "typejoin":return onTypeJoin(ws, msg);
+      case "typewatch":return onTypeWatch(ws, msg);
+      case "typeleave":return onTypeLeave(ws);
+      case "typeteam":
+      case "typetheme":
+      case "typeclaim":
+      case "typetable":return onTypeDo(ws, msg);
       case "watch":   return onWatch(ws, msg);
       case "unwatch": return watchStop(ws);
       case "rename":  return onRename(ws, msg);
@@ -1065,6 +1185,8 @@ setInterval(() => {
      연습 대표가 끼어 있으면 서버가 대신 값을 부른다. */
   /* 블라인드는 단계가 바뀌거나 정답이 한 개 더 열릴 때만 알린다 */
   for (const o of omrs.values()) if (o.tick(now)) pushOmr(o);
+  /* 타자는 미리 보기·경기·종목 결과가 시계로 넘어가고, 연습 참가자가 친다 */
+  for (const g of typings.values()) if (g.tick(now)) pushTyping(g);
   for (const b of bids.values()){
     let shout = b.tick(now);
     if (bidbots.tick(b, now)) shout = true;

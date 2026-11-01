@@ -1,0 +1,1017 @@
+<!doctype html><html lang="ko"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>타자 올림픽</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@400;700;800&family=Nanum+Gothic+Coding:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* 타자 올림픽 — 학생 화면, 그리고 ?t=1 이면 교사(교실 앞) 화면. 판정과 시계는 서버가 갖는다 */
+:root{
+  color-scheme:light;
+  --wall:#ffffff; --wall-2:#f6f6f7; --wall-line:#dcdce1;
+  --chalk:#16171a; --chalk-dim:#63646b; --mark:#8a5a00; --gold:#f0c75e;
+  --win:#1f7a3d; --lose:#c62828; --wait:#2d5f9a;
+  --m-gold:#d9a514; --m-silver:#9aa1a9; --m-bronze:#b26a35;
+  --s1:4px; --s2:10px; --s3:16px; --s4:24px; --s5:36px;
+  --type-font:"Nanum Gothic Coding",monospace; --type-size:24px; --type-pad:12px 16px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--wall);color:var(--chalk);font-family:"Gothic A1",sans-serif;font-size:15px}
+header{display:flex;gap:var(--s3);align-items:center;flex-wrap:wrap;padding:var(--s3) var(--s4);border-bottom:1px solid var(--wall-line)}
+header .hdr-info{display:flex;gap:var(--s4);align-items:baseline;font-variant-numeric:tabular-nums;margin-right:auto}
+header .hdr-info .ttl{font-size:16px;font-weight:800}
+header .hdr-info b{font-size:22px;font-weight:800} header .hdr-info span{font-size:12px;color:var(--chalk-dim);margin-left:4px}
+header h1{font-size:18px;font-weight:800;margin:0 var(--s3) 0 0}
+header label{font-size:13px;color:var(--chalk-dim);display:flex;gap:6px;align-items:center}
+header input{width:64px;font:inherit;padding:4px 6px;border:1px solid var(--wall-line);border-radius:6px}
+.layout{display:grid;grid-template-columns:1fr 300px;min-height:calc(100vh - 62px)}
+main{padding:var(--s4);padding-bottom:300px;min-width:0}   /* 아래 고정 입력대에 가리지 않게 */
+/* 입력대 — 모든 종목의 입력 칸은 경기 화면 아래쪽 가운데에 붙박는다 */
+.dock{position:fixed;bottom:0;left:calc((100vw - 300px) / 2);transform:translateX(-50%);z-index:5;
+  width:min(900px, calc(100vw - 300px - 48px));background:var(--wall);padding:var(--s3) 0 var(--s2);
+  box-shadow:0 -14px 18px -12px rgba(0,0,0,.12)}
+.dock .toast{margin-top:6px}
+aside{border-left:1px solid var(--wall-line);background:var(--wall-2);padding:var(--s4) var(--s3)}
+aside h2{font-size:13px;color:var(--chalk-dim);margin:0 0 var(--s2);font-weight:700}
+h2.title{font-size:22px;font-weight:800;margin:0 0 var(--s1)}
+.sub{color:var(--chalk-dim);margin:0 0 var(--s3)}
+button{font:inherit;font-size:14px;padding:8px 14px;border:1px solid var(--wall-line);border-radius:8px;background:var(--wall);cursor:pointer}
+button:hover{background:var(--wall-2)}
+button.go{background:var(--chalk);color:var(--wall);border-color:var(--chalk);font-weight:700}
+.row{display:flex;gap:var(--s2);align-items:center;flex-wrap:wrap}
+ul.rules{margin:0 0 var(--s4);padding-left:20px;line-height:1.8}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
+table.t{border-collapse:collapse;width:100%;margin:var(--s2) 0 var(--s3);font-variant-numeric:tabular-nums}
+table.t th,table.t td{padding:6px 10px;border-bottom:1px solid var(--wall-line);text-align:left}
+table.t th{font-size:12px;color:var(--chalk-dim);font-weight:700}
+tr.me td{background:#fff7dc}
+tr.up td{font-weight:700}
+
+/* 종목 진행표 · 메달판 */
+.evs{display:grid;gap:4px;margin-bottom:var(--s4)}
+.ev{font:inherit;font-size:13px;padding:6px 10px;border-radius:6px;color:var(--chalk-dim);text-align:left;background:none;border:1px solid transparent;cursor:pointer}
+.ev:hover{background:var(--wall);border-color:var(--wall-line)}
+.ev.now{background:var(--wall);color:var(--chalk);font-weight:700;border:1px solid var(--wall-line)}
+.ev.done{color:var(--chalk)}
+.medal{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;color:#fff;font-size:12px;font-weight:800}
+.medal.g{background:var(--m-gold)} .medal.s{background:var(--m-silver)} .medal.b{background:var(--m-bronze)}
+.tally td:nth-child(n+2){text-align:center;width:34px}
+
+/* 시상대 */
+.podium{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s2);align-items:end;max-width:560px;margin:var(--s4) 0}
+.step{text-align:center}
+.step .who{font-size:14px;margin-bottom:6px}
+.step .who b{display:block;font-size:17px}
+.step .block{border-radius:8px 8px 0 0;color:#fff;font-weight:800;font-size:28px;display:grid;place-items:center}
+.step.p0 .block{height:130px;background:var(--m-gold)} .step.p1 .block{height:95px;background:var(--m-silver)} .step.p2 .block{height:70px;background:var(--m-bronze)}
+.step.p0{order:2} .step.p1{order:1} .step.p2{order:3}
+
+/* 경기 화면 */
+.hud{display:flex;gap:var(--s4);margin-bottom:var(--s3);font-variant-numeric:tabular-nums}
+.hud div b{display:block;font-size:26px;font-weight:800}
+.hud div span{font-size:12px;color:var(--chalk-dim)}
+.items{display:grid;gap:4px;margin-bottom:var(--s3)}
+.item{display:grid;grid-template-columns:1fr auto;gap:var(--s2);align-items:center;padding:6px 10px;border:1px solid var(--wall-line);border-radius:8px;font-family:var(--type-font);font-size:16px}
+.item.tried{grid-template-columns:44px 1fr auto}
+.items.two{grid-template-columns:1fr 1fr;gap:4px 8px}
+.items.two .item{font-size:15px;padding:4px 8px;min-height:34px}
+.tries{font-family:"Gothic A1",sans-serif;font-size:12px;font-weight:800;text-align:center;border-radius:999px;padding:2px 0;color:var(--chalk-dim)}
+.tries.hot{background:var(--wait);color:var(--wall)}
+.sheet td.pm{white-space:nowrap}
+.item .src{display:block;font-family:"Gothic A1",sans-serif;font-size:11px;color:var(--chalk-dim);margin-top:2px}
+.item .st{font-family:"Gothic A1",sans-serif;font-size:12px;color:var(--chalk-dim);white-space:nowrap}
+.item.on{border-color:var(--wait);background:#eef4fb}
+.item.taken{opacity:.45;text-decoration:line-through}
+.item.ours{opacity:.6;background:#eaf6ee;text-decoration:none}
+.item.click{cursor:pointer} .item.click:hover{border-color:var(--chalk-dim)}
+/* 1종목 우리 팀 상자 */
+.teambox{border:1px solid var(--wall-line);border-radius:10px;padding:var(--s2) var(--s3);min-width:300px;margin-bottom:var(--s3)}
+.tb-head{font-size:14px;margin-bottom:4px} .tb-head b{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums}
+.tb-head span{color:var(--chalk-dim);font-size:13px}
+.teambox table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+.teambox th{font-size:11px;color:var(--chalk-dim);text-align:left;font-weight:700;padding:2px 6px}
+.teambox td{padding:3px 6px;border-top:1px solid var(--wall-line)}
+.teambox td:nth-child(n+2),.teambox th:nth-child(n+2){text-align:right;width:48px}
+/* 1종목 카드 — 칸 크기가 고정이라 글자가 바뀌어도 아무것도 밀리지 않는다 */
+.cards{display:grid;grid-template-columns:repeat(5,1fr);gap:var(--s2);margin-bottom:var(--s3)}
+.card{height:72px;display:grid;place-items:center;border:1px solid var(--wall-line);border-radius:10px;
+  font-family:var(--type-font);font-size:22px;background:var(--wall);overflow:hidden;white-space:nowrap}
+.card.on{border-color:var(--wait);background:#eef4fb}
+.card.empty{border-style:dashed;background:var(--wall-2)}
+.card.fresh{animation:fresh .5s ease-out}
+@keyframes fresh{0%{background:#eaf6ee;transform:scale(.92)}100%{background:var(--wall);transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){.card.fresh{animation:none}}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:var(--s3)}
+.chip{font-family:var(--type-font);font-size:18px;padding:6px 12px;border:1px solid var(--wall-line);border-radius:999px}
+.chip.on{border-color:var(--wait);background:#eef4fb}
+.chip.taken{background:#eaf6ee;color:var(--win);border-color:#bfe3ca}
+mark{background:#fde7a6;border-bottom:2px solid var(--mark);color:inherit}
+mark.gap{padding:0 3px}
+.toast{min-height:22px;font-size:14px;font-weight:700;margin-top:var(--s2)}
+.toast.bad{color:var(--lose)} .toast.good{color:var(--win)}
+.toast.ready{color:var(--wait)}
+
+/* 득점 배너 — 화면 위쪽 가운데에 크게 떴다가 사라진다 */
+.pop{position:fixed;left:50%;top:90px;transform:translateX(-50%);z-index:10;pointer-events:none;white-space:nowrap;
+  background:var(--chalk);color:var(--wall);border-radius:18px;padding:16px 44px;text-align:center;
+  box-shadow:0 10px 36px rgba(0,0,0,.3);opacity:0}
+.pop b{display:block;font-size:52px;line-height:1.15;font-weight:800;color:var(--gold)}
+.pop span{font-size:20px;font-weight:700}
+.pop.show{animation:pop 1.8s ease-out}
+@keyframes pop{0%{opacity:0;transform:translate(-50%,-10px) scale(.9)}10%{opacity:1;transform:translate(-50%,0) scale(1.05)}20%{transform:translate(-50%,0) scale(1)}80%{opacity:1}100%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.pop.show{animation:none;opacity:1}}
+
+
+/* 타자 칸 — typing-lab 과 같은 겹침 */
+.line{font-family:var(--type-font);font-size:var(--type-size);line-height:1.6;padding:var(--type-pad);border:2px solid transparent;border-radius:10px;
+  white-space:pre-wrap;word-break:break-all;overflow-wrap:anywhere;letter-spacing:0;font-kerning:none;font-variant-ligatures:none;width:100%;margin:0}
+.target{background:var(--wall-2);min-height:calc(var(--type-size)*1.6 + 28px)}
+.target .ok{color:#a7a8ae} .target .bad{background:#fde3e3;color:var(--lose)} .target .cur{background:var(--gold);border-radius:3px}
+.target .hint{color:var(--chalk-dim);font-family:"Gothic A1",sans-serif;font-size:15px}
+.field{position:relative;margin-top:var(--s2)}
+.ghost{position:absolute;inset:0;color:transparent;pointer-events:none}
+.ghost .bad{text-decoration:underline wavy var(--lose);text-decoration-thickness:2px;text-underline-offset:7px;text-decoration-skip-ink:none}
+textarea.line{display:block;position:relative;background:transparent;border-color:var(--wall-line);resize:none;overflow:hidden;outline:none;caret-color:var(--wait)}
+textarea.line:focus{border-color:var(--wait)}
+
+/* 표 편집 */
+.tables{display:grid;gap:var(--s3)}
+.tables .sub{margin-bottom:6px}
+table.grid{border-collapse:collapse;font-family:var(--type-font);font-size:14px;width:100%;table-layout:fixed}
+table.grid td{border:1px solid var(--wall-line);padding:0;height:34px}
+table.grid input,table.grid textarea{display:block;width:100%;height:100%;border:0;padding:6px 8px;font:inherit;line-height:1.5;background:transparent;outline:none}
+table.grid textarea{resize:none;overflow:hidden;height:54px}
+table.grid td.num input{text-align:right}
+table.grid input:focus,table.grid textarea:focus{background:#eef4fb;box-shadow:inset 0 0 0 2px var(--wait)}
+table.grid td.diff{background:#fde7a6}
+table.grid td.part{box-shadow:inset 0 0 0 2px #f0c24b}
+mark.chg{background:#fde7a6;color:inherit;border-radius:2px;padding:0 1px} mark.chg.gap{display:inline-block;width:6px;height:1em;vertical-align:middle;background:#f0c24b}
+table.grid.goal td.swap{box-shadow:inset 0 0 0 2px #7b4fd6}
+.tables .how{font-weight:400;color:var(--chalk-dim)}
+table.grid td.head{background:var(--wall-2);font-weight:700}
+table.grid td.head.diff{background:#fde7a6}   /* 제목 칸도 다르면 노랗게 */
+table.grid.goal td{padding:6px 8px;line-height:1.5} table.grid.goal td.num{text-align:right}
+
+/* 팀 고르기 — 2행 3열 빈 칸 */
+.lobby{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s3);margin-bottom:var(--s4)}
+.slot{min-height:150px;border:2px solid var(--wall-line);border-radius:12px;padding:var(--s2) var(--s3);display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start;cursor:pointer}
+.slot.empty{border-style:dashed;background:var(--wall-2)}
+.slot.mine{border-color:var(--wait)}
+.slot-h{width:100%;font-weight:800;margin-bottom:4px} .slot-h span{font-weight:400;font-size:13px;color:var(--chalk-dim)}
+.chip.pl{font-family:"Gothic A1",sans-serif;font-size:13px;padding:4px 10px;background:var(--wall)}
+.chip.pl.me{border-color:var(--wait);background:#eef4fb;font-weight:700}
+.chip.pl[draggable="true"]{cursor:grab}
+
+/* 종목 결과 — 팀 순위 + 득점표(우리 팀 | MVP) */
+.res-head{display:flex;justify-content:space-between;align-items:baseline;gap:var(--s3);flex-wrap:wrap}
+.res-head .cd{font-size:14px;color:var(--chalk-dim)} .res-head .cd b{font-size:22px;color:var(--chalk);font-variant-numeric:tabular-nums}
+.sheet{display:grid;grid-template-columns:1fr 1fr;gap:var(--s4);align-items:start}
+.sheet h3{font-size:15px;margin:var(--s3) 0 0}
+.t small{color:var(--chalk-dim)}
+
+/* 배점 배지 — 문장 끝 오른쪽 */
+.pts{display:inline-block;font-family:"Gothic A1",sans-serif;font-size:12px;font-weight:800;line-height:1;padding:4px 8px;border-radius:999px;margin-left:6px;vertical-align:middle;white-space:nowrap}
+.pts.t0{background:#eceef1;color:#4a4d55} .pts.t1{background:#dbe8f8;color:#1d4f8f} .pts.t2{background:#eadff8;color:#5b2d9a}
+.pts.late{box-shadow:inset 0 0 0 2px var(--m-gold)}
+.pts.x2{background:var(--lose);color:#fff}
+.card .pts{font-size:11px;padding:3px 6px}
+.hud .late{align-self:center;font-weight:800;color:var(--mark)}
+
+/* 팀 대 팀 카드 — 미리 보기와 결과가 같은 틀 */
+.vs{display:grid;grid-template-columns:1fr auto 1fr;gap:var(--s3);align-items:start;margin:var(--s3) 0}
+.vs-mid{align-self:center;font-size:30px;font-weight:800;color:var(--chalk-dim)}
+.side{border:2px solid var(--wall-line);border-radius:12px;padding:var(--s2) var(--s3)}
+.side.won{border-color:var(--win);background:#f3faf5}
+.vs-h{display:flex;gap:8px;align-items:center;font-size:20px;font-weight:800}
+.vs-h b{margin-left:auto;font-size:24px;font-variant-numeric:tabular-nums}
+.vs-h .vs-sub{margin-left:auto}
+.vs-sub{font-size:12px;font-weight:400;color:var(--chalk-dim)}
+.tag{font-size:12px;padding:3px 9px;border-radius:999px;background:var(--wall-2);color:var(--chalk-dim)}
+.tag.win{background:var(--win);color:#fff} .tag.lose{background:var(--wall-line);color:var(--chalk)}
+.medal.sm{width:18px;height:18px;font-size:10px;margin-right:2px}
+.countdown{font-size:24px;font-weight:800;text-align:center;margin:var(--s4) 0 var(--s2);font-variant-numeric:tabular-nums}
+[hidden]{display:none !important}
+.tn{white-space:nowrap} .slot-h span.tn{font-weight:inherit;font-size:inherit;color:inherit}
+.gate{max-width:560px}
+.gate input{font:inherit;font-size:16px;padding:10px 12px;border:1px solid var(--wall-line);border-radius:8px;width:100%}
+.gate label{display:block;font-size:13px;color:var(--chalk-dim);margin:var(--s3) 0 6px}
+.pickrow{display:flex;gap:var(--s2);align-items:center;width:100%;text-align:left;margin-bottom:6px}
+.pickrow.on{border-color:var(--wait);background:#eef4fb}
+.pickrow .t{flex:1;font-weight:700}
+.msg{min-height:22px;font-size:14px;margin-top:var(--s2);color:var(--chalk-dim)} .msg.bad{color:var(--lose)}
+.teach-bar{display:flex;gap:var(--s2);flex-wrap:wrap;align-items:center;margin:var(--s3) 0;padding:var(--s2) var(--s3);background:#fff7dc;border:1px solid #ecd9a0;border-radius:10px}
+.teach-bar b{margin-right:auto}
+body:not(.teach) .teach-only{display:none !important}
+.offline{position:fixed;top:0;left:0;right:0;z-index:20;background:var(--lose);color:#fff;text-align:center;padding:6px;font-weight:700}
+/* 단축키 안내 — 크게, 짧게 */
+.keys{display:grid;gap:var(--s3);margin:var(--s3) 0 var(--s4)}
+.key{display:grid;grid-template-columns:minmax(260px,auto) 1fr;gap:var(--s4);align-items:center;font-size:24px}
+.key .what{font-weight:800}
+kbd{display:inline-block;font-family:"Gothic A1",sans-serif;font-size:22px;font-weight:800;padding:6px 14px;border:2px solid var(--chalk);border-bottom-width:5px;border-radius:10px;background:var(--wall);margin:0 2px;line-height:1.2}
+.plus{font-size:20px;color:var(--chalk-dim);margin:0 2px}
+.practice{border:2px dashed var(--wall-line);border-radius:12px;padding:var(--s3);margin-top:var(--s3)}
+.practice h3{margin:0 0 var(--s2);font-size:17px}
+.practice textarea.line{border-color:var(--wall-line)}
+.practice .ok{color:var(--win);font-weight:800}
+.grp{border:1px solid var(--wall-line);border-radius:10px;padding:var(--s2) var(--s3);margin-bottom:var(--s3)}
+.grp h3{margin:0 0 4px;font-size:16px}
+.boards{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:var(--s3)}
+</style>
+
+<div class="offline" id="offline" hidden>연결이 끊겼습니다 — 다시 붙는 중입니다</div>
+<header>
+  <h1 id="ttl">타자 올림픽</h1>
+  <div class="hdr-info" id="hdrInfo"></div>
+  <span id="myname" class="sub" style="margin:0"></span>
+</header>
+<div class="layout">
+  <main id="stage"></main>
+  <aside id="board"></aside>
+</div>
+<div class="pop" id="pop"></div>
+
+<script>
+/* ───────── 자모 · 판정 ───────── */
+const CHO  = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ";
+const JUNG = "ㅏㅐㅑㅒㅓㅔㅕㅖㅗㅘㅙㅚㅛㅜㅝㅞㅟㅠㅡㅢㅣ";
+const JONG = ["","ㄱ","ㄲ","ㄳ","ㄴ","ㄵ","ㄶ","ㄷ","ㄹ","ㄺ","ㄻ","ㄼ","ㄽ","ㄾ","ㄿ","ㅀ","ㅁ","ㅂ","ㅄ","ㅅ","ㅆ","ㅇ","ㅈ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"];
+const SPLIT = {"ㅘ":"ㅗㅏ","ㅙ":"ㅗㅐ","ㅚ":"ㅗㅣ","ㅝ":"ㅜㅓ","ㅞ":"ㅜㅔ","ㅟ":"ㅜㅣ","ㅢ":"ㅡㅣ",
+  "ㄳ":"ㄱㅅ","ㄵ":"ㄴㅈ","ㄶ":"ㄴㅎ","ㄺ":"ㄹㄱ","ㄻ":"ㄹㅁ","ㄼ":"ㄹㅂ","ㄽ":"ㄹㅅ","ㄾ":"ㄹㅌ","ㄿ":"ㄹㅍ","ㅀ":"ㄹㅎ","ㅄ":"ㅂㅅ"};
+const jamo = j => SPLIT[j] || j;
+function keys(str){
+  let out = "";
+  for (const ch of str){
+    const c = ch.charCodeAt(0) - 0xAC00;
+    if (c >= 0 && c < 11172) out += CHO[Math.floor(c / 588)] + jamo(JUNG[Math.floor(c % 588 / 28)]) + jamo(JONG[c % 28]);
+    else out += jamo(ch);
+  }
+  return out;
+}
+function judge(typed, target){
+  const t = [...typed], g = [...target];
+  return t.map((ch, i) => {
+    if (ch === g[i]) return "ok";
+    if (i === t.length - 1 && keys(g.slice(i, i + 2).join("")).startsWith(keys(ch))) return "wait";
+    return "bad";
+  });
+}
+
+/* ───────── 바탕 ───────── */
+const Q = new URLSearchParams(location.search);
+const TEACH = Q.has("t");
+document.body.classList.toggle("teach", TEACH);
+const local = /^(localhost|127\.|192\.168\.|10\.)/.test(location.hostname);
+const SERVER = Q.get("server") || (local ? "ws://" + (location.hostname || "127.0.0.1") + ":3000/ws" : "wss://class-live-62tz.onrender.com/ws");
+const API = (Q.get("api") || SERVER.replace(/^ws/, "http").replace(/\/ws$/, "")).replace(/\/+$/, "");
+function myPid(){                 // 쇼기·퀴즈와 같은 값 — 같은 학생은 늘 같은 이름
+  let v = null;
+  try { v = localStorage.getItem("shogi-pid"); } catch (e) {}
+  if (!v || v.length < 8){
+    v = "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
+    try { localStorage.setItem("shogi-pid", v); } catch (e) {}
+  }
+  return v;
+}
+const PID = myPid();
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const rand = (a, b) => a + Math.random() * (b - a);
+const shuffle = a => { a = [...a]; for (let i = a.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const fmt1 = x => Number.isInteger(x) ? x : +(+x).toFixed(1);
+const TEAM_COLORS = ["#d64545","#2d6fd6","#1f9d55","#d68a1f","#8a4fd6","#159aa8"];
+const tname = t => `<span class="tn"><span class="dot" style="background:${TEAM_COLORS[t % 6]}"></span>${t + 1}팀</span>`;
+const MEDAL = ["g", "s", "b"], MEDAL_TXT = ["금", "은", "동"];
+const PTS = [[10, 20, 30], [30, 40, 50]];
+const ERR = {badpin: "비밀번호가 맞지 않습니다", notype: "없는 대회입니다", started: "이미 시작한 대회입니다",
+  full: "자리가 다 찼습니다", closed: "지금은 고를 수 없습니다", teams: "여섯 팀이 다 차야 시작합니다",
+  lobby: "먼저 팀 고르기를 마감해 주세요", nohello: "다시 들어와 주세요", stale: "다시 로그인해 주세요"};
+
+let sock = null, V = null, skew = 0, joined = null, watchPin = "", token = null;
+const SEAT = TEACH ? "type-seat-t" : "type-seat";
+try { joined = localStorage.getItem(SEAT) || null; watchPin = localStorage.getItem("type-seat-pin") || ""; token = sessionStorage.getItem("shogi-admin"); } catch (e) {}
+const seat = v => { joined = v; try { v ? localStorage.setItem(SEAT, v) : localStorage.removeItem(SEAT); } catch (e) {} };
+const send = (t, o) => { if (sock && sock.readyState === 1) sock.send(JSON.stringify(Object.assign({t}, o || {}))); };
+const now = () => Date.now() + skew;
+const left = until => Math.max(0, Math.ceil((until - now()) / 1000));
+
+/* ───────── 소켓 ───────── */
+let hooks = {};                    // 경기 화면이 듣는 것 — typegot / typemiss
+function connect(){
+  sock = new WebSocket(SERVER);
+  sock.onopen = () => {
+    $("offline").hidden = true;
+    send("hello", {pid: PID});
+    if (joined) send(TEACH ? "typewatch" : "typejoin", {code: joined, pin: watchPin});
+    else send("typings", {});
+  };
+  sock.onmessage = e => {
+    let m; try { m = JSON.parse(e.data); } catch (x) { return; }
+    if (m.t === "me") $("myname").textContent = TEACH ? "교사 화면" : "나: " + m.name;
+    else if (m.t === "typings"){ rows = m.typings; if (!joined) gate(); }
+    else if (m.t === "typeme"){
+      if (!m.code){ seat(null); V = null; return gate(); }
+      skew = m.now - Date.now(); seat(m.code); V = m; draw();
+    }
+    else if (m.t === "typegone"){ seat(null); V = null; gate("대회가 닫혔습니다."); }
+    else if (m.t === "typegot"){ hooks.got && hooks.got(m); }
+    else if (m.t === "typemiss"){ hooks.miss && hooks.miss(m); }
+    else if (m.t === "error"){
+      if (m.why === "notype" && joined){ seat(null); V = null; return gate("대회가 사라졌습니다. 서버가 다시 시작됐을 수 있습니다 — 선생님께 알려 주세요."); }
+      say(ERR[m.why] || m.why, "bad");
+    }
+  };
+  sock.onclose = () => { sock = null; $("offline").hidden = false; setTimeout(connect, 2000); };
+  sock.onerror = () => {};
+}
+setInterval(() => { if (!joined) send("typings", {}); }, 4000);
+function say(text, kind){ const n = $("msg") || $("toast"); if (n){ n.textContent = text || ""; n.className = (n.id === "toast" ? "toast " : "msg ") + (kind || ""); } }
+
+/* 교사가 시키는 일 — 관리자 창구(HTTP)로 간다 */
+async function call(what, body){
+  let j;
+  try {
+    const r = await fetch(API + "/admin/" + what, {method: "POST", headers: {"content-type": "application/json"},
+      body: JSON.stringify(Object.assign({token}, body || {}))});
+    j = await r.json();
+  } catch (e) { j = {ok: false, why: "서버에 닿지 않습니다"}; }
+  if (j.why === "stale"){ token = null; try { sessionStorage.removeItem("shogi-admin"); } catch (e) {} gate("다시 로그인해 주세요."); }
+  else if (!j.ok) say(ERR[j.why] || j.why, "bad");
+  return j;
+}
+const act = (a, o) => call("typeact", Object.assign({code: joined, act: a}, o || {}));
+
+/* ───────── 대회 고르기 / 교사 로그인 ───────── */
+let rows = [], chose = null;
+function gate(why){
+  clearHooks(); $("hdrInfo").innerHTML = ""; $("board").innerHTML = ""; screen = null;
+  if (TEACH && !token){
+    $("stage").innerHTML = `<div class="gate"><h2 class="title">교사 화면</h2><p class="sub">관리자 비밀번호로 들어갑니다.</p>
+      <label>관리자 비밀번호</label><input type="password" id="pw" autocomplete="current-password">
+      <div class="row" style="margin-top:var(--s3)"><button class="go" id="login">들어가기</button></div><p class="msg ${why ? "bad" : ""}" id="msg">${esc(why || "")}</p></div>`;
+    const go = async () => {
+      say("확인하는 중입니다…");
+      let j; try { j = await (await fetch(API + "/admin/login", {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({pw: $("pw").value})})).json(); }
+      catch (e) { return say("서버에 닿지 않습니다. 무료 서버라 깨는 데 1분쯤 걸립니다.", "bad"); }
+      if (!j.ok) return say("비밀번호가 맞지 않습니다.", "bad");
+      token = j.token; try { sessionStorage.setItem("shogi-admin", token); } catch (e) {}
+      gate();
+    };
+    $("login").onclick = go; $("pw").onkeydown = e => { if (e.key === "Enter") go(); };
+    return;
+  }
+  if (TEACH) return teacherGate(why);
+  $("stage").innerHTML = `<div class="gate"><h2 class="title">타자 올림픽</h2><p class="sub">선생님이 연 대회를 골라 비밀번호를 넣습니다.</p>
+    <div id="list">${rows.length ? "" : `<p class="sub">아직 열린 대회가 없습니다. 선생님이 열면 저절로 뜹니다.</p>`}</div>
+    <label>비밀번호 (숫자 네 자리)</label><input id="pin" inputmode="numeric" maxlength="4" autocomplete="off">
+    <div class="row" style="margin-top:var(--s3)"><button class="go" id="enter">들어가기</button></div><p class="msg ${why ? "bad" : ""}" id="msg">${esc(why || "")}</p></div>`;
+  if (!chose && rows.length === 1) chose = rows[0].code;
+  $("list").insertAdjacentHTML("beforeend", rows.map(r => `<button class="pickrow ${chose === r.code ? "on" : ""}" data-code="${esc(r.code)}"><span class="t">${esc(r.title)}</span><span class="sub" style="margin:0">${r.people}명 · ${{open: "팀 고르는 중", running: "진행 중", done: "끝남"}[r.state]}</span></button>`).join(""));
+  $("list").onclick = e => { const b = e.target.closest("[data-code]"); if (b){ chose = b.dataset.code; gate(); } };
+  const enter = () => { if (!chose) return say("들어갈 대회를 골라 주세요.", "bad"); say("들어가는 중입니다…"); send("typejoin", {code: chose, pin: $("pin").value.replace(/\D/g, "")}); };
+  $("enter").onclick = enter; $("pin").onkeydown = e => { if (e.key === "Enter") enter(); };
+}
+async function teacherGate(why){
+  $("stage").innerHTML = `<div class="gate"><h2 class="title">교사 화면 — 타자 올림픽</h2>
+    <h3>새 대회 열기</h3><label>대회 이름</label><input id="ntitle" value="타자 올림픽">
+    <label>학생 비밀번호 (숫자 네 자리)</label><input id="npin" inputmode="numeric" maxlength="4" value="${String(1000 + Math.floor(Math.random() * 9000))}">
+    <div class="row" style="margin-top:var(--s3)"><button class="go" id="open">열기</button></div>
+    <h3 style="margin-top:var(--s5)">열려 있는 대회</h3><div id="tlist" class="sub">불러오는 중…</div><p class="msg ${why ? "bad" : ""}" id="msg">${esc(why || "")}</p></div>`;
+  const watch = (code, pin) => { watchPin = pin || ""; try { localStorage.setItem("type-seat-pin", watchPin); } catch (e) {} seat(code); send("typewatch", {code, pin: watchPin}); };
+  $("open").onclick = async () => {
+    const j = await call("typeopen", {title: $("ntitle").value, pin: $("npin").value.replace(/\D/g, "")});
+    if (j.ok) watch(j.typing.code, j.typing.pin);
+  };
+  const j = await call("typelist", {});
+  if (!j.ok || !$("tlist")) return;
+  $("tlist").innerHTML = j.typings.length ? j.typings.map(g => `<div class="row" style="margin-bottom:8px"><b style="flex:1">${esc(g.title)}</b><span>${g.people}명 · 비번 ${esc(g.pin || "없음")}</span>
+    <button class="go" data-w="${g.code}" data-p="${esc(g.pin || "")}">띄우기</button><button data-x="${g.code}">닫기</button></div>`).join("") : "없습니다.";
+  $("tlist").onclick = async e => {
+    const w = e.target.closest("[data-w]"), x = e.target.closest("[data-x]");
+    if (w) watch(w.dataset.w, w.dataset.p);
+    if (x && confirm("이 대회를 닫을까요? 되돌릴 수 없습니다.")){ await call("typeclose", {code: x.dataset.x}); teacherGate(); }
+  };
+}
+
+/* ───────── 그리기 — 단계가 바뀌면 새로 짓고, 같은 단계면 바뀐 곳만 고친다 ───────── */
+let screen = null, upd = null;
+function clearHooks(){ hooks = {}; upd = null; }
+const meP = () => V && V.me;
+const pname = (pid, name) => esc(name) + (meP() && pid === V.me.pid ? " (나)" : "");
+const medalsOf = (pid, team) => V.medals.filter(m => m.who ? m.who === pid : m.team === team);
+const medalCount = c => `<span style="white-space:nowrap"><span class="medal g">금</span> ${c[0]} <span class="medal s">은</span> ${c[1]} <span class="medal b">동</span> ${c[2]}</span>`;
+const teamMedals = t => [0, 1, 2].map(i => V.medals.filter(m => m.team === t && m.place === i).length);
+function draw(){
+  const k = V.state === "open" ? "lobby" : V.ph.k;
+  const key = [k, V.ev, V.ph.g, V.ph.rd, k === "play" && V.mine ? V.mine.i : ""].join("|");
+  board();
+  if (key !== screen){ clearHooks(); screen = key; ({lobby, intro, pick: pickTheme, formed, preview, play, after, ceremony, finale}[k] || (() => {}))(); }
+  else if (upd) upd();
+}
+function teachBar(label, buttons){
+  return TEACH ? `<div class="teach-bar"><b>${label}</b>${buttons}<span class="toast" id="toast"></span></div>` : "";
+}
+function board(){
+  const evs = V.events.map((e, i) => `<div class="ev ${V.state !== "open" && i === V.ev ? "now" : i < V.ev || V.state === "done" ? "done" : ""}">${i + 1}. ${e}</div>`).join("");
+  const tally = [0, 1, 2, 3, 4, 5].map(t => ({t, c: teamMedals(t)})).filter(x => V.teams[x.t].ps.length)
+    .sort((a, b) => b.c[0] - a.c[0] || b.c[1] - a.c[1] || b.c[2] - a.c[2]);
+  $("board").innerHTML = `<h2>종목</h2><div class="evs">${evs}</div>
+    <h2>메달</h2><table class="t tally"><tr><th>팀</th><th><span class="medal g">금</span></th><th><span class="medal s">은</span></th><th><span class="medal b">동</span></th></tr>
+    ${tally.map(x => `<tr class="${meP() && x.t === V.me.team ? "me" : ""}"><td>${tname(x.t)}</td><td>${x.c[0]}</td><td>${x.c[1]}</td><td>${x.c[2]}</td></tr>`).join("")}</table>
+    <h2>팀</h2>${V.teams.filter(t => t.ps.length).map(t => `<div style="font-size:12px;margin-bottom:6px"><b>${tname(t.t)}</b> <span style="color:var(--chalk-dim)">${t.ps.map(p => pname(p.pid, p.name)).join(", ")}</span></div>`).join("")}`;
+  $("ttl").textContent = V.title;
+}
+/* 시계 — 화면에 남은 초가 있으면 0.25초마다 고친다 */
+setInterval(() => {
+  if (!V || !V.ph.until) return;
+  const s = left(V.ph.until);
+  document.querySelectorAll("[data-clock]").forEach(n => n.textContent = n.dataset.clock.replace("#", s));
+  if ($("hT")) $("hT").textContent = s;
+}, 250);
+const clock = (fmt, tag) => `<${tag || "span"} data-clock="${esc(fmt)}">${esc(fmt.replace("#", V.ph.until ? left(V.ph.until) : ""))}</${tag || "span"}>`;
+
+/* ───────── 팀 고르기 ───────── */
+function lobby(){
+  const render = () => {
+    const open = V.lobby, mine = meP() ? V.me.team : null;
+    const chip = p => `<span class="chip pl ${meP() && p.pid === V.me.pid ? "me" : ""}" draggable="${TEACH && !open}" data-p="${esc(p.pid)}">${pname(p.pid, p.name)}</span>`;
+    $("stage").innerHTML = `<h2 class="title">${open ? "팀 고르기" : "팀 재배치"}</h2>
+      <p class="sub">${open ? (TEACH ? `학생이 빈 칸을 눌러 들어온다. 모두 ${V.n}명.` : "들어갈 팀 칸을 누릅니다. 다 들어오면 선생님이 마감합니다.")
+        : (TEACH ? "이름을 끌어다 다른 팀에 놓는다. 여섯 팀이 다 차야 시작한다." : "선생님이 팀을 고르고 있습니다. 곧 시작합니다.")}</p>
+      ${teachBar(open ? "팀 고르기 중" : "마감됨", open ? `<button class="go" id="tclose">마감</button>` : `<button class="go" id="tstart">시작</button><button id="treopen">다시 열기</button>`)
+        + (TEACH ? `<p class="countdown" style="text-align:left;margin:0 0 var(--s3)">학생 주소 <u>${esc(location.host + location.pathname)}</u> · 비밀번호 <u>${esc(watchPin || "없음")}</u></p>
+          <div class="row teach-only" style="margin-bottom:var(--s3)"><span class="sub" style="margin:0">리허설용 연습 참가자</span><button id="tmock">+6명</button></div>` : "")}
+      <div class="lobby">${V.teams.map(t => `<div class="slot ${t.ps.length ? "" : "empty"} ${mine === t.t ? "mine" : ""}" data-team="${t.t}"><div class="slot-h">${tname(t.t)} <span>${t.ps.length}명</span></div>${t.ps.map(chip).join("")}</div>`).join("")}</div>
+      ${TEACH ? "" : `<p class="toast" id="toast"></p>`}`;
+    const L = document.querySelector(".lobby");
+    L.onclick = e => { const s = e.target.closest("[data-team]"); if (s && open && !TEACH) send("typeteam", {team: +s.dataset.team}); };
+    if (TEACH){
+      L.ondragstart = e => e.dataTransfer.setData("text/plain", e.target.dataset.p);
+      L.ondragover = e => { if (e.target.closest("[data-team]")) e.preventDefault(); };
+      L.ondrop = e => { const s = e.target.closest("[data-team]"); if (!s) return; e.preventDefault();
+        act("move", {pid: e.dataTransfer.getData("text/plain"), team: +s.dataset.team}); };
+      $("tmock").onclick = () => act("mock", {n: 6});
+      if (open) $("tclose").onclick = () => act("close");
+      else { $("tstart").onclick = () => act("start"); $("treopen").onclick = () => act("reopen"); }
+    }
+  };
+  render(); upd = render;
+}
+
+/* ───────── 종목 소개 ───────── */
+const RULES = [
+  ["개인전. 칠 어휘(음식 · 고사성어 · 도시 · 가을)를 골라 조에 들어간다. 3명 이하인 조는 없어지고 그 사람들은 다른 조로 흩어진다.",
+   "카드 10장 — 먼저 친 사람이 갖고, 그 자리에 새 단어가 들어온다. 치기 시작하면 맞는 단어를 알아서 찾는다.",
+   "오타는 그대로 남는다. 지워서 고치거나 Enter 로 칸을 비우고 다시.",
+   "짧음 10 · 중간 20 · 긺 30점. 후반부터 새로 나오는 단어는 30 · 40 · 50점.",
+   "두 게임. 게임마다 조 안 점수 순으로 금 · 은 · 동 — 같으면 맞힌 단어 수, 그래도 같으면 타수."],
+  ["팀 대 팀. 인용문 6개가 깔리고 먼저 친 사람이 갖는다 — 그 자리에 새 인용문.",
+   "치기 시작하면 맞는 문장을 알아서 찾는다. Enter 로 칸을 비운다.",
+   "짧음 10 · 중간 20 · 긺 30점, 후반 새 문장은 30 · 40 · 50점. 지고 있는 팀의 가장 약한 학생에게만 가끔 ×2.",
+   "두 판. 승 2 · 무 1 승점 순으로 1 · 2 · 3위 팀이 메달."],
+];
+const KEYS_E3 = [
+  [["Ctrl", "←"], ["Ctrl", "→"]], "단어 단위로 건너뛰기",
+  [["Shift", "←"], ["Shift", "→"]], "한 글자씩 선택",
+  [["Ctrl", "Shift", "←"], ["Ctrl", "Shift", "→"]], "단어를 한꺼번에 선택",
+  [["Home"], ["End"]], "줄 맨 앞 · 맨 끝으로",
+];
+const KEYS_E4 = [
+  [["Tab"]], "다음 칸으로",
+  [["Shift", "Tab"]], "앞 칸으로",
+  [["Ctrl", "A"]], "칸 안의 글자를 모두 선택",
+  [["Ctrl", "X"], ["Ctrl", "V"]], "잘라 내기 · 붙여 넣기",
+];
+const kb = combos => combos.map(c => c.map(k => `<kbd>${k}</kbd>`).join(`<span class="plus">+</span>`)).join(` <span class="plus">/</span> `);
+const keyList = list => `<div class="keys">${list.reduce((h, x, i) => i % 2 ? h + `<div class="key"><span>${kb(list[i - 1])}</span><span class="what">${x}</span></div>` : h, "")}</div>`;
+function intro(){
+  const e = V.ev;
+  const head = `<h2 class="title">${e + 1}종목 · ${V.events[e]}</h2>` + teachBar("학생들이 안내를 보고 있습니다", `<button class="go" id="tgo">${e === 0 ? "조 고르기로" : "첫 판 대진 공개"}</button>`);
+  let body;
+  if (e < 2) body = `<ul class="rules">${RULES[e].map(r => `<li>${r}</li>`).join("")}</ul>`;
+  else if (e === 2) body = `<p class="sub">문장에서 바뀐 곳을 찾아 고친다. 단축키를 쓰면 훨씬 빠르다.</p>${keyList(KEYS_E3)}
+    <div class="practice"><h3>연습 — <span id="prHow">Ctrl + Shift + → 로 '김밥'을 한 번에 골라 '비빔밥'으로 바꿔 보자</span></h3>
+      <textarea class="line" id="pr" rows="1" spellcheck="false">오늘 점심은 김밥이다.</textarea><p class="toast" id="prOk"></p></div>`;
+  else body = `<p class="sub">표의 칸을 옮겨 다니며 고친다. 마우스보다 키보드가 빠르다.</p>${keyList(KEYS_E4)}
+    <div class="practice"><h3>연습 — Tab 으로 '비고' 칸에 가서 Ctrl + A, Ctrl + X 로 잘라 아래 빈 칸에 Ctrl + V</h3>
+      <table class="grid" id="pr4" style="max-width:640px"><colgroup><col style="width:30%"><col></colgroup>
+      <tr><td class="head"><input value="제품명" readonly></td><td class="head"><input value="비고" readonly></td></tr>
+      <tr><td><input value="산업용 제습기"></td><td><input value="재고 확인 바람."></td></tr>
+      <tr><td><input value="고속 문서 세단기"></td><td><input value=""></td></tr></table><p class="toast" id="prOk"></p></div>`;
+  $("stage").innerHTML = head + body;
+  if (TEACH) $("tgo").onclick = () => act("go");
+  if (e === 2){
+    const pr = $("pr");
+    pr.oninput = () => { if (pr.value.includes("\n")) pr.value = pr.value.replace(/\n/g, "");
+      $("prOk").textContent = pr.value === "오늘 점심은 비빔밥이다." ? "잘했다! 다른 곳도 마음껏 연습해 보자" : ""; $("prOk").className = "toast good"; };
+    pr.onkeydown = e => { if (e.key === "Enter") e.preventDefault(); };
+    pr.focus(); pr.setSelectionRange(7, 7);
+  }
+  if (e === 3){
+    const t = $("pr4");
+    t.oninput = () => { const v = [...t.querySelectorAll("input")].map(x => x.value);
+      $("prOk").textContent = v[3] === "" && v[5] === "재고 확인 바람." ? "잘했다! 그대로 옮겨졌다" : ""; $("prOk").className = "toast good"; };
+    t.querySelectorAll("input")[2].focus();
+  }
+}
+
+/* ───────── 1종목 조 고르기 · 조 발표 ───────── */
+function pickTheme(){
+  const render = () => {
+    const P = V.pick;
+    $("stage").innerHTML = `<h2 class="title">1종목 · ${V.ph.g + 1}게임 / 2게임 · 조 고르기</h2>
+      <p class="sub">칠 어휘를 골라 조에 들어간다. 3명 이하인 조는 마감 때 없어지고, 그 조 사람은 다른 조로 흩어진다.</p>
+      ${teachBar("조 고르는 중", `<button class="go" id="tgo">마감</button>`)}
+      <div class="lobby">${P.themes.map((th, i) => `<div class="slot ${th.ps.length ? "" : "empty"} ${P.mine === i ? "mine" : ""}" data-g="${i}">
+        <div class="slot-h">${esc(th.name)}조 <span>${th.ps.length}명</span></div><p class="sub" style="margin:0 0 6px;width:100%">${th.sample.map(esc).join(" · ")} …</p>
+        ${th.ps.map(n => `<span class="chip pl">${esc(n)}</span>`).join("")}</div>`).join("")}</div>`;
+    document.querySelector(".lobby").onclick = e => { const s = e.target.closest("[data-g]"); if (s && !TEACH) send("typetheme", {i: +s.dataset.g}); };
+    if (TEACH) $("tgo").onclick = () => act("go");
+  };
+  render(); upd = render;
+}
+function formed(){
+  const F = V.formed;
+  $("stage").innerHTML = `<h2 class="title">1종목 · ${V.ph.g + 1}게임 · 조 발표</h2>
+    <p class="sub">${F.gone.length ? `없어진 조: <b>${F.gone.map(esc).join(", ")}</b> — 그 사람들은 다른 조로 갔다.` : "모든 조가 그대로 섰다."}</p>
+    ${teachBar("조가 섰습니다", `<button class="go" id="tgo">게임 시작</button>`)}
+    <div class="boards">${F.groups.map(g => `<div class="grp"><h3>${esc(g.name)}조 · ${g.ps.length}명</h3>${g.ps.map(n => `<span class="chip pl">${esc(n)}</span> `).join("")}</div>`).join("")}</div>
+    ${TEACH ? "" : `<p class="countdown">곧 시작합니다 — 키보드에 손을 올려 두자</p>`}`;
+  if (TEACH) $("tgo").onclick = () => act("go");
+}
+
+/* ───────── 팀 대 팀 카드 — 미리 보기와 결과가 같은 틀 ───────── */
+function vsCard(r, res){
+  const sa = r.sa, sb = r.sb;
+  const mvp = res ? r.ps.reduce((w, e) => e.score > w.score ? e : w, r.ps[0]) : null;
+  const side = (t, mine, theirs) => {
+    const es = r.ps.filter(e => e.team === t).sort((x, y) => res ? y.score - x.score : (y.cpm || 0) - (x.cpm || 0));
+    const c = teamMedals(t), mul = r.mul ? (t === r.a ? r.mul.a : r.mul.b) : 1;
+    const tag = !res ? "" : mine > theirs ? `<span class="tag win">승리</span>` : mine < theirs ? `<span class="tag lose">패배</span>` : `<span class="tag">무승부</span>`;
+    const head = `<div class="vs-h">${tname(t)} ${tag}${res ? `<b>${fmt1(mine)}점</b>` : `<span class="vs-sub">${medalCount(c)}</span>`}</div>${mul === 1 ? "" : `<span class="vs-sub">인원 보정 ×${mul.toFixed(2)}</span>`}`;
+    const th = res ? "<th>득점</th><th>맞힌 수</th>" : "<th>타/분</th><th>메달</th>";
+    const rows = es.map(e => `<tr class="${meP() && e.pid === V.me.pid ? "me" : ""}"><td>${e === mvp ? "👑 " : ""}${pname(e.pid, e.name)}</td>${res ? `<td>${e.score}</td><td>${e.got}</td>`
+      : `<td>${e.cpm ? Math.round(e.cpm) : "—"}</td><td>${medalsOf(e.pid, e.team).map(x => `<span class="medal sm ${MEDAL[x.place]}">${MEDAL_TXT[x.place]}</span>`).join("") || "—"}</td>`}</tr>`).join("");
+    return `<div class="side ${res && mine > theirs ? "won" : ""}">${head}<table class="t"><tr><th>이름</th>${th}</tr>${rows}</table></div>`;
+  };
+  return `<div class="vs">${side(r.a, sa, sb)}<div class="vs-mid">VS</div>${side(r.b, sb, sa)}</div>`;
+}
+const leagueHead = () => `<h2 class="title">${V.ev + 1}종목 · ${V.events[V.ev]} <span class="sub">${V.ph.rd + 1}판 / 2판</span></h2>`;
+const others = res => V.races.filter((r, i) => !V.mine || i !== V.mine.i).map(r =>
+  `${tname(r.a)} ${res ? fmt1(r.sa) + " : " + fmt1(r.sb) : "vs"} ${tname(r.b)}`).join(" · ");
+function preview(){
+  const body = TEACH ? V.races.map(r => vsCard(r, false)).join("")
+    : vsCard(V.mine, false) + `<p class="sub">같은 시간 다른 경기 — ${others(false)}</p>`;
+  $("stage").innerHTML = leagueHead() + teachBar("맞대결 공개", `<button class="go" id="tgo">바로 시작</button>`)
+    + `<p class="countdown">${clock("경기가 #초 후에 시작됩니다.")}</p>` + body;
+  if (TEACH) $("tgo").onclick = () => act("go");
+}
+
+/* ───────── 경기 ───────── */
+const badge = it => `<span class="pts t${it.tier}${it.late ? " late" : ""}">${it.pts}점</span>` + (it.x2 ? `<span class="pts x2">×2</span>` : "");
+const isLate = () => { const lim = [60, 150, 90, 90][V.ev]; return V.ph.until && (V.ph.until - now()) <= lim * 500; };
+function play(){
+  if (TEACH) return playBoard();
+  ({word: playWords, quote: playQuote, edit: playEdit, table: playTable})[V.mine.kind]();
+}
+/* 교실 앞 — 모든 경기의 점수 */
+function playBoard(){
+  const render = () => {
+    const tables = V.races.map(r => {
+      const ps = r.ps.slice().sort((a, b) => b.score - a.score);
+      const head = r.th ? `<h3>${esc(r.th)}조</h3>` : `<h3>${tname(r.a)} <b>${fmt1(r.sa)}</b> : <b>${fmt1(r.sb)}</b> ${tname(r.b)}</h3>`;
+      return `<div class="grp">${head}<table class="t"><tr><th>이름</th><th>팀</th><th>점수</th><th>맞힌 수</th></tr>${ps.map(p => `<tr><td>${esc(p.name)}</td><td>${tname(p.team)}</td><td>${p.score}</td><td>${p.got}</td></tr>`).join("")}</table></div>`;
+    }).join("");
+    $("stage").innerHTML = `<h2 class="title">${V.ev + 1}종목 · ${V.events[V.ev]} ${V.ev ? `<span class="sub">${V.ph.rd + 1}판</span>` : `<span class="sub">${V.ph.g + 1}게임</span>`}</h2>
+      <div class="hud"><div><b id="hT">${left(V.ph.until)}</b><span>남은 초</span></div><div class="late">${isLate() ? "후반! 새로 나오는 문제는 30·40·50점" : ""}</div></div>
+      ${teachBar("경기 중", `<button id="tgo">경기 끝내기</button>`)}<div class="boards">${tables}</div>`;
+    $("tgo").onclick = () => { if (confirm("남은 시간을 버리고 경기를 끝낼까요?")) act("go"); };
+  };
+  render(); upd = render;
+}
+const typeBox = hint => `<div class="dock"><div class="line target" id="tTarget"><span class="hint">${hint}</span></div>
+  <div class="field"><div class="line ghost" id="tGhost" aria-hidden="true"></div>
+  <textarea class="line" id="tInput" rows="1" spellcheck="false" autocomplete="off"></textarea></div>
+  <div class="toast" id="toast"></div></div>`;
+function paintType(target, hint){
+  const typed = $("tInput").value, t = [...typed];
+  const st = target == null ? t.map(() => "bad") : judge(typed, target);
+  $("tGhost").innerHTML = t.map((ch, i) => st[i] === "bad" ? `<span class="bad">${esc(ch)}</span>` : esc(ch)).join("") + "​";
+  if (target == null){ $("tTarget").innerHTML = `<span class="hint">${hint}</span>`; }
+  else {
+    const cur = st.length && st[st.length - 1] === "wait" ? t.length - 1 : t.length;
+    $("tTarget").innerHTML = [...target].map((ch, i) => {
+      const c = i === cur ? "cur" : st[i] === "ok" ? "ok" : st[i] === "bad" ? "bad" : "";
+      return c ? `<span class="${c}">${esc(ch)}</span>` : esc(ch);
+    }).join("");
+  }
+  const el = $("tInput"); el.style.height = "auto"; el.style.height = el.scrollHeight + 4 + "px";
+}
+function pop(main, sub){
+  const el = $("pop");
+  el.innerHTML = `<b>${main}</b><span>${sub}</span>`;
+  const dock = document.querySelector(".dock") || $("mine"), at = $("tInput") || dock;
+  if (dock){ const d = dock.getBoundingClientRect(); el.style.left = d.left + d.width / 2 + "px"; el.style.top = at.getBoundingClientRect().top - el.offsetHeight / 2 + "px"; }
+  el.classList.remove("show"); void el.offsetWidth; el.classList.add("show");
+}
+let toastT = 0;
+function toast(msg, cls){ const el = $("toast"); if (!el) return; el.textContent = msg; el.className = "toast " + (cls || ""); clearTimeout(toastT); toastT = setTimeout(() => el.textContent = "", 1600); }
+const myScore = () => { const p = V.mine.ps.find(e => e.pid === V.me.pid); return p || {score: 0, got: 0}; };
+const rankIn = () => V.mine.ps.slice().sort((a, b) => b.score - a.score).findIndex(e => e.pid === V.me.pid) + 1;
+const ourScore = () => V.mine.a === undefined ? 0 : V.me.team === V.mine.a ? V.mine.sa : V.mine.sb;
+const theirScore = () => V.me.team === V.mine.a ? V.mine.sb : V.mine.sa;
+
+/* 치는 글자로 항목을 알아본다. 하나로 좁혀지면 그 항목에 묶는다(오타가 나도 안 풀림).
+   칸을 비우거나 고쳐 친 글자가 다른 항목에 맞으면 풀린다. 오타는 지우지 않는다.
+   다 맞게 치면 서버에 보내고, 먼저 친 사람이 갖는다. */
+function bindTyping(){
+  const input = $("tInput");
+  let lock = null, sent = null;
+  const items = () => V.mine.items || [];
+  const byI = i => items().find(x => x.i === i);
+  const reset = (hint, msg) => {
+    lock = null; sent = null;
+    input.blur();
+    setTimeout(() => { input.value = ""; paintType(null, hint); input.focus(); }, 0);
+    if (msg) toast(msg, "bad");
+  };
+  const fits = (typed, it) => it && !judge(typed, it.text).includes("bad");
+  const update = () => {
+    const typed = input.value;
+    if (!typed){ lock = null; paintType(null, "치기 시작하면 맞는 항목을 찾는다"); return; }
+    const open = items();
+    if (lock !== null && !fits(typed, byI(lock)) && open.some(it => fits(typed, it))) lock = null;
+    const cand = lock !== null && byI(lock) ? [byI(lock)] : open.filter(it => fits(typed, it));
+    if (lock === null && cand.length === 1) lock = cand[0].i;
+    const it = cand[0] || null;
+    paintType(it ? it.text : null, "맞는 항목이 없다");
+    if (it && typed === it.text && sent !== it.i){ sent = it.i; send("typeclaim", {i: it.i, text: typed}); }
+  };
+  input.addEventListener("input", update);
+  input.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === "Escape"){ e.preventDefault(); reset("치기 시작하면 맞는 항목을 찾는다"); } });
+  input.addEventListener("paste", e => e.preventDefault());
+  input.addEventListener("beforeinput", e => {
+    if (e.inputType === "insertText" && /[a-z]/i.test(e.data || "")){ e.preventDefault(); toast("영문 입력 상태다 — 한/영 키를 누르자", "bad"); }
+  });
+  input.focus();
+  hooks.got = m => { reset("다음 항목을 치자"); pop(`+${m.val}점!`, V.mine.a === undefined ? `내 점수 ${myScore().score + m.val}점` : `우리 팀 점수가 올랐다`); };
+  hooks.miss = m => { if (m.why === "taken" || m.why === "gone") reset("치기 시작하면 맞는 항목을 찾는다", "마감 — 다른 사람이 먼저 쳤다"); else sent = null; };
+  /* 새 모습이 올 때마다 — 치던 항목이 사라졌으면(남이 먼저) 비운다. 내 것이면 typegot 이 먼저 와서 이미 비었다 */
+  return () => {
+    if (lock === null || sent === lock) return;
+    if (!byI(lock)){
+      const typed = input.value;
+      if (items().some(it => fits(typed, it))){ lock = null; update(); }
+      else reset("치기 시작하면 맞는 항목을 찾는다", "마감 — 다른 사람이 먼저 쳤다");
+    }
+  };
+}
+function playWords(){
+  $("stage").innerHTML = `<h2 class="title">1종목 · ${V.ph.g + 1}게임 · ${esc(V.mine.th)}조</h2>
+    <div class="row" style="align-items:flex-start;gap:var(--s5)">
+      <div class="hud"><div><b id="hT">${left(V.ph.until)}</b><span>남은 초</span></div><div><b id="hS">0</b><span>내 점수</span></div><div><b id="hR">-</b><span>조 안 순위</span></div><div class="late" id="hL"></div></div>
+      <div class="teambox"><div class="tb-head">우리 조</div><table id="tbRows"></table></div>
+    </div>
+    <div class="cards" id="cards">${(V.mine.items || []).map(() => `<div class="card"></div>`).join("")}</div>${typeBox("치기 시작하면 맞는 단어를 찾는다")}`;
+  const poll = bindTyping(), cards = [...$("cards").children], shown = [];
+  const frame = () => {
+    poll();
+    $("hS").textContent = myScore().score; $("hR").textContent = rankIn() + "/" + V.mine.ps.length;
+    $("hL").textContent = isLate() ? "후반! 새로 나오는 단어는 30·40·50점" : "";
+    const rows = `<tr><th>이름</th><th>점수</th><th>단어</th></tr>` + V.mine.ps.slice().sort((a, b) => b.score - a.score)
+      .map(p => `<tr class="${p.pid === V.me.pid ? "me" : ""}"><td>${pname(p.pid, p.name)}</td><td>${p.score}</td><td>${p.got}</td></tr>`).join("");
+    if ($("tbRows").innerHTML !== rows) $("tbRows").innerHTML = rows;
+    V.mine.items.forEach((it, k) => {
+      const el = cards[k]; if (!el || shown[k] === it.i) return;
+      el.innerHTML = esc(it.text) + badge(it);
+      if (shown[k] !== undefined){ el.classList.remove("fresh"); void el.offsetWidth; el.classList.add("fresh"); }
+      shown[k] = it.i;
+    });
+  };
+  frame(); upd = frame;
+}
+function playQuote(){
+  const r = V.mine, opp = V.me.team === r.a ? r.b : r.a;
+  const mulTxt = t => { const m = t === r.a ? r.mul.a : r.mul.b; return m === 1 ? "" : ` · 인원 보정 ×${m.toFixed(2)}`; };
+  $("stage").innerHTML = `<h2 class="title">2종목 · ${tname(r.a)} vs ${tname(r.b)}</h2>
+    <div class="hud"><div><b id="hT">${left(V.ph.until)}</b><span>남은 초</span></div><div><b id="hU">0</b><span>우리 팀 점수${mulTxt(V.me.team)}</span></div><div><b id="hO">0</b><span>상대 팀 점수${mulTxt(opp)}</span></div><div><b id="hM">0</b><span>내 점수</span></div><div class="late" id="hL"></div></div>
+    <div class="items" id="items"></div>${typeBox("치기 시작하면 맞는 문장을 찾는다")}`;
+  const poll = bindTyping();
+  const frame = () => {
+    poll();
+    $("hU").textContent = fmt1(ourScore()); $("hO").textContent = fmt1(theirScore()); $("hM").textContent = myScore().score;
+    $("hL").textContent = isLate() ? "후반! 새로 나오는 문장은 30·40·50점" : "";
+    const html = V.mine.items.map(it => `<div class="item"><span>${esc(it.text)}${badge(it)}${it.src ? `<small class="src">${esc(it.src)}</small>` : ""}</span><span class="st"></span></div>`).join("");
+    if ($("items").innerHTML !== html) $("items").innerHTML = html;
+  };
+  frame(); upd = frame;
+}
+const segText = (segs, side) => segs.map(s => typeof s === "string" ? s : s[side]).join("");
+const segHtml = (segs, side) => segs.map(s => typeof s === "string" ? esc(s) : s[side] ? `<mark>${esc(s[side])}</mark>` : `<mark class="gap"></mark>`).join("");
+function playEdit(){
+  const r = V.mine, opp = V.me.team === r.a ? r.b : r.a;
+  const HINT = `<span class="hint">남은 항목이 없다</span>`;
+  let pos = null, cur = null, sent = null;
+  $("stage").innerHTML = `<h2 class="title">3종목 · ${tname(r.a)} vs ${tname(r.b)}</h2>
+    <div class="hud"><div><b id="hT">${left(V.ph.until)}</b><span>남은 초</span></div><div><b id="hU">0</b><span>우리 팀 점수</span></div><div><b id="hO">0</b><span>상대 팀 점수</span></div><div><b id="hM">0</b><span>내가 고친 것</span></div><div class="late" id="hL"></div></div>
+    <div class="items" id="items"></div>
+    <div class="dock"><div class="line target" id="tTarget">${HINT}</div>
+    <div class="field"><div class="line ghost" id="tGhost" aria-hidden="true"></div>
+    <textarea class="line" id="tInput" rows="1" spellcheck="false" autocomplete="off" disabled></textarea></div>
+    <div class="toast" id="toast"></div></div>`;
+  const input = $("tInput"), items = () => V.mine.items, byI = i => items().find(x => x.i === i);
+  const paint = () => {
+    if (input.value.includes("\n")) input.value = input.value.replace(/\n/g, "");
+    const it = cur === null ? null : byI(cur);
+    const v = [...input.value], g = it ? [...it.text] : [];
+    let p = 0; while (p < v.length && v[p] === g[p]) p++;
+    let s = 0; while (s < v.length - p && s < g.length - p && v[v.length - 1 - s] === g[g.length - 1 - s]) s++;
+    let lo = p, hi = v.length - s;
+    if (lo === hi && v.length !== g.length){ lo = Math.max(0, p - 1); hi = Math.min(v.length, lo + 1); }
+    $("tGhost").innerHTML = !it ? "" : v.map((ch, i) => i >= lo && i < hi ? `<span class="bad">${esc(ch)}</span>` : esc(ch)).join("") + "​";
+    input.style.height = "auto"; input.style.height = input.scrollHeight + 4 + "px";
+    if (it && input.value === it.text){ const el = $("toast"); el.textContent = "정답과 같다 — Enter 로 제출"; el.className = "toast ready"; }
+    else if ($("toast").classList.contains("ready")) $("toast").textContent = "";
+  };
+  const drafts = {};
+  const load = k => {
+    pos = k; const it = items()[k]; cur = it.i;
+    $("tTarget").innerHTML = segHtml(it.segs, 1) + " " + badge(it);
+    input.disabled = false; input.value = drafts[cur] ?? segText(it.segs, 0); input.focus();
+    input.setSelectionRange(0, 0);
+    paint(); list();
+  };
+  const step = dir => {
+    const n = items().length;
+    if (!n){ pos = cur = null; input.disabled = true; $("tTarget").innerHTML = HINT; return; }
+    load(pos === null ? 0 : (pos + dir + n) % n);
+  };
+  const submit = () => {
+    if (cur === null) return;
+    paint();
+    if (input.value !== byI(cur).text) return toast("아직 정답과 다르다 — 밑줄 친 곳을 고치자", "bad");
+    sent = cur; send("typeclaim", {i: cur, text: input.value});
+  };
+  hooks.got = m => { sent = null; pop(`+${m.val}점 획득!`, "우리 팀 점수가 올랐다"); };
+  hooks.miss = m => { sent = null; if (m.why === "taken" || m.why === "gone") toast("마감 — 상대나 팀원이 먼저 고쳤다", "bad"); };
+  const list = () => {
+    const html = items().map((it, k) => `<div class="item click ${pos === k ? "on" : ""}" data-k="${k}"><span>${segHtml(it.segs, 0)} → ${segHtml(it.segs, 1)} ${badge(it)}</span></div>`).join("");
+    if ($("items").innerHTML !== html) $("items").innerHTML = html;
+  };
+  $("items").onclick = e => { const el = e.target.closest("[data-k]"); if (el) load(+el.dataset.k); };
+  let pending = null;
+  const keyAct = k => k === "Enter" ? submit() : step(k === "ArrowDown" ? 1 : -1);
+  input.addEventListener("keydown", e => {
+    if (e.key === "Escape" && cur !== null){ input.value = segText(byI(cur).segs, 0); drafts[cur] = input.value; paint(); }
+    if (!["Enter", "ArrowUp", "ArrowDown"].includes(e.key)) return;
+    e.preventDefault();
+    if (e.isComposing || e.keyCode === 229) pending = e.key; else keyAct(e.key);
+  });
+  input.addEventListener("compositionend", () => { if (pending){ const k = pending; pending = null; setTimeout(() => keyAct(k), 0); } });
+  input.addEventListener("input", () => { if (cur !== null) drafts[cur] = input.value; paint(); });
+  input.addEventListener("paste", e => e.preventDefault());
+  step(1);
+  const frame = () => {
+    /* 내가 고르던 자리에 다른 문장이 들어왔다 — 내가 냈든 남이 먼저 했든 같은 자리의 새 문장으로 */
+    if (pos !== null && items()[pos] && items()[pos].i !== cur){
+      const mine = sent === cur; load(pos);
+      if (!mine) toast("마감 — 상대나 팀원이 먼저 고쳤다. 그 자리에 새 문장", "bad");
+    }
+    $("hU").textContent = fmt1(ourScore()); $("hO").textContent = fmt1(theirScore()); $("hM").textContent = myScore().got;
+    $("hL").textContent = isLate() ? "후반! 새로 나오는 문장은 30·40·50점" : "";
+    list();
+  };
+  frame(); upd = frame;
+}
+
+/* ───────── 4종목 표 — 과제는 각자 화면에서 만든다 ───────── */
+const E4_HEAD = ["제품명", "모델명", "단가", "공급가액", "비고"];
+const E4_ITEMS = [
+  ["산업용 제습기", "LX20-MV-280PK"], ["업소용 공기청정기", "AP45-HC-1200WT"], ["시스템 냉난방기", "HV36-SC-3400GR"],
+  ["무선 바코드 스캐너", "BS10-RF-750BK"], ["회의실 전자칠판", "EB86-TQ-4100SV"], ["고속 문서 세단기", "SD32-XC-920GY"],
+  ["사무용 복합기", "MF55-LS-2650WH"], ["랙형 무정전 전원장치", "UP30-RK-1500BK"],
+];
+const E4_NOTES = [
+  "재고 확인 바람. 입고 예정일이 협력사 사정으로 지연될 수 있으므로 발주 전 담당자와 재확인할 것.",
+  "전년도 동기 대비 단가가 인상되었으므로 계약 갱신 시 단가 조정 근거 자료를 첨부해야 함.",
+  "부가가치세 별도 금액이며, 세금계산서는 납품 완료 후 익월 10일까지 발행 예정임.",
+  "검수 과정에서 외관 불량 2건이 확인되어 반품 처리 중이며, 대체품 입고 후 정산 예정.",
+  "분할 납품 조건으로 1차분은 이번 달 말, 잔여 물량은 다음 분기 초에 출고 예정.",
+  "예산 전용 승인이 필요한 품목이므로 결재 완료 전까지 발주를 보류할 것.",
+  "유지보수 계약이 포함된 단가로, 무상 보증 기간 2년 경과 후 별도 비용이 발생함.",
+  "견적서 유효 기간이 만료되어 재견적을 요청하였으며, 회신 결과에 따라 단가가 변동될 수 있음.",
+];
+const E4_ROWS = 4;
+const won = () => (1000 + Math.floor(Math.random() * 9000)) * 1000;   // 7자리 원
+const money = n => n.toLocaleString("ko-KR");
+function newTable(){
+  const items = shuffle(E4_ITEMS).slice(0, E4_ROWS), notes = shuffle(E4_NOTES);
+  const rows = items.map(([name, code], i) => [name, code, money(won()), money(won()), notes[i]]);
+  rows[Math.floor(Math.random() * E4_ROWS)][4] = "";   // 비고 하나는 비워 둔다 — 옮겨 붙일 자리
+  return [[...E4_HEAD], ...rows];
+}
+// 과제마다 g 를 고치고 이름을 돌려준다. 못 하는 상황이면 false. g.how = 무엇을 하라는지 한 줄,
+// g.mark = 테두리를 칠 행들. 행을 지우면 빈 행이 생긴다 — 빈 행은 많아야 둘, 다른 과제는 빈 행을 건드리지 않는다
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const bodyRows = () => [...Array(E4_ROWS)].map((_, i) => i + 1);
+const col = h => E4_HEAD.indexOf(h);
+const filled = g => bodyRows().filter(r => g[r].some(v => v));
+const blank = g => bodyRows().filter(r => g[r].every(v => !v));
+// 비고 고치기: 앞의 말이 비고에 있으면 뒤의 말로 바꾼다
+const E4_NOTE_EDIT = [["확인 바람","검토 바람"],["협력사","거래처"],["담당자","책임자"],["인상","인하"],["첨부","제출"],
+  ["10일","15일"],["별도 금액","포함 금액"],["2건","3건"],["반품","교환"],["다음 분기","다음 달"],["보류","중단"],
+  ["승인","협의"],["2년","3년"],["요청","의뢰"],["변동","조정"],["만료","임박"],["지연","취소"],["정산","결제"]];
+const E4_TASK = {
+  // 모델명 한 줄의 가운데 숫자를 바꾼다: LX20-MV-280PK → LX20-MV-5600PK
+  model(g){
+    const c = col("모델명"), r = pick(filled(g));
+    g[r][c] = g[r][c].replace(/\d+(?=[A-Z]+$)/, d => { let x; do x = String(Math.floor(rand(10, 990)) * 10); while (x === d); return x; });
+    g.how = "모델명에서 노랗게 칠한 부분을 정답대로 고친다";
+    return "모델명 고치기";
+  },
+  // 비고 안의 말 하나를 바꾼다
+  noteEdit(g){
+    const c = col("비고"), pairs = E4_NOTE_EDIT.flatMap(([x, y]) => [[x, y], [y, x]]);   // 양쪽으로 — 한 번 바꾼 말도 다시 고칠 거리가 된다
+    const cand = filled(g).flatMap(r => pairs.filter(([x]) => g[r][c].includes(x)).map(e => [r, e]));
+    if (!cand.length) return false;
+    const [r, [x, y]] = pick(cand);
+    g[r][c] = g[r][c].replace(x, y);
+    g.how = "비고에서 노랗게 칠한 부분을 정답대로 고친다";
+    return "비고 고치기";
+  },
+  // 비고 하나를 빈 비고 칸으로 잘라 옮긴다
+  note(g){
+    const c = col("비고"), empty = filled(g).filter(r => !g[r][c]), full = filled(g).filter(r => g[r][c]);
+    if (!empty.length || !full.length) return false;
+    const to = pick(empty), from = pick(full);
+    g[to][c] = g[from][c]; g[from][c] = "";
+    g.how = "비고를 잘라 내(Ctrl+X) 빈 비고 칸에 붙인다(Ctrl+V)";
+    return "비고 옮기기";
+  },
+  // 비고 하나를 지운다 (비고가 둘 이상 남아 있을 때만 — 옮길 거리가 남게)
+  noteDel(g){
+    const c = col("비고"), full = filled(g).filter(r => g[r][c]);
+    if (full.length < 2) return false;
+    g[pick(full)][c] = "";
+    g.how = "노랗게 칠한 비고 칸을 비운다";
+    return "비고 지우기";
+  },
+  // 금액 열 하나를 모두 0 으로
+  zero(g){
+    const cs = [col("단가"), col("공급가액")].filter(c => filled(g).some(r => g[r][c] !== "0"));
+    if (!cs.length) return false;
+    const c = pick(cs);
+    filled(g).forEach(r => g[r][c] = "0");
+    g.how = `${g[0][c]} 열의 금액을 모두 0으로 바꾼다`;
+    return `${g[0][c]} 열 0으로`;
+  },
+  // 한 행을 모두 빈 칸으로 (빈 행이 하나 이하이고 채운 행이 셋 이상일 때만)
+  clear(g){
+    if (blank(g).length > 1 || filled(g).length < 3) return false;
+    const r = pick(filled(g));
+    g[r] = g[r].map(() => "");
+    g.mark = [r]; g.how = "테두리 친 행의 칸을 모두 비운다";
+    return "행 지우기";
+  },
+  // 한 행을 빈 행으로 통째로 옮긴다 (빈 행이 있을 때만)
+  move(g){
+    const to = pick(blank(g));
+    if (to === undefined) return false;
+    const from = pick(filled(g));
+    g[to] = g[from]; g[from] = g[from].map(() => "");
+    g.mark = [from, to]; g.how = "테두리 친 행을 빈 행으로 통째로 옮긴다 (잘라 내 붙이기)";
+    return "행 옮기기";
+  },
+};
+const E4_TIERS = [["model", "noteEdit", "note", "noteDel"], ["zero", "clear"], ["move"]];   // 짧음 · 중간 · 긺
+// 그 등급에 할 과제가 없으면(행 지우기·열 0으로는 경기마다 몇 번 못 한다) 가까운 등급에서 낸다. g.tier = 실제로 낸 등급
+function nextGoal(cur, tier){
+  const order = [0, 1, 2].sort((a, b) => Math.abs(a - tier) - Math.abs(b - tier) || b - a);
+  for (const t of order){
+    const g = cur.map(row => [...row]);
+    for (const k of shuffle(E4_TIERS[t])){ const name = E4_TASK[k](g); if (name){ g.task = name; g.tier = t; return g; } }
+  }
+}
+
+function playTable(){
+  const r = V.mine, opp = V.me.team === r.a ? r.b : r.a;
+  let cur = newTable(), goal;
+  const setGoal = () => { goal = nextGoal(cur, Math.floor(Math.random() * 3)); };
+  setGoal();
+  const gb = () => { const g = V.mine.goal || {}; const pts = PTS[g.late ? 1 : 0][goal.tier];
+    return badge({tier: goal.tier, late: g.late, pts, x2: g.x2}); };
+  $("stage").innerHTML = `<h2 class="title">4종목 · ${tname(r.a)} vs ${tname(r.b)}</h2>
+    <div class="hud"><div><b id="hT">${left(V.ph.until)}</b><span>남은 초</span></div><div><b id="hU">0</b><span>우리 팀 점수</span></div><div><b id="hO">0</b><span>상대 팀 점수</span></div><div><b id="hC">0</b><span>내 완성</span></div><div class="late" id="hL"></div></div>
+    <div class="tables"><div><p class="sub">정답 표 <span id="gb"></span></p><table class="grid goal" id="goal"></table></div>
+    <div><p class="sub">내 표 — 정답 표처럼 고친다</p><table class="grid" id="mine"></table></div></div>
+    <div class="toast" id="toast"></div>`;
+  const cols = `<colgroup><col style="width:17%"><col style="width:17%"><col style="width:12%"><col style="width:12%"><col></colgroup>`;
+  const cell = (v, r, c) => r && c === 4 ? `<textarea data-r="${r}" data-c="${c}" rows="2" spellcheck="false">${esc(v)}</textarea>`
+    : `<input data-r="${r}" data-c="${c}" value="${esc(v)}" spellcheck="false" autocomplete="off">`;
+  const cls = (r, c) => `${r ? "" : "head"} ${c === 2 || c === 3 ? "num" : ""}`;
+  $("mine").innerHTML = cols + cur.map((row, r) => `<tr>${row.map((v, c) => `<td class="${cls(r, c)}">${cell(v, r, c)}</td>`).join("")}</tr>`).join("");
+  const read = () => cur.map((row, r) => row.map((_, c) => $("mine").querySelector(`[data-r="${r}"][data-c="${c}"]`).value));
+  const kind = (a, b) => a === b ? "" : a && b ? "part" : "diff";
+  const part = (a, b) => {
+    const x = [...a], y = [...b]; let p = 0, q = 0;
+    while (p < x.length && p < y.length && x[p] === y[p]) p++;
+    while (q < x.length - p && q < y.length - p && x[x.length - 1 - q] === y[y.length - 1 - q]) q++;
+    const mid = y.slice(p, y.length - q).join("");
+    return esc(y.slice(0, p).join("")) + `<mark class="chg ${mid ? "" : "gap"}">${esc(mid)}</mark>` + esc(y.slice(y.length - q).join(""));
+  };
+  const paint = () => {
+    const now = read();
+    $("gb").innerHTML = gb() + ` <b>${goal.task}</b> <span class="how">— ${goal.how}</span>`;
+    const swap = r => goal.mark && goal.mark.includes(r) ? "swap" : "";
+    $("goal").innerHTML = cols + goal.map((row, r) => `<tr>${row.map((v, c) => { const k = kind(now[r][c], v);
+      return `<td class="${cls(r, c)} ${k} ${swap(r)}">${k === "part" ? part(now[r][c], v) : esc(v)}</td>`; }).join("")}</tr>`).join("");
+    $("mine").querySelectorAll("input, textarea").forEach(el => { const k = kind(el.value, goal[+el.dataset.r][+el.dataset.c]);
+      el.parentElement.classList.toggle("diff", k === "diff"); el.parentElement.classList.toggle("part", k === "part"); });
+  };
+  hooks.got = m => pop(`+${m.val}점!`, "우리 팀 점수가 올랐다");
+  $("mine").addEventListener("input", () => {
+    const now = read();
+    if (now.every((row, r) => row.every((v, c) => v === goal[r][c]))){
+      send("typetable", {tier: goal.tier});
+      cur = now; setGoal();   // 내 표와 커서는 그대로 둔다
+    }
+    paint();
+  });
+  paint();
+  const MOVE = {ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1]};
+  $("mine").addEventListener("keydown", e => {
+    if (e.key === "Enter") return e.preventDefault();
+    const d = MOVE[e.key], el = e.target;
+    if (!d || e.isComposing || e.shiftKey) return;
+    const s = el.selectionStart, n = el.value.length;
+    if (d[1] && (s !== el.selectionEnd || (d[1] < 0 && s > 0) || (d[1] > 0 && s < n))) return;
+    const to = $("mine").querySelector(`[data-r="${+el.dataset.r + d[0]}"][data-c="${+el.dataset.c + d[1]}"]`);
+    e.preventDefault();
+    if (to) to.focus();
+  });
+  $("mine").addEventListener("focusin", e => setTimeout(() => { const n = e.target.value.length; e.target.setSelectionRange(n, n); }, 0));
+  $("mine").querySelector("input").focus();
+  const frame = () => {
+    $("hU").textContent = fmt1(ourScore()); $("hO").textContent = fmt1(theirScore()); $("hC").textContent = myScore().got;
+    $("hL").textContent = isLate() ? "후반! 새 과제는 30·40·50점" : "";
+    $("gb").innerHTML = gb() + ` <b>${goal.task}</b> <span class="how">— ${goal.how}</span>`;
+  };
+  frame(); upd = frame;
+}
+
+/* ───────── 경기 결과 ───────── */
+function after(){
+  const render = () => {
+    if (V.ev === 0){
+      const table = r => { const ps = (r.table || []).map(pid => r.ps.find(p => p.pid === pid));
+        return `<table class="t"><tr><th>순위</th><th>이름</th><th>팀</th><th>점수</th><th>맞힌 단어</th></tr>${ps.map((p, i) => `<tr class="${meP() && p.pid === V.me.pid ? "me" : ""}"><td>${i < 3 && p.score > 0 ? `<span class="medal ${MEDAL[i]}">${MEDAL_TXT[i]}</span>` : i + 1}</td><td>${pname(p.pid, p.name)}</td><td>${tname(p.team)}</td><td>${p.score}</td><td>${p.got}</td></tr>`).join("")}</table>`; };
+      const body = TEACH ? `<div class="boards">${V.races.map(r => `<div class="grp"><h3>${esc(r.th)}조</h3>${table(r)}</div>`).join("")}</div>`
+        : `<h3>${esc(V.mine.th)}조</h3>${table(V.mine)}<p class="sub">다른 조 금메달 — ${V.races.filter((r, i) => i !== V.mine.i).map(r => { const p = r.ps.find(x => x.pid === r.table[0]); return `${esc(r.th)}조 ${esc(p.name)}`; }).join(" · ")}</p>`;
+      $("stage").innerHTML = `<h2 class="title">1종목 · ${V.ph.g + 1}게임 끝</h2>` + teachBar("게임 결과", `<button class="go" id="tgo">${V.ph.g === 0 ? "2게임 조 고르기" : "1종목 결과 발표"}</button>`) + body;
+    } else {
+      const body = TEACH ? V.races.map(r => vsCard(r, true)).join("") : vsCard(V.mine, true) + `<p class="sub">같은 시간 다른 경기 — ${others(true)}</p>`;
+      $("stage").innerHTML = leagueHead() + teachBar("판 결과", `<button class="go" id="tgo">${V.ph.rd === 0 ? "다음 판 대진 공개" : V.ev + 1 + "종목 결과 발표"}</button>`) + body;
+    }
+    if (TEACH) $("tgo").onclick = () => act("go");
+  };
+  render(); upd = render;
+}
+
+/* ───────── 종목 결과 (1분) ───────── */
+function ceremony(){
+  const res = V.res, ev = res.ev, mine = meP() ? V.me.team : null;
+  const won = t => V.medals.filter(m => m.ev === ev && m.team === t).sort((a, b) => a.place - b.place)
+    .map(m => `<span class="medal ${MEDAL[m.place]}">${MEDAL_TXT[m.place]}</span>${m.who ? ` <small>${esc(m.name)}</small>` : ""}`).join(" ");
+  const byKey = rows => rows.slice().sort((a, b) => b.key - a.key);
+  const cells = r => r.v.map(x => `<td>${x}</td>`).join("");
+  const pMedals = r => { const c = [0, 0, 0]; medalsOf(r.pid, r.team).forEach(m => c[m.place]++);
+    return `<td class="pm">${c.map((n, i) => n ? `<span class="medal sm ${MEDAL[i]}">${MEDAL_TXT[i]}</span>${n}` : "").join(" ") || "—"}</td>`; };
+  const ths = res.cols.map(c => `<th>${c}</th>`).join("");
+  const ours = byKey(res.rows.filter(r => r.team === mine)), mvp = byKey(res.rows).slice(0, 3);
+  const last = ev >= V.events.length - 1;
+  $("stage").innerHTML = `<div class="res-head"><h2 class="title">${ev + 1}종목 결과 · ${V.events[ev]}</h2>
+      <div class="cd">${last ? "종합 발표" : "다음 종목"}까지 <b>${clock("#")}</b>초 ${TEACH ? `<button id="tgo">바로 넘기기</button>` : ""}</div></div>
+    <table class="t"><tr><th>순위</th><th>팀</th><th>이번 메달</th><th>기록</th><th>누적 메달</th></tr>
+      ${res.teams.map((x, i) => `<tr class="${x.team === mine ? "me" : ""}"><td>${i + 1}</td><td>${tname(x.team)}</td><td>${won(x.team)}</td><td>${x.val}</td><td>${medalCount(teamMedals(x.team))}</td></tr>`).join("")}</table>
+    <div class="sheet">
+      ${mine === null ? "<div></div>" : `<div><h3>우리 팀 · ${tname(mine)}</h3><table class="t"><tr><th>이름</th><th>누적 메달</th>${ths}</tr>${ours.map(r => `<tr class="${r.pid === V.me.pid ? "me" : ""}"><td>${pname(r.pid, r.name)}</td>${pMedals(r)}${cells(r)}</tr>`).join("")}</table></div>`}
+      <div><h3>MVP — 메달과 상관없이 가장 잘한 셋</h3><table class="t"><tr><th></th><th>이름</th><th>팀</th><th>누적 메달</th>${ths}</tr>${mvp.map((r, i) => `<tr class="${meP() && r.pid === V.me.pid ? "me" : ""}"><td>${i + 1}</td><td>👑 ${pname(r.pid, r.name)}</td><td>${tname(r.team)}</td>${pMedals(r)}${cells(r)}</tr>`).join("")}</table></div>
+    </div>`;
+  if (TEACH) $("tgo").onclick = () => act("go");
+}
+function finale(){
+  const t = [0, 1, 2, 3, 4, 5].filter(x => V.teams[x].ps.length).map(x => { const c = teamMedals(x); return {team: x, g: c[0], s: c[1], b: c[2]}; })
+    .sort((a, b) => b.g - a.g || b.s - a.s || b.b - a.b);
+  const pod = t.slice(0, 3).map((r, i) => `<div class="step p${i}"><div class="who">${tname(r.team)}<br>금 ${r.g} · 은 ${r.s} · 동 ${r.b}</div><div class="block">${i + 1}</div></div>`).join("");
+  const byEv = V.events.map((e, i) => `<tr><td>${i + 1}. ${e}</td>${[0, 1, 2].map(p => { const ms = V.medals.filter(x => x.ev === i && x.place === p);
+    return `<td>${ms.map(m => (m.who ? esc(m.name) + " · " : "") + tname(m.team)).join("<br>") || "—"}</td>`; }).join("")}</tr>`).join("");
+  const place = (i, team) => V.ranks[i] ? V.ranks[i].indexOf(team) + 1 + "위" : "—";
+  $("stage").innerHTML = `<h2 class="title">종합 발표</h2><p class="sub">금메달 수, 같으면 은메달, 같으면 동메달 순.</p>
+    <div class="podium">${pod}</div>
+    <table class="t"><tr><th>팀</th><th>금</th><th>은</th><th>동</th>${V.events.map((_, i) => `<th>${i + 1}종목</th>`).join("")}</tr>${t.map(r => `<tr class="${meP() && r.team === V.me.team ? "me" : ""}"><td>${tname(r.team)}</td><td>${r.g}</td><td>${r.s}</td><td>${r.b}</td>${V.events.map((_, i) => `<td>${place(i, r.team)}</td>`).join("")}</tr>`).join("")}</table>
+    <table class="t"><tr><th>종목</th><th>금</th><th>은</th><th>동</th></tr>${byEv}</table>`;
+}
+
+gate();
+connect();
+</script>
