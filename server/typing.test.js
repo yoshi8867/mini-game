@@ -74,7 +74,9 @@ assert.ok(v1.mine && v1.mine.table, "게임 결과 순위표가 없다");
 assert.ok(r1.items.some(it => it.late), "후반 문제가 안 나왔다");
 assert.ok(r1.items.filter(it => it.late).every(it => it.pts >= 30), "후반 배점이 30·40·50 이 아니다");
 const g1medals = g.medals.filter(m => m.ev === 0).length;
-assert.strictEqual(g1medals, g.e1.groups.length * 3, "조마다 금은동이 아니다");
+/* 조마다 금은동 — 0점은 메달이 없으니 득점한 사람이 셋 안 되는 조는 그만큼 적다 */
+const want = g.races.reduce((n, r) => n + Math.min(3, r.ps.filter(id => (r.sc[id] || {}).score > 0).length), 0);
+assert.strictEqual(g1medals, want, "조마다 금은동이 아니다");
 g.go(now); assert.strictEqual(g.ph.k, "pick", "2게임 조 고르기로 안 갔다");
 g.go(now); g.go(now); run(61);
 g.go(now);                                     // → ceremony
