@@ -131,6 +131,7 @@ mark.gap{padding:0 3px}
 .target .hint{color:var(--chalk-dim);font-family:"Gothic A1",sans-serif;font-size:15px}
 .field{position:relative;margin-top:var(--s2)}
 .ghost{position:absolute;inset:0;color:transparent;pointer-events:none}
+.lid{position:absolute;z-index:3;cursor:not-allowed;background:transparent}
 .ghost .bad{text-decoration:underline wavy var(--lose);text-decoration-thickness:2px;text-underline-offset:7px;text-decoration-skip-ink:none}
 textarea.line{display:block;position:relative;background:transparent;border-color:var(--wall-line);resize:none;overflow:hidden;outline:none;caret-color:var(--wait)}
 textarea.line:focus{border-color:var(--wait)}
@@ -502,28 +503,34 @@ function gridKeys(box){
   });
   box.addEventListener("focusin", e => setTimeout(() => { const n = e.target.value.length; e.target.setSelectionRange(n, n); }, 0));
 }
-/* 마우스 막기 — 3·4종목은 키보드로만 고친다. 칸을 누르거나 끌어 고르면 포커스·커서·선택을 그대로 두고 알린다.
-   손가락(터치)은 막지 않는다 — 휴대폰에는 방향키가 없다 */
-let lastPointer = "mouse";
-addEventListener("pointerdown", e => lastPointer = e.pointerType, true);
+/* 마우스 막기 — 3·4종목은 키보드로만 고친다. 입력 칸 위에 투명한 덮개를 씌워 클릭이 칸에 닿지 않게 하고,
+   막힌 클릭이 나오면 곧장 단축키를 알린다. 포커스·커서·선택은 그대로 둔다.
+   손가락만 있는 기기(휴대폰)에는 씌우지 않는다 — 방향키가 없다 */
 const NO_MOUSE = {grid: ["방향키 또는 Tab으로 조작해 보세요.", "Ctrl+A로 전체 선택 해 보세요."],
                   line: ["Ctrl + 방향키를 이용해 보세요.", "Ctrl + Shift + 방향키로 선택해 보세요."]};
 let drag = null;                            // 누른 채 끌면 「선택」으로 본다
 addEventListener("mousemove", e => { if (drag && e.buttons && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) > 4){ drag.say(1); drag = null; } });
 addEventListener("mouseup", () => drag = null);
 function noMouse(box, kind, noteId){
+  if (!matchMedia("(any-pointer: fine)").matches) return;
   let saved = null, nt;
   const say = k => { const el = $(noteId); if (!el) return;
     el.textContent = NO_MOUSE[kind][k]; el.className = "toast bad"; clearTimeout(nt); nt = setTimeout(() => el.textContent = "", 2000); };
   box.addEventListener("focusout", e => { const el = e.target; if (el.setSelectionRange) saved = [el, el.selectionStart, el.selectionEnd, el.selectionDirection]; });
-  box.addEventListener("mousedown", e => {
-    if (lastPointer !== "mouse" || !e.target.closest("input, textarea")) return;
-    e.preventDefault();                       // 포커스도 커서도 옮겨 가지 않는다
+  const lid = document.createElement("div"), host = box.parentElement;
+  lid.className = "lid"; lid.setAttribute("aria-hidden", "true");
+  if (getComputedStyle(host).position === "static") host.style.position = "relative";
+  box.after(lid);
+  const fit = () => Object.assign(lid.style, {left: box.offsetLeft + "px", top: box.offsetTop + "px", width: box.offsetWidth + "px", height: box.offsetHeight + "px"});
+  fit(); new ResizeObserver(fit).observe(box);
+  lid.addEventListener("mousedown", e => {
+    e.preventDefault();                       // 포커스가 덮개로 오지 않는다 — 있던 칸에 그대로
     if (!box.contains(document.activeElement) && saved && box.contains(saved[0])){   // 밖에 나가 있었다면 있던 자리로
       const [el, a, b, d] = saved; el.focus(); setTimeout(() => el.setSelectionRange(a, b, d), 0);
     }
     drag = {x: e.clientX, y: e.clientY, say}; say(e.detail >= 2 ? 1 : 0);
   });
+  lid.addEventListener("contextmenu", e => { e.preventDefault(); say(0); });
 }
 const kb = combos => combos.map(c => c.map(k => `<kbd>${k}</kbd>`).join(`<span class="plus">+</span>`)).join(` <span class="plus">/</span> `);
 const keyList = list => `<div class="keys">${list.reduce((h, x, i) => i % 2 ? h + `<div class="key"><span>${kb(list[i - 1])}</span><span class="what">${x}</span></div>` : h, "")}</div>`;
@@ -548,7 +555,7 @@ function intro(){
     pr.oninput = () => { if (pr.value.includes("\n")) pr.value = pr.value.replace(/\n/g, "");
       $("prOk").textContent = pr.value === "오늘 점심은 비빔밥이다." ? "잘했다! 다른 곳도 마음껏 연습해 보자" : ""; $("prOk").className = "toast good"; };
     pr.onkeydown = e => { if (e.key === "Enter") e.preventDefault(); };
-    noMouse(pr.parentElement, "line", "prOk");
+    noMouse(pr, "line", "prOk");
     pr.focus(); pr.setSelectionRange(7, 7);
   }
   if (e === 3){
