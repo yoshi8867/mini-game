@@ -2,7 +2,7 @@
 "use strict";
 const assert = require("assert");
 const T = require("./typing.js");
-const {Typing, roundRobin, standings, formGroups, keys, LEAGUE_ROUNDS} = T;
+const {Typing, standings, formGroups, keys} = T;
 const players = require("./players.js");
 
 const who = n => players.get("ttest-" + n + "-aaaaaaaa");
@@ -12,13 +12,14 @@ assert.strictEqual(keys("까"), 2, "ㄲ 은 1타");
 assert.strictEqual(keys("과"), 3, "ㅘ 는 ㅗ+ㅏ 2타");
 assert.strictEqual(keys("닭"), 4, "ㄺ 은 ㄹ+ㄱ 2타");
 
-const rr = roundRobin([0, 1, 2, 3, 4, 5]);
-assert.strictEqual(rr.length, 5, "여섯 팀 풀리그는 다섯 판");
-assert.ok(rr.every(r => new Set(r.flat()).size === 6), "판마다 여섯 팀이 한 번씩");
-assert.strictEqual(new Set(rr.flat().map(p => p.slice().sort().join("-"))).size, 15, "모든 쌍이 한 번씩");
-/* 2·3·4종목 여섯 판 — 재대결은 마지막 판뿐이고 연달아 붙는 일은 없다 */
-const used = LEAGUE_ROUNDS.slice(1).flat();
-assert.deepStrictEqual(used, [0, 1, 2, 3, 4, 0]);
+/* 대진 — 1번(만난 팀 피하기) 다음 2번(실력 비슷한 팀끼리). 1-2 · 3-4 · 5-6 다음, 점수 200 100 220 160 140 120 */
+const norm = ps => ps.map(p => p.slice().sort().join("-")).sort().join(" ");
+const ban = new Set(["0-1", "2-3", "4-5"]), power = {0: 200, 1: 100, 2: 220, 3: 160, 4: 140, 5: 120};
+for (let i = 0; i < 20; i++)
+  assert.strictEqual(norm(T.matchUp([0, 1, 2, 3, 4, 5].sort(() => Math.random() - .5), power, ban)), "0-2 1-5 3-4", "1-3 · 2-6 · 4-5 여야 한다");
+assert.strictEqual(norm(T.matchUp([0, 1, 2, 3, 4, 5], {0: 0, 1: -1, 2: -2, 3: -3, 4: -4, 5: -5}, new Set())), "0-1 2-3 4-5", "앞 종목 순위가 붙은 팀끼리");
+assert.strictEqual(norm(T.matchUp([0, 1, 2, 3, 4, 5], {0: 0, 1: -1, 2: -2, 3: -3, 4: -4, 5: -5}, new Set(["0-1", "2-3", "4-5"]))).split(" ").some(p => ["0-1", "2-3", "4-5"].includes(p)), false, "바로 앞 판 상대는 피한다");
+assert.strictEqual(T.LEAGUE_GAMES, 2);
 
 const st = standings([{a: 0, b: 1, sa: 10, sb: 5}, {a: 0, b: 2, sa: 3, sb: 3}], [0, 1, 2]);
 assert.deepStrictEqual(st.map(x => x.pts), [3, 1, 0], "승 2 · 무 1");
@@ -118,8 +119,10 @@ for (const ev of [1, 2, 3]){
 }
 assert.strictEqual(g.state, "done");
 assert.strictEqual(g.ph.k, "finale");
-/* 여섯 판 동안 모든 팀이 다른 다섯 팀을 다 만났다 */
-assert.strictEqual(new Set(seen).size, 15, "안 만난 팀이 있다");
+/* 여섯 판 — 바로 앞 판 상대와는 다시 붙지 않는다 (같은 종목 두 판도 이것으로 갈린다) */
+assert.strictEqual(seen.length, 18);
+for (let i = 3; i < 18; i += 3)
+  assert.ok(seen.slice(i, i + 3).every(p => !seen.slice(i - 3, i).includes(p)), (i / 3 + 1) + "번째 판이 앞 판 상대와 또 붙었다");
 /* 종합 MVP — 셋, 팀마다 한 명, 득점 합 순 */
 const mv = g.view(null, now).mvp;
 assert.strictEqual(mv.length, 3, "MVP 가 셋이 아니다");

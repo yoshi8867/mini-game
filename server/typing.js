@@ -11,8 +11,9 @@
    · **모두 시간제다.** 끝난 문제 자리에는 새 문제가 들어와 바닥나지 않는다.
      후반(제한 시간의 절반 뒤)에 새로 나오는 문제는 10·20·30 이 아니라
      30·40·50 점이다.
-   · **팀전 대진은 시작할 때 다 정한다.** 여섯 팀 풀리그 다섯 판을 2·3·4종목이
-     두 판씩 나눠 쓴다(여섯째 판은 첫 판 다시). 판이 시작될 때 하나씩 공개한다.
+   · **팀전 대진은 판마다 그때 짠다.** 먼저 같은 종목에서 만난 팀과 바로 앞
+     판에서 만난 팀은 피하고(1번), 그 안에서 실력이 비슷한 팀끼리 붙인다(2번).
+     실력은 그 종목에서 지금까지 낸 팀 점수, 종목 첫 판이면 앞 종목 순위다.
    · 지고 있는 팀의 가장 약한 학생(1종목 타수)에게만 가끔 ×2 문제가 간다.
    · 인원이 적은 팀은 비례 가점을 받는다 (3명 대 4명이면 ×4/3).
    · 판정은 서버가 한다 — 학생이 보낸 글자가 그 문제와 똑같아야 갖는다.
@@ -36,7 +37,7 @@ const LIMIT = [60, 150, 90, 90];                // 한 판 (초)
 const PREVIEW = 15, RESULT = 60;                // 맞대결 미리 보기 · 종목 결과 (초)
 const E1_GAMES = 2, E1_MIN = 4, E1_SLOTS = 10;  // 게임 수, 조 최소 인원(밑이면 해체), 카드 수
 const E2_SLOTS = 6;                             // 긴 인용문이 섞여도 한 화면에 들어가는 수
-const LEAGUE_ROUNDS = [null, [0, 1], [2, 3], [4, 0]];   // 종목마다 풀리그의 몇째 판을 쓰나
+const LEAGUE_GAMES = 2;                         // 2·3·4종목 판 수
 const TIER_E3 = [2, 3];                         // 3종목은 고칠 곳 수 2·3·4
 const GOT = [null, "친 문장", "고친 문장", "완성한 표"];
 
@@ -67,7 +68,6 @@ const shuffle = a => {
   for (let i = a.length - 1; i > 0; i--){ const j = (Math.random() * (i + 1)) | 0; [a[i], a[j]] = [a[j], a[i]]; }
   return a;
 };
-/* 풀리그(원형 배치): 짝수 팀이면 n-1 판, 판마다 모든 팀이 한 경기, 모든 쌍이 정확히 한 번 */
 /* 종합 MVP — 종목마다 득점을 그 종목 평균으로 나눠(평균 = 100) 더하고, 팀마다 한 명만 셋 */
 function mvp(rec, teamOf){
   const seen = new Set(), rows = Object.values(rec);
@@ -78,13 +78,23 @@ function mvp(rec, teamOf){
     .sort((a, b) => b.sum - a.sum)
     .filter(x => x.team != null && !seen.has(x.team) && seen.add(x.team)).slice(0, 3);
 }
-function roundRobin(teams){
-  const a = teams.slice(), n = a.length, out = [];
-  for (let r = 0; r < n - 1; r++){
-    out.push([...Array(n / 2)].map((_, i) => [a[i], a[n - 1 - i]]));
-    a.splice(1, 0, a.pop());
-  }
-  return out;
+/* 대진: 막힌 쌍(ban, "a-b")은 빼고, 붙는 두 팀의 실력(power) 차이 합이 가장 작은 짝 맞추기.
+   여섯 팀이면 짝 맞추기가 15가지뿐이라 다 본다. 같은 값이면 먼저 섞은 순서로 고른다.
+   막힌 쌍을 다 피할 수 없으면(여섯 팀에서는 일어나지 않는다) 가장 적게 어기는 것 */
+const pairKey = (a, b) => a < b ? a + "-" + b : b + "-" + a;
+function matchUp(teams, power, ban){
+  let best = null, bestCost = null;
+  const walk = (left, acc, broke, diff) => {
+    if (!left.length){
+      if (!best || broke < bestCost[0] || (broke === bestCost[0] && diff < bestCost[1] - 1e-9)){ best = acc; bestCost = [broke, diff]; }
+      return;
+    }
+    const [a, ...rest] = left;
+    rest.forEach((b, i) => walk(rest.filter((_, j) => j !== i), [...acc, [a, b]],
+      broke + (ban.has(pairKey(a, b)) ? 1 : 0), diff + Math.abs((power[a] || 0) - (power[b] || 0))));
+  };
+  walk(teams.slice(), [], 0, 0);
+  return best;
 }
 /* 리그 순위: 승 2 · 무 1, 같으면 득점 */
 function standings(results, teams){
@@ -123,7 +133,7 @@ class Typing {
     this.people = new Map();                 // pid → {pid, name, team, bot, cpm, edit}
     this.lobby = true;                       // 학생이 팀을 고를 수 있나 (마감하면 교사가 옮긴다)
     this.teams = [];
-    this.sched = [];                         // 풀리그 다섯 판 [[a, b] × 3] × 5
+    this.prev = [];                          // 바로 앞 판의 대진 [[a, b] × 3] — 다음 판에서 다시 붙이지 않는다
     this.ev = 0;
     this.ph = {k: "lobby"};                  // 지금 단계 — until 이 있으면 그때 저절로 넘어간다
     this.medals = [];                        // {ev, place, team, who?, game?}
@@ -139,14 +149,14 @@ class Typing {
   /* ─── 맡기기 · 되살리기 ─── 통째로 적는다. Map 만 배열로 푼다 */
   snapshot(){
     const o = {v: 1};
-    for (const k of ["code", "pin", "title", "state", "made", "lobby", "teams", "sched", "ev", "ph",
+    for (const k of ["code", "pin", "title", "state", "made", "lobby", "teams", "prev", "ev", "ph",
                      "medals", "ranks", "res", "rec", "picks", "e1", "lg", "races"]) o[k] = this[k];
     o.people = [...this.people.values()];
     return o;
   }
   static revive(d){
     const g = new Typing(d.code, {pin: d.pin, title: d.title});
-    for (const k of ["state", "made", "lobby", "teams", "sched", "ev", "ph", "medals", "ranks",
+    for (const k of ["state", "made", "lobby", "teams", "prev", "ev", "ph", "medals", "ranks",
                      "res", "rec", "picks", "e1", "lg", "races"]) if (d[k] !== undefined) g[k] = d[k];
     (d.people || []).forEach(p => g.people.set(p.pid, p));
     return g;
@@ -205,7 +215,6 @@ class Typing {
     const teams = [...Array(TEAMS).keys()].filter(t => this.members(t).length);
     if (teams.length < TEAMS) return {err: "teams"};
     this.teams = teams;
-    this.sched = roundRobin(shuffle(teams));  // 대진은 지금 다 정하고 판마다 하나씩 공개
     this.state = "running";
     this.ev = 0;
     this.ph = {k: "intro", ev: 0};
@@ -230,7 +239,7 @@ class Typing {
         if (this.e1.g + 1 < E1_GAMES){ this.e1.g++; return this.pick(); }
         return this.finishE1(now);
       }
-      if (this.lg.k + 1 < LEAGUE_ROUNDS[this.ev].length){ this.lg.k++; return this.round(now); }
+      if (this.lg.k + 1 < LEAGUE_GAMES){ this.lg.k++; return this.round(now); }
       return this.finishLeague(now);
     }
     if (k === "ceremony"){
@@ -292,7 +301,8 @@ class Typing {
 
   /* ─── 2·3·4종목 — 팀 대 팀 리그 ─── */
   round(now){
-    const pairs = this.sched[LEAGUE_ROUNDS[this.ev][this.lg.k]];
+    const pairs = this.pairs();
+    this.prev = pairs;
     this.races = pairs.map(([a, b]) => {
       const ps = [...this.members(a), ...this.members(b)].map(p => p.pid);
       const kind = ["", "quote", "edit", "table"][this.ev];
@@ -302,6 +312,15 @@ class Typing {
     });
     this.ph = {k: "preview", ev: this.ev, rd: this.lg.k, until: now + PREVIEW * 1000};
     return {ok: true};
+  }
+  /* 1번: 이 종목에서 만난 팀, 바로 앞 판에서 만난 팀과는 다시 붙지 않는다 (앞 종목은 그 한 판만 본다)
+     2번: 그 안에서 실력이 비슷한 팀끼리. 실력 = 이 종목 팀 점수 합, 종목 첫 판이면 앞 종목 순위 */
+  pairs(){
+    const ban = new Set([...(this.prev || []), ...this.lg.results.map(m => [m.a, m.b])].map(([a, b]) => pairKey(a, b)));
+    const power = {};
+    if (this.lg.results.length) this.lg.results.forEach(m => { power[m.a] = (power[m.a] || 0) + m.sa; power[m.b] = (power[m.b] || 0) + m.sb; });
+    else (this.ranks[this.ev - 1] || []).forEach((t, i) => power[t] = -i);
+    return matchUp(shuffle(this.teams), power, ban);
   }
   finishLeague(now){
     const st = standings(this.lg.results, this.teams);
@@ -496,4 +515,4 @@ class Typing {
 }
 
 module.exports = {Typing, MAX_ENTRANTS, TEAMS, EVENTS, PTS, LIMIT, PREVIEW, RESULT, E1_GAMES, E1_MIN,
-                  roundRobin, standings, formGroups, keys, tierOf, segText, LEAGUE_ROUNDS};
+                  matchUp, standings, formGroups, keys, tierOf, segText, LEAGUE_GAMES};
