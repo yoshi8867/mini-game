@@ -19,6 +19,9 @@
    · 판정은 서버가 한다 — 학생이 보낸 글자가 그 문제와 똑같아야 갖는다.
      먼저 온 쪽이 갖는다. 4종목만은 표를 각자 화면에서 고치므로 다 고쳤다는
      알림을 믿는다.
+   · 네 종목이 끝난 뒤 교사가 종목을 골라 **한 게임 더** 할 수 있다. 몇 번이고.
+     한 게임(1종목은 한 게임, 팀전은 한 판)만 하고 종합 발표로 돌아온다.
+     메달·종합 순위·MVP 에는 넣지 않는다 — 판 결과만 보여 준다.
    · 교사가 넘긴다. 미리 보기(15초)·경기·종목 결과(1분)만 시계로 넘어가고,
      나머지는 교사가 「다음」을 누른다.
 
@@ -138,6 +141,8 @@ class Typing {
     this.ph = {k: "lobby"};                  // 지금 단계 — until 이 있으면 그때 저절로 넘어간다
     this.medals = [];                        // {ev, place, team, who?, game?}
     this.ranks = [];                         // ranks[종목] = 그 종목 팀 순서
+    this.x = null;                           // 한 게임 더 — {n: 몇 번째, ev} . 끝나면 null
+    this.bonus = 0;                          // 한 게임 더를 몇 번 했나
     this.res = null;                         // 종목 결과
     this.rec = {};                           // pid → 종목마다 개인 득점 — 종합 MVP
     this.picks = {};                         // 1종목 조 고르기 pid → 어휘 번호
@@ -150,14 +155,14 @@ class Typing {
   snapshot(){
     const o = {v: 1};
     for (const k of ["code", "pin", "title", "state", "made", "lobby", "teams", "prev", "ev", "ph",
-                     "medals", "ranks", "res", "rec", "picks", "e1", "lg", "races"]) o[k] = this[k];
+                     "medals", "ranks", "res", "rec", "picks", "e1", "lg", "races", "x", "bonus"]) o[k] = this[k];
     o.people = [...this.people.values()];
     return o;
   }
   static revive(d){
     const g = new Typing(d.code, {pin: d.pin, title: d.title});
     for (const k of ["state", "made", "lobby", "teams", "prev", "ev", "ph", "medals", "ranks",
-                     "res", "rec", "picks", "e1", "lg", "races"]) if (d[k] !== undefined) g[k] = d[k];
+                     "res", "rec", "picks", "e1", "lg", "races", "x", "bonus"]) if (d[k] !== undefined) g[k] = d[k];
     (d.people || []).forEach(p => g.people.set(p.pid, p));
     return g;
   }
@@ -235,6 +240,7 @@ class Typing {
     if (k === "preview") return this.play(now);
     if (k === "play") return this.endPlay(now);
     if (k === "after"){
+      if (this.x){ this.x = null; this.state = "done"; this.races = []; this.ph = {k: "finale"}; return {ok: true}; }   // 한 게임 더 — 끝
       if (this.ev === 0){
         if (this.e1.g + 1 < E1_GAMES){ this.e1.g++; return this.pick(); }
         return this.finishE1(now);
@@ -249,6 +255,17 @@ class Typing {
       return {ok: true};
     }
     return {err: "nothing"};
+  }
+  /* 한 게임 더 — 종합 발표에서 교사가 종목을 고른다. 1종목은 조 고르기부터, 팀전은 대진 공개부터 */
+  extra(ev, now){
+    ev = ev | 0;
+    if (this.state !== "done" || this.ph.k !== "finale") return {err: "notdone"};
+    if (!(ev >= 0 && ev < EVENTS.length)) return {err: "bad"};
+    this.state = "running"; this.ev = ev; this.res = null;
+    this.x = {n: ++this.bonus, ev};
+    if (ev === 0){ this.e1 = {g: 0, acc: {}}; return this.pick(); }
+    this.lg = {k: 0, results: [], stat: {}};
+    return this.round(now);
   }
   /* 시계로 넘어가는 단계와 연습 참가자. 바뀐 것이 있으면 true */
   tick(now){
@@ -314,12 +331,13 @@ class Typing {
     return {ok: true};
   }
   /* 1번: 이 종목에서 만난 팀, 바로 앞 판에서 만난 팀과는 다시 붙지 않는다 (앞 종목은 그 한 판만 본다)
-     2번: 그 안에서 실력이 비슷한 팀끼리. 실력 = 이 종목 팀 점수 합, 종목 첫 판이면 앞 종목 순위 */
+     2번: 그 안에서 실력이 비슷한 팀끼리. 실력 = 이 종목 팀 점수 합, 종목 첫 판이면 앞 종목 순위
+          (한 게임 더는 그 종목 최종 순위) */
   pairs(){
     const ban = new Set([...(this.prev || []), ...this.lg.results.map(m => [m.a, m.b])].map(([a, b]) => pairKey(a, b)));
     const power = {};
     if (this.lg.results.length) this.lg.results.forEach(m => { power[m.a] = (power[m.a] || 0) + m.sa; power[m.b] = (power[m.b] || 0) + m.sb; });
-    else (this.ranks[this.ev - 1] || []).forEach((t, i) => power[t] = -i);
+    else (this.ranks[this.x ? this.ev : this.ev - 1] || []).forEach((t, i) => power[t] = -i);
     return matchUp(shuffle(this.teams), power, ban);
   }
   finishLeague(now){
@@ -430,7 +448,7 @@ class Typing {
           a.s[g] = s.score; a.got += s.got; a.k += s.k; a.t += secs; });
         const cpmOf = pid => r.sc[pid].k / Math.max(secs, 1);
         r.table = r.ps.slice().sort((x, y) => r.sc[y].score - r.sc[x].score || r.sc[y].got - r.sc[x].got || cpmOf(y) - cpmOf(x));
-        r.table.filter(pid => r.sc[pid].score > 0).slice(0, 3).forEach((pid, place) =>   // 0점은 메달이 없다
+        if (!this.x) r.table.filter(pid => r.sc[pid].score > 0).slice(0, 3).forEach((pid, place) =>   // 0점은 메달이 없다, 한 게임 더도
           this.medals.push({ev: 0, place, team: this.people.get(pid).team, who: pid, game: g}));
       });
     } else {
@@ -473,7 +491,7 @@ class Typing {
   /* ─── 보여 줄 모습 ─── 사람마다(pid), 교실 앞 화면은 pid 없이 */
   view(pid, now){
     const name = id => (this.people.get(id) || {}).name || "?";
-    const out = {code: this.code, title: this.title, state: this.state, now, ph: this.ph, ev: this.ev,
+    const out = {code: this.code, title: this.title, state: this.state, now, ph: this.ph, ev: this.ev, extra: this.x || undefined,
       lobby: this.lobby, n: this.people.size, events: EVENTS,
       teams: [...Array(TEAMS).keys()].map(t => ({t, ps: this.members(t).map(p => ({pid: p.pid, name: p.name, cpm: p.cpm}))})),
       medals: this.medals.map(m => m.who ? Object.assign({}, m, {name: name(m.who)}) : m),

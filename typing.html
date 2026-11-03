@@ -295,7 +295,8 @@ const MEDAL = ["g", "s", "b"], MEDAL_TXT = ["금", "은", "동"];
 const PTS = [[10, 20, 30], [30, 40, 50]];
 const ERR = {badpin: "비밀번호가 맞지 않습니다", notype: "없는 대회입니다", started: "이미 시작한 대회입니다",
   full: "자리가 다 찼습니다", closed: "지금은 고를 수 없습니다", teams: "여섯 팀이 다 차야 시작합니다",
-  lobby: "먼저 팀 고르기를 마감해 주세요", nohello: "다시 들어와 주세요", stale: "다시 로그인해 주세요"};
+  lobby: "먼저 팀 고르기를 마감해 주세요", nohello: "다시 들어와 주세요", stale: "다시 로그인해 주세요",
+  notdone: "네 종목이 다 끝난 뒤에 한 게임 더 할 수 있습니다"};
 
 let sock = null, V = null, skew = 0, joined = null, watchPin = "", token = null;
 const SEAT = TEACH ? "type-seat-t" : "type-seat";
@@ -748,7 +749,7 @@ function intro(){
 function pickTheme(){
   const render = () => {
     const P = V.pick;
-    $("stage").innerHTML = `<h2 class="title">1종목 · ${V.ph.g + 1}게임 / 2게임 · 조 고르기</h2>
+    $("stage").innerHTML = `<h2 class="title">1종목 · ${V.extra ? xname() : `${V.ph.g + 1}게임 / 2게임`} · 조 고르기</h2>
       <p class="sub">칠 어휘를 골라 조에 들어간다. 3명 이하인 조는 마감 때 없어지고, 그 조 사람은 다른 조로 흩어진다.</p>
       ${teachBar("조 고르는 중", `<button class="go" id="tgo">마감</button>`)}
       <div class="lobby">${P.themes.map((th, i) => `<div class="slot ${th.ps.length ? "" : "empty"} ${P.mine === i ? "mine" : ""}" data-g="${i}">
@@ -761,7 +762,7 @@ function pickTheme(){
 }
 function formed(){
   const F = V.formed;
-  $("stage").innerHTML = `<h2 class="title">1종목 · ${V.ph.g + 1}게임 · 조 발표</h2>
+  $("stage").innerHTML = `<h2 class="title">1종목 · ${gname()} · 조 발표</h2>
     <p class="sub">${F.gone.length ? `없어진 조: <b>${F.gone.map(esc).join(", ")}</b> — 그 사람들은 다른 조로 갔다.` : "모든 조가 그대로 섰다."}</p>
     ${teachBar("조가 섰습니다", `<button class="go" id="tgo">게임 시작</button>`)}
     <div class="boards">${F.groups.map(g => `<div class="grp"><h3>${esc(g.name)}조 · ${g.ps.length}명</h3>${g.ps.map(n => `<span class="chip pl">${esc(n)}</span> `).join("")}</div>`).join("")}</div>
@@ -785,7 +786,9 @@ function vsCard(r, res){
   };
   return `<div class="vs">${side(r.a, sa, sb)}<div class="vs-mid">VS</div>${side(r.b, sb, sa)}</div>`;
 }
-const leagueHead = () => `<h2 class="title">${V.ev + 1}종목 · ${V.events[V.ev]} <span class="sub">${V.ph.rd + 1}판 / 2판</span></h2>`;
+const xname = () => `한 게임 더 #${V.extra.n}`;
+const gname = () => V.extra ? xname() : `${V.ph.g + 1}게임`;
+const leagueHead = () => `<h2 class="title">${V.ev + 1}종목 · ${V.events[V.ev]} <span class="sub">${V.extra ? xname() : `${V.ph.rd + 1}판 / 2판`}</span></h2>`;
 const others = res => V.races.filter((r, i) => !V.mine || i !== V.mine.i).map(r =>
   `${tname(r.a)} ${res ? fmt1(r.sa) + " : " + fmt1(r.sb) : "vs"} ${tname(r.b)}`).join(" · ");
 function preview(){
@@ -811,7 +814,7 @@ function playBoard(){
       const head = r.th ? `<h3>${esc(r.th)}조</h3>` : `<h3>${tname(r.a)} <b>${fmt1(r.sa)}</b> : <b>${fmt1(r.sb)}</b> ${tname(r.b)}</h3>`;
       return `<div class="grp">${head}<table class="t"><tr><th>이름</th><th>팀</th><th>점수</th><th>맞힌 수</th></tr>${ps.map(p => `<tr><td>${esc(p.name)}</td><td>${tname(p.team)}</td><td>${p.score}</td><td>${p.got}</td></tr>`).join("")}</table></div>`;
     }).join("");
-    $("stage").innerHTML = `<h2 class="title">${V.ev + 1}종목 · ${V.events[V.ev]} ${V.ev ? `<span class="sub">${V.ph.rd + 1}판</span>` : `<span class="sub">${V.ph.g + 1}게임</span>`}</h2>
+    $("stage").innerHTML = `<h2 class="title">${V.ev + 1}종목 · ${V.events[V.ev]} <span class="sub">${V.extra ? xname() : V.ev ? `${V.ph.rd + 1}판` : `${V.ph.g + 1}게임`}</span></h2>
       <div class="hud"><div><b id="hT">${left(V.ph.until)}</b><span>남은 초</span></div><div class="late">${isLate() ? "후반! 새로 나오는 문제는 30·40·50점" : ""}</div></div>
       ${teachBar("경기 중", `<button id="tgo">경기 끝내기</button>`)}<div class="boards">${tables}</div>`;
     $("tgo").onclick = () => { if (confirm("남은 시간을 버리고 경기를 끝낼까요?")) act("go"); };
@@ -896,7 +899,7 @@ function bindTyping(){
   };
 }
 function playWords(){
-  $("stage").innerHTML = `<h2 class="title">1종목 · ${V.ph.g + 1}게임 · ${esc(V.mine.th)}조</h2>
+  $("stage").innerHTML = `<h2 class="title">1종목 · ${gname()} · ${esc(V.mine.th)}조</h2>
     <div class="row" style="align-items:flex-start;gap:var(--s5)">
       <div class="hud"><div><b id="hT">${left(V.ph.until)}</b><span>남은 초</span></div><div><b id="hS">0</b><span>내 점수</span></div><div><b id="hR">-</b><span>조 안 순위</span></div><div class="late" id="hL"></div></div>
       <div class="teambox"><div class="tb-head">우리 조</div><table id="tbRows"></table></div>
@@ -1162,7 +1165,7 @@ function playTable(){
   hooks.got = m => pop(`+${m.val}점!`, "우리 팀 점수가 올랐다");
   /* 다음 키 가이드 — 1게임 전반(시간의 절반)에만. 2게임에는 없다 */
   let clip = "";
-  const guideOn = () => V.ph.rd === 0 && !isLate();
+  const guideOn = () => !V.extra && V.ph.rd === 0 && !isLate();
   const guide = () => { const el = $("g4"); if (!el) return; el.hidden = !guideOn(); if (el.hidden) return;
     const a = document.activeElement, h = guideHtml(tableGuide(read(), goal, $("mine").contains(a) ? a : null, clip));
     if (el.innerHTML !== h) el.innerHTML = h; };
@@ -1200,10 +1203,10 @@ function after(){
         return `<table class="t"><tr><th>순위</th><th>이름</th><th>팀</th><th>점수</th><th>맞힌 단어</th></tr>${ps.map((p, i) => `<tr class="${meP() && p.pid === V.me.pid ? "me" : ""}"><td>${i < 3 && p.score > 0 ? `<span class="medal ${MEDAL[i]}">${MEDAL_TXT[i]}</span>` : i + 1}</td><td>${pname(p.pid, p.name)}</td><td>${tname(p.team)}</td><td>${p.score}</td><td>${p.got}</td></tr>`).join("")}</table>`; };
       const body = TEACH ? `<div class="boards">${V.races.map(r => `<div class="grp"><h3>${esc(r.th)}조</h3>${table(r)}</div>`).join("")}</div>`
         : `<h3>${esc(V.mine.th)}조</h3>${table(V.mine)}<p class="sub">다른 조 금메달 — ${V.races.filter((r, i) => i !== V.mine.i).map(r => { const p = r.ps.find(x => x.pid === r.table[0]); return `${esc(r.th)}조 ${esc(p.name)}`; }).join(" · ")}</p>`;
-      $("stage").innerHTML = `<h2 class="title">1종목 · ${V.ph.g + 1}게임 끝</h2>` + teachBar("게임 결과", `<button class="go" id="tgo">${V.ph.g === 0 ? "2게임 조 고르기" : "1종목 결과 발표"}</button>`) + body;
+      $("stage").innerHTML = `<h2 class="title">1종목 · ${gname()} 끝</h2>` + teachBar("게임 결과", `<button class="go" id="tgo">${V.extra ? "종합 발표로" : V.ph.g === 0 ? "2게임 조 고르기" : "1종목 결과 발표"}</button>`) + body;
     } else {
       const body = TEACH ? V.races.map(r => vsCard(r, true)).join("") : vsCard(V.mine, true) + `<p class="sub">같은 시간 다른 경기 — ${others(true)}</p>`;
-      $("stage").innerHTML = leagueHead() + teachBar("판 결과", `<button class="go" id="tgo">${V.ph.rd === 0 ? "다음 판 대진 공개" : V.ev + 1 + "종목 결과 발표"}</button>`) + body;
+      $("stage").innerHTML = leagueHead() + teachBar("판 결과", `<button class="go" id="tgo">${V.extra ? "종합 발표로" : V.ph.rd === 0 ? "다음 판 대진 공개" : V.ev + 1 + "종목 결과 발표"}</button>`) + body;
     }
     if (TEACH) $("tgo").onclick = () => act("go");
   };
@@ -1242,13 +1245,16 @@ function finale(){
   const ours = mine === null ? [] : V.teams[mine].ps.map(p => { const c = [0, 0, 0]; medalsOf(p.pid, mine).forEach(m => c[m.place]++); return {pid: p.pid, name: p.name, c}; })
     .sort((a, b) => b.c[0] - a.c[0] || b.c[1] - a.c[1] || b.c[2] - a.c[2]);
   const row = (p, lead) => `<tr class="${meP() && p.pid === V.me.pid ? "me" : ""}">${lead}<td>${medalCount(p.c)}</td></tr>`;
-  $("stage").innerHTML = `<div class="res-head"><h2 class="title">종합 발표</h2></div><p class="sub">누적 메달 — 금메달 수, 같으면 은메달, 같으면 동메달 순.</p>
+  $("stage").innerHTML = teachBar("한 게임 더 — 종목을 고르면 한 게임만 하고 여기로 돌아온다 (메달·순위에는 안 들어간다)",
+      V.events.map((e, i) => `<button class="go" data-xev="${i}">${i + 1}. ${e}</button>`).join("")) +
+    `<div class="res-head"><h2 class="title">종합 발표</h2></div><p class="sub">누적 메달 — 금메달 수, 같으면 은메달, 같으면 동메달 순.</p>
     <table class="t" style="white-space:nowrap"><tr><th>순위</th><th>팀</th>${V.events.map((_, i) => `<th>${i + 1}종목</th>`).join("")}<th>누적 메달</th></tr>
       ${t.map((r, i) => `<tr class="${r.team === mine ? "me" : ""}"><td>${i + 1}</td><td>${tname(r.team)}</td>${V.events.map((_, e) => `<td>${won(e, r.team)}</td>`).join("")}<td>${medalCount([r.g, r.s, r.b])}</td></tr>`).join("")}</table>
     <div class="sheet">
       ${mine === null ? "<div></div>" : `<div><h3>우리 팀 · ${tname(mine)}</h3><table class="t"><tr><th>이름</th><th>누적 메달</th></tr>${ours.map(p => row(p, `<td>${pname(p.pid, p.name)}</td>`)).join("")}</table></div>`}
       <div><h3>MVP — 팀마다 한 명</h3><p class="sub">종목마다 그 종목 평균을 100으로 환산해 더한 점수로 줄 세운다.</p><table class="t" style="white-space:nowrap"><tr><th></th><th>이름</th><th>팀</th>${V.events.map((_, i) => `<th>${i + 1}종목</th>`).join("")}<th>환산 합계</th></tr>${(V.mvp || []).map((p, i) => `<tr class="${meP() && p.pid === V.me.pid ? "me" : ""}"><td>${i + 1}</td><td>👑 ${pname(p.pid, p.name)}</td><td>${tname(p.team)}</td>${V.events.map((_, e) => `<td>${p.ev[e] ?? "—"}</td>`).join("")}<td><b>${p.sum}</b></td></tr>`).join("")}</table></div>
     </div>`;
+  if (TEACH) $("stage").querySelectorAll("[data-xev]").forEach(b => b.onclick = () => act("extra", {ev: +b.dataset.xev}));
 }
 
 /* ?practice=3 · ?practice=4 — 서버 없이 그 종목 소개의 연습 칸만 띄운다 (교사가 미리 해 보기) */

@@ -897,6 +897,7 @@ function onAdmin(what, m, done, ip){
         case "move":   r = g.move(String(m.pid || ""), m.team); break;
         case "start":  r = g.start(); break;
         case "go":     r = g.go(now); break;
+        case "extra":  r = g.extra(m.ev, now); break;   // 다 끝난 뒤 한 게임 더
         case "mock": {
           let n = Math.max(1, Math.min(m.n | 0 || 1, TYPE_MAX - g.people.size));
           for (let i = 0; i < n; i++)

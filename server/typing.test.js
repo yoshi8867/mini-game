@@ -130,6 +130,25 @@ assert.strictEqual(g.ph.k, "finale");
 assert.strictEqual(seen.length, 18);
 for (let i = 3; i < 18; i += 3)
   assert.ok(seen.slice(i, i + 3).every(p => !seen.slice(i - 3, i).includes(p)), (i / 3 + 1) + "번째 판이 앞 판 상대와 또 붙었다");
+/* 한 게임 더 — 종합 발표에서 종목을 골라 한 게임만. 메달·MVP 는 그대로 */
+const medals0 = JSON.stringify(g.medals), rec0 = JSON.stringify(g.rec);
+for (const xev of [2, 0, 3, 3]){
+  assert.strictEqual(g.extra(xev, now).ok, true, xev + "종목 한 게임 더가 안 열렸다");
+  assert.strictEqual(g.extra(1, now).err, "notdone", "한 게임 더 도중에 또 열렸다");
+  assert.strictEqual(g.view(null, now).extra.ev, xev);
+  if (xev === 0){ assert.strictEqual(g.ph.k, "pick"); g.go(now); g.go(now); }
+  else { assert.strictEqual(g.ph.k, "preview"); assert.strictEqual(g.races.length, 3); run(16); }
+  assert.strictEqual(g.ph.k, "play");
+  run(T.LIMIT[xev] + 1);
+  assert.strictEqual(g.ph.k, "after", "한 게임 더가 끝나지 않았다");
+  g.go(now);
+  assert.strictEqual(g.ph.k, "finale", "한 게임 더 뒤에 종합 발표로 안 돌아왔다");
+  assert.strictEqual(g.state, "done");
+}
+assert.strictEqual(g.bonus, 4);
+assert.strictEqual(JSON.stringify(g.medals), medals0, "한 게임 더가 메달을 바꿨다");
+assert.strictEqual(JSON.stringify(g.rec), rec0, "한 게임 더가 MVP 기록을 바꿨다");
+assert.strictEqual(g.view(null, now).extra, undefined);
 /* 종합 MVP — 셋, 팀마다 한 명, 득점 합 순 */
 const mv = g.view(null, now).mvp;
 assert.strictEqual(mv.length, 3, "MVP 가 셋이 아니다");
