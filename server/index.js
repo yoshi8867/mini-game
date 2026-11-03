@@ -466,13 +466,15 @@ function pushTyping(g){
     send(ws, "typeme", g.view(ws.typeFan ? null : ws.person && ws.person.pid, now));
   }
 }
-/* 2종목 커서 — 바뀐 대결의 사람들에게만, 화면 전체가 아니라 커서만 */
+/* 2·3종목 커서와 팀전 득점 알림 — 그 대결 사람들에게만, 화면 전체가 아니라 그것만 */
+function toRace(g, r, t, o){
+  const who = new Set(r.ps);
+  for (const ws of wss.clients)
+    if (ws.readyState === 1 && ws.typing === g.code && !ws.typeFan && ws.person && who.has(ws.person.pid)) send(ws, t, o);
+}
 function pushProg(g, now){
-  for (const [r, ps] of g.progs(now)){
-    const who = new Set(r.ps);
-    for (const ws of wss.clients)
-      if (ws.readyState === 1 && ws.typing === g.code && !ws.typeFan && ws.person && who.has(ws.person.pid)) send(ws, "typeprog", {ps});
-  }
+  for (const [r, s] of g.scored()) toRace(g, r, "typescore", s);
+  for (const [r, ps] of g.progs(now)) toRace(g, r, "typeprog", {ps});
 }
 function typeList(){
   const out = [...typings.values()].map(g => ({code: g.code, title: g.title, state: g.state, people: g.people.size}));
@@ -521,6 +523,7 @@ function onTypeDo(ws, msg){
   else r = g.tableDone(pid, msg.tier, now);
   if (r.err) return send(ws, "typemiss", {why: r.err, i: msg.i});
   if (r.val) send(ws, "typegot", {val: r.val, i: msg.i});
+  for (const [rc, s] of g.scored()) toRace(g, rc, "typescore", s);
   pushTyping(g);
 }
 

@@ -424,32 +424,47 @@ class Typing {
     if (r.prog) for (const p in r.prog) if (r.prog[p].i === (i | 0)) delete r.prog[p];   // 끝난 문장의 커서는 지운다
     const val = it.pts * (it.x2 === pid ? 2 : 1);
     const s = r.sc[pid]; s.score += val; s.got++; s.k += keys(it.text);
+    if (r.a !== undefined) (r.feed ??= []).push({pid, val});   // 같은 대결 모두에게 득점 알림
     r.slots[pos] = r.items.length;
     r.items.push(this.gen(r, now));
     return {ok: true, val};
   }
-  /* 2종목 — 치는 중인 곳(몇 번째 문장, 맞게 친 글자 수). 같은 대결 사람들에게 커서로 보인다 */
+  /* 2·3종목 — 치는(고치는) 중인 곳(몇 번째 문장, 앞에서부터 맞는 글자 수). 같은 대결 사람들에게 커서로 보인다 */
   progress(pid, i, n){
     const r = this.raceOf(pid);
-    if (this.ph.k !== "play" || !r || r.kind !== "quote") return;
+    if (this.ph.k !== "play" || !r || (r.kind !== "quote" && r.kind !== "edit")) return;
     r.prog ??= {};
     if (i === null || i === undefined || !r.slots.includes(i | 0)) delete r.prog[pid];
     else r.prog[pid] = {i: i | 0, n: Math.max(0, n | 0)};
+  }
+  /* 팀전 득점 알림 — 쌓인 것을 꺼낸다. [대결, {누가, 몇 점, 두 팀 점수}] */
+  scored(){
+    const out = [];
+    for (const r of this.races){
+      if (!r.feed || !r.feed.length) continue;
+      for (const f of r.feed.splice(0)){
+        const p = this.people.get(f.pid) || {};
+        out.push([r, {pid: f.pid, name: p.name || "?", team: p.team, val: f.val, a: r.a, b: r.b, sa: this.teamScore(r, r.a), sb: this.teamScore(r, r.b)}]);
+      }
+    }
+    return out;
   }
   /* 시계마다 — 커서가 바뀐 대결만 [대결, 커서들]. 연습 참가자는 치는 시간에 맞춰 나아간다 */
   progs(now){
     if (this.ph.k !== "play") return [];
     const out = [];
     for (const r of this.races){
-      if (r.kind !== "quote" || now >= r.until) continue;
+      if ((r.kind !== "quote" && r.kind !== "edit") || now >= r.until) continue;
       const ps = [];
       for (const pid of r.ps){
         const b = r.bot[pid], p = r.prog && r.prog[pid];
         let at = null;
         if (p && r.slots.includes(p.i)) at = p;
         else if (b && b.cur !== null && b.t && r.slots.includes(b.cur) && !r.items[b.cur].owner){
-          const len = [...r.items[b.cur].text].length;
-          at = {i: b.cur, n: Math.min(len - 1, Math.floor(len * (now - b.t) / Math.max(1, b.at - b.t)))};
+          const it = r.items[b.cur], len = [...it.text].length;
+          let base = 0;   // 3종목은 처음 고칠 곳까지는 이미 맞아 있다
+          if (it.segs) for (const x of it.segs){ if (typeof x !== "string") break; base += [...x].length; }
+          at = {i: b.cur, n: Math.min(len - 1, base + Math.floor((len - base) * (now - b.t) / Math.max(1, b.at - b.t)))};
         }
         if (at) ps.push({pid, name: (this.people.get(pid) || {}).name || "?", team: (this.people.get(pid) || {}).team, i: at.i, n: at.n});
       }
@@ -466,6 +481,7 @@ class Typing {
     const g = r.goals[pid] || {late: false, x2: false};
     const val = PTS[g.late ? 1 : 0][tier] * (g.x2 ? 2 : 1);
     const s = r.sc[pid]; s.score += val; s.got++;
+    (r.feed ??= []).push({pid, val});
     r.goals[pid] = this.goal(r, pid, now);
     return {ok: true, val};
   }
