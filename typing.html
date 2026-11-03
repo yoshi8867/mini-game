@@ -330,7 +330,7 @@ function connect(){
       if (!m.code){ seat(null); V = null; return gate(); }
       skew = m.now - Date.now(); seat(m.code); V = m; draw();
     }
-    else if (m.t === "typegone"){ seat(null); V = null; gate("대회가 닫혔습니다."); }
+    else if (m.t === "typegone"){ rows = (rows || []).filter(r => r.code !== joined); seat(null); V = null; gate("대회가 닫혔습니다."); send("typings", {}); }
     else if (m.t === "typegot"){ hooks.got && hooks.got(m); }
     else if (m.t === "typeprog"){ progs = m.ps || []; hooks.prog && hooks.prog(); }
     else if (m.t === "typemiss"){ hooks.miss && hooks.miss(m); }
@@ -440,7 +440,13 @@ function board(){
   $("board").innerHTML = `<h2>종목</h2><div class="evs">${evs}</div>
     <h2>메달</h2><table class="t tally"><tr><th>팀</th><th><span class="medal g">금</span></th><th><span class="medal s">은</span></th><th><span class="medal b">동</span></th></tr>
     ${tally.map(x => `<tr class="${meP() && x.t === V.me.team ? "me" : ""}"><td>${tname(x.t)}</td><td>${x.c[0]}</td><td>${x.c[1]}</td><td>${x.c[2]}</td></tr>`).join("")}</table>
-    <h2>팀</h2>${V.teams.filter(t => t.ps.length).map(t => `<div style="font-size:12px;margin-bottom:6px"><b>${tname(t.t)}</b> <span style="color:var(--chalk-dim)">${t.ps.map(p => pname(p.pid, p.name)).join(", ")}</span></div>`).join("")}`;
+    <h2>팀</h2>${V.teams.filter(t => t.ps.length).map(t => `<div style="font-size:12px;margin-bottom:6px"><b>${tname(t.t)}</b> <span style="color:var(--chalk-dim)">${t.ps.map(p => pname(p.pid, p.name)).join(", ")}</span></div>`).join("")}
+    ${TEACH ? `<h2>관리</h2><div class="row"><button id="tquit">대회 닫기</button><button id="tleave">목록으로</button></div>
+      <p class="sub" style="font-size:12px">닫기는 모두에게서 대회를 끝낸다(되돌릴 수 없다). 목록으로는 이 화면만 나가고 대회는 그대로 굴러간다.</p>` : ""}`;
+  if (TEACH){   // 언제든 — 경기 중이든 다 끝났든
+    $("tquit").onclick = async () => { if (confirm("이 대회를 닫을까요? 학생 화면도 모두 끝납니다. 되돌릴 수 없습니다.")) await call("typeclose", {code: joined}); };
+    $("tleave").onclick = () => send("typeleave", {});
+  }
   $("ttl").textContent = V.title;
 }
 /* 시계 — 화면에 남은 초가 있으면 0.25초마다 고친다 */
