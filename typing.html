@@ -22,6 +22,10 @@ header{display:flex;gap:var(--s3);align-items:center;flex-wrap:wrap;padding:var(
 header .hdr-info{display:flex;gap:var(--s4);align-items:baseline;font-variant-numeric:tabular-nums;margin-right:auto}
 header .hdr-info .ttl{font-size:16px;font-weight:800}
 header .hdr-info b{font-size:22px;font-weight:800} header .hdr-info span{font-size:12px;color:var(--chalk-dim);margin-left:4px}
+header .hdr-info .title{font-size:17px;margin:0} header .hdr-info .title .sub{font-size:13px}
+header .hdr-info .hud{margin:0;gap:var(--s3);align-items:baseline}
+header .hdr-info .hud div b{display:inline;font-size:20px} header .hdr-info .hud div span{margin-left:3px}
+header .hdr-info .hud .late{font-size:13px}
 header h1{font-size:18px;font-weight:800;margin:0 var(--s3) 0 0}
 header label{font-size:13px;color:var(--chalk-dim);display:flex;gap:6px;align-items:center}
 header input{width:64px;font:inherit;padding:4px 6px;border:1px solid var(--wall-line);border-radius:6px}
@@ -237,8 +241,8 @@ kbd{display:inline-block;font-family:"Gothic A1",sans-serif;font-size:22px;font-
 <div class="offline" id="offline" hidden>연결이 끊겼습니다 — 다시 붙는 중입니다</div>
 <header>
   <h1 id="ttl">타자 올림픽</h1>
-  <div class="hdr-info" id="hdrInfo"></div>
   <span id="myname" class="sub" style="margin:0"></span>
+  <div class="hdr-info" id="hdrInfo"></div>
 </header>
 <div class="layout">
   <main id="stage"></main>
@@ -427,8 +431,17 @@ function draw(){
   const k = V.state === "open" ? "lobby" : V.ph.k;
   const key = [k, V.ev, V.ph.g, V.ph.rd, k === "play" && V.mine ? V.mine.i : ""].join("|");
   board();
-  if (key !== screen){ clearHooks(); screen = key; ({lobby, intro, pick: pickTheme, formed, preview, play, after, ceremony, finale}[k] || (() => {}))(); }
+  if (key !== screen){ clearHooks(); $("hdrInfo").innerHTML = ""; screen = key; ({lobby, intro, pick: pickTheme, formed, preview, play, after, ceremony, finale}[k] || (() => {}))(); }
   else if (upd) upd();
+  if (k === "play") lift();
+}
+/* 경기 중에는 제목과 점수판을 머리줄로 올린다 — 문장이 화면에 더 들어오게. 새로 그린 것이 있을 때만 바꾼다 */
+function lift(){
+  const t = document.querySelector("#stage h2.title"), hud = document.querySelector("#stage .hud");
+  if (!t && !hud) return;
+  const h = $("hdrInfo"); h.innerHTML = "";
+  if (t) h.append(t);
+  if (hud) h.append(hud);
 }
 function teachBar(label, buttons){
   return TEACH ? `<div class="teach-bar"><b>${label}</b>${buttons}<span class="toast" id="toast"></span></div>` : "";
