@@ -973,7 +973,7 @@ function playQuote(){
     poll();
     $("hU").textContent = fmt1(ourScore()); $("hO").textContent = fmt1(theirScore()); $("hM").textContent = myScore().score;
     $("hL").textContent = isLate() ? "후반! 새로 나오는 문장은 30·40·50점" : "";
-    const html = V.mine.items.map(it => { const os = typers(it.i);
+    const html = V.mine.items.map(it => { const os = typers(it.i).filter(p => p.team === V.me.team);   // 목록에는 우리 팀만. 상대까지 다는 내가 치는 줄에서
       return `<div class="item ${os.length ? "oc-on" : ""}"><span>${withCarets([...it.text].map(esc), os)}${badge(it)}${it.src ? `<small class="src">${esc(it.src)}</small>` : ""}</span><span class="st"></span></div>`; }).join("");
     if ($("items").innerHTML !== html) $("items").innerHTML = html;
   };
