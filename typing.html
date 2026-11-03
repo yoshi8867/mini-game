@@ -1251,6 +1251,11 @@ function finale(){
     </div>`;
 }
 
-gate();
-connect();
+/* ?practice=3 · ?practice=4 — 서버 없이 그 종목 소개의 연습 칸만 띄운다 (교사가 미리 해 보기) */
+const PRACTICE = {"3": 2, "4": 3}[Q.get("practice")];
+if (PRACTICE !== undefined){
+  V = {ev: PRACTICE, ph: {k: "intro", ev: PRACTICE}, events: ["단어 개인전", "문장 팀전", "문장 편집 팀전", "표 편집 팀전"]};
+  intro();
+  $("stage").insertAdjacentHTML("afterbegin", `<p class="sub">연습만 해 보기 · <a href="?practice=3">3종목 연습</a> · <a href="?practice=4">4종목 연습</a></p>`);
+} else { gate(); connect(); }
 </script>
