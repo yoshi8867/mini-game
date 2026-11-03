@@ -466,6 +466,14 @@ function pushTyping(g){
     send(ws, "typeme", g.view(ws.typeFan ? null : ws.person && ws.person.pid, now));
   }
 }
+/* 2종목 커서 — 바뀐 대결의 사람들에게만, 화면 전체가 아니라 커서만 */
+function pushProg(g, now){
+  for (const [r, ps] of g.progs(now)){
+    const who = new Set(r.ps);
+    for (const ws of wss.clients)
+      if (ws.readyState === 1 && ws.typing === g.code && !ws.typeFan && ws.person && who.has(ws.person.pid)) send(ws, "typeprog", {ps});
+  }
+}
 function typeList(){
   const out = [...typings.values()].map(g => ({code: g.code, title: g.title, state: g.state, people: g.people.size}));
   out.sort((a, b) => (a.state === b.state ? 0 : a.state === "open" ? -1 : 1));
@@ -508,6 +516,7 @@ function onTypeDo(ws, msg){
   let r;
   if (msg.t === "typeteam") r = g.setTeam(pid, msg.team);
   else if (msg.t === "typetheme") r = g.setTheme(pid, msg.i);
+  else if (msg.t === "typeprog") return g.progress(pid, msg.i, msg.n);   // 내려보내기는 시계가 묶어서
   else if (msg.t === "typeclaim") r = g.claim(pid, msg.i, msg.text, now);
   else r = g.tableDone(pid, msg.tier, now);
   if (r.err) return send(ws, "typemiss", {why: r.err, i: msg.i});
@@ -985,6 +994,7 @@ wss.on("connection", ws => {
       case "typeteam":
       case "typetheme":
       case "typeclaim":
+      case "typeprog":
       case "typetable":return onTypeDo(ws, msg);
       case "watch":   return onWatch(ws, msg);
       case "unwatch": return watchStop(ws);
@@ -1187,7 +1197,7 @@ setInterval(() => {
   /* 블라인드는 단계가 바뀌거나 정답이 한 개 더 열릴 때만 알린다 */
   for (const o of omrs.values()) if (o.tick(now)) pushOmr(o);
   /* 타자는 미리 보기·경기·종목 결과가 시계로 넘어가고, 연습 참가자가 친다 */
-  for (const g of typings.values()) if (g.tick(now)) pushTyping(g);
+  for (const g of typings.values()){ if (g.tick(now)) pushTyping(g); pushProg(g, now); }
   for (const b of bids.values()){
     let shout = b.tick(now);
     if (bidbots.tick(b, now)) shout = true;

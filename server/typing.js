@@ -421,11 +421,42 @@ class Typing {
     if (it.owner) return {err: "taken"};
     if (String(text) !== it.text) return {err: "wrong"};
     it.owner = pid; it.at = now;
+    if (r.prog) for (const p in r.prog) if (r.prog[p].i === (i | 0)) delete r.prog[p];   // 끝난 문장의 커서는 지운다
     const val = it.pts * (it.x2 === pid ? 2 : 1);
     const s = r.sc[pid]; s.score += val; s.got++; s.k += keys(it.text);
     r.slots[pos] = r.items.length;
     r.items.push(this.gen(r, now));
     return {ok: true, val};
+  }
+  /* 2종목 — 치는 중인 곳(몇 번째 문장, 맞게 친 글자 수). 같은 대결 사람들에게 커서로 보인다 */
+  progress(pid, i, n){
+    const r = this.raceOf(pid);
+    if (this.ph.k !== "play" || !r || r.kind !== "quote") return;
+    r.prog ??= {};
+    if (i === null || i === undefined || !r.slots.includes(i | 0)) delete r.prog[pid];
+    else r.prog[pid] = {i: i | 0, n: Math.max(0, n | 0)};
+  }
+  /* 시계마다 — 커서가 바뀐 대결만 [대결, 커서들]. 연습 참가자는 치는 시간에 맞춰 나아간다 */
+  progs(now){
+    if (this.ph.k !== "play") return [];
+    const out = [];
+    for (const r of this.races){
+      if (r.kind !== "quote" || now >= r.until) continue;
+      const ps = [];
+      for (const pid of r.ps){
+        const b = r.bot[pid], p = r.prog && r.prog[pid];
+        let at = null;
+        if (p && r.slots.includes(p.i)) at = p;
+        else if (b && b.cur !== null && b.t && r.slots.includes(b.cur) && !r.items[b.cur].owner){
+          const len = [...r.items[b.cur].text].length;
+          at = {i: b.cur, n: Math.min(len - 1, Math.floor(len * (now - b.t) / Math.max(1, b.at - b.t)))};
+        }
+        if (at) ps.push({pid, name: (this.people.get(pid) || {}).name || "?", team: (this.people.get(pid) || {}).team, i: at.i, n: at.n});
+      }
+      const key = JSON.stringify(ps);
+      if (key !== r.plast){ r.plast = key; out.push([r, ps]); }
+    }
+    return out;
   }
   /* 4종목 — 표 하나를 다 고쳤다. tier 는 그 과제의 등급(0·1·2) */
   tableDone(pid, tier, now){
@@ -477,7 +508,7 @@ class Typing {
       if (b.cur === null || r.items[b.cur].owner || !r.slots.includes(b.cur)){
         const open = r.slots.filter(i => !r.items[i].owner);
         if (!open.length) continue;
-        b.cur = open[(Math.random() * open.length) | 0];
+        b.cur = open[(Math.random() * open.length) | 0]; b.t = now;
         const it = r.items[b.cur];
         b.at = now + 1000 * (r.kind === "edit" ? (6 + p.edit * 1.5 * it.ch) * rand(0.8, 1.3)
                                               : keys(it.text) / p.speed * 60 * rand(1, 1.4) + 0.6);
