@@ -33,7 +33,7 @@ const MAX_ENTRANTS = 40;
 const TEAMS = 6;
 const EVENTS = ["단어 개인전", "문장 팀전", "문장 편집 팀전", "표 편집 팀전"];
 const PTS = [[10, 20, 30], [30, 40, 50]];       // 짧음·중간·긺, [앞 절반, 뒤 절반]
-const LIMIT = [60, 150, 90, 90];                // 한 판 (초)
+const LIMIT = [60, 120, 120, 120];              // 한 판 (초)
 const PREVIEW = 15, RESULT = 60;                // 맞대결 미리 보기 · 종목 결과 (초)
 const E1_GAMES = 2, E1_MIN = 4, E1_SLOTS = 10;  // 게임 수, 조 최소 인원(밑이면 해체), 카드 수
 const E2_SLOTS = 6;                             // 긴 인용문이 섞여도 한 화면에 들어가는 수
