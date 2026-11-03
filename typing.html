@@ -18,6 +18,9 @@
 }
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--wall);color:var(--chalk);font-family:"Gothic A1",sans-serif;font-size:15px}
+/* 경기 마지막 10초 — 배경이 흰색·분홍색으로 깜빡인다 */
+body.hurry, body.hurry aside, body.hurry .dock{animation:hurry 1s ease-in-out infinite}   /* 자기 배경이 있는 곳도 같이 */
+@keyframes hurry{0%,100%{background:var(--wall)}50%{background:#ffc9d6}}
 header{display:flex;gap:var(--s3);align-items:center;flex-wrap:wrap;padding:var(--s3) var(--s4);border-bottom:1px solid var(--wall-line)}
 header .hdr-info{display:flex;gap:var(--s4);align-items:baseline;font-variant-numeric:tabular-nums;margin-right:auto}
 header .hdr-info .ttl{font-size:16px;font-weight:800}
@@ -474,6 +477,8 @@ function board(){
 }
 /* 시계 — 화면에 남은 초가 있으면 0.25초마다 고친다 */
 setInterval(() => {
+  const hurry = !!(V && V.ph && V.ph.k === "play" && V.ph.until && left(V.ph.until) <= 10 && left(V.ph.until) > 0);
+  document.body.classList.toggle("hurry", hurry);
   if (!V || !V.ph.until) return;
   const s = left(V.ph.until);
   document.querySelectorAll("[data-clock]").forEach(n => n.textContent = n.dataset.clock.replace("#", s));
