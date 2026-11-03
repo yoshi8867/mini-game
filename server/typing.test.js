@@ -12,6 +12,11 @@ assert.strictEqual(keys("까"), 2, "ㄲ 은 1타");
 assert.strictEqual(keys("과"), 3, "ㅘ 는 ㅗ+ㅏ 2타");
 assert.strictEqual(keys("닭"), 4, "ㄺ 은 ㄹ+ㄱ 2타");
 
+/* 한영키를 쓰지 않는다 — 친 글자에 영문이 들면 막히므로 인용문·문장에 로마자가 없어야 한다 */
+const D = require("./typing-data.js");
+assert.deepStrictEqual(D.QUOTES.filter(q => /[A-Za-z]/.test(q.text)).map(q => q.text), [], "로마자가 든 인용문");
+assert.ok(!D.E3_BANK.some(x => /[A-Za-z]/.test(JSON.stringify(x))), "로마자가 든 3종목 문장");
+
 /* 대진 — 1번(만난 팀 피하기) 다음 2번(실력 비슷한 팀끼리). 1-2 · 3-4 · 5-6 다음, 점수 200 100 220 160 140 120 */
 const norm = ps => ps.map(p => p.slice().sort().join("-")).sort().join(" ");
 const ban = new Set(["0-1", "2-3", "4-5"]), power = {0: 200, 1: 100, 2: 220, 3: 160, 4: 140, 5: 120};

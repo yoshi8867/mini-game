@@ -215,6 +215,10 @@ kbd{display:inline-block;font-family:"Gothic A1",sans-serif;font-size:22px;font-
 .practice h3{margin:0 0 var(--s2);font-size:17px}
 .practice textarea.line{border-color:var(--wall-line)}
 .practice .ok{color:var(--win);font-weight:800}
+.practice .sub{margin:var(--s2) 0 4px}
+.guide{display:flex;align-items:center;flex-wrap:wrap;gap:8px;min-height:52px;margin:var(--s2) 0;padding:6px 12px;border:2px solid var(--wait);border-radius:10px;font-size:15px}
+.guide .lbl{font-weight:800;color:var(--wait)} .guide .n{font-size:20px;font-weight:800} .guide .typ{font-family:var(--type-font);font-size:18px}
+.toast.big{font-size:24px}
 .grp{border:1px solid var(--wall-line);border-radius:10px;padding:var(--s2) var(--s3);margin-bottom:var(--s3)}
 .grp h3{margin:0 0 4px;font-size:16px}
 .boards{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:var(--s3)}
@@ -486,6 +490,7 @@ const KEYS_E4 = [
   [["Shift", "Tab"]], "앞 칸으로",
   [["Ctrl", "A"]], "칸 안의 글자를 모두 선택",
   [["Ctrl", "X"], ["Ctrl", "V"]], "잘라 내기 · 붙여 넣기",
+  [["Home"], ["End"]], "칸 안의 맨 앞 · 맨 끝으로",
   [["↑"], ["↓"], ["←"], ["→"]], "옆 칸으로 (좌우는 글자 끝에서)",
 ];
 /* 표 칸 이동 — 칸에 들어가면 커서는 글자 맨 끝, 방향키로 옆 칸. 게임과 연습이 같이 쓴다 */
@@ -534,6 +539,109 @@ function noMouse(box, kind, noteId){
 }
 const kb = combos => combos.map(c => c.map(k => `<kbd>${k}</kbd>`).join(`<span class="plus">+</span>`)).join(` <span class="plus">/</span> `);
 const keyList = list => `<div class="keys">${list.reduce((h, x, i) => i % 2 ? h + `<div class="key"><span>${kb(list[i - 1])}</span><span class="what">${x}</span></div>` : h, "")}</div>`;
+/* ───────── 4종목 연습 — 토이 표. 정답 표(위)와 내 표(아래), 지금 칸·커서에서 누를 키를 하나씩 알린다 ───────── */
+const TOY_HEAD = ["제품명", "금액", "비고"];
+const TOY_ITEMS = [["제습기", "12,000"], ["세단기", "8,500"], ["복합기", "30,000"], ["스캐너", "4,200"], ["전자칠판", "56,000"], ["공기청정기", "9,900"]];
+const TOY_NOTES = [["재고 확인", "재고 검토"], ["반품 예정", "반품 완료"], ["단가 인상", "단가 인하"], ["결재 보류", "결재 중단"], ["분할 납품", "일괄 납품"], ["재견적 요청", "재견적 완료"]];
+// S = 내 표 처음, G = 정답 표. r·o 는 서로 다른 본문 행
+const TOY_TASKS = {
+  del:  (S, G, r) => { G[r][2] = ""; return "비고 지우기"; },
+  move: (S, G, r, o) => { S[o][2] = ""; G[o][2] = S[r][2]; G[r][2] = ""; return "비고 옮기기"; },
+  edit: (S, G, r) => { G[r][2] = TOY_NOTES.find(x => x[0] === S[r][2])[1]; return "비고 고치기"; },
+  name: (S, G, r) => { G[r][0] = pick(["대형 ", "신형 ", "소형 "]) + S[r][0]; return "제품명 고치기"; },
+  zero: (S, G) => { for (let r = 1; r < S.length; r++) G[r][1] = "0"; return "금액 열 0으로"; },
+  row:  (S, G, r) => { if (r === 3) r = 1; S[3] = ["", "", ""]; G[3] = [...S[r]]; G[r] = ["", "", ""]; return "행 옮기기"; },
+};
+function toyTask(last){
+  const k = pick(Object.keys(TOY_TASKS).filter(x => x !== last));
+  const notes = shuffle(TOY_NOTES);
+  const S = [[...TOY_HEAD], ...shuffle(TOY_ITEMS).slice(0, 3).map(([n, w], i) => [n, w, notes[i][0]])];
+  const r = 1 + Math.floor(Math.random() * 3), o = 1 + (r + Math.floor(Math.random() * 2)) % 3;
+  const G = S.map(row => [...row]);
+  const task = TOY_TASKS[k](S, G, r, o);
+  return {k, S, G, task};
+}
+/* 다음 한 걸음. now·goal = 표 값, el = 커서가 있는 칸, clip = 잘라 둔 글자.
+   잘라 둔 것을 붙일 칸 → 옮길(잘라 낼) 칸 → 가장 가까운 다른 칸 순으로 고르고, 그 칸까지 가는 키부터 낸다.
+   꼭 이대로 할 필요는 없다 — 표가 바뀔 때마다 지금 모습에서 다시 계산한다 */
+function toyGuide(now, goal, el, clip){
+  const cells = [];
+  now.forEach((row, r) => row.forEach((v, c) => { if (r && v !== goal[r][c]) cells.push([r, c]); }));
+  if (!cells.length) return null;
+  if (!el || el.dataset.r === undefined) return {say: "아래 표를 누르면 있던 칸으로 돌아간다"};
+  const at = [+el.dataset.r, +el.dataset.c], v = el.value, s = el.selectionStart, e = el.selectionEnd, all = v && s === 0 && e === v.length;
+  const far = ([r, c]) => Math.abs(r - at[0]) * 10 + Math.abs(c - at[1]);
+  const near = list => list.slice().sort((x, y) => far(x) - far(y))[0];
+  const pasteTo = clip ? cells.filter(([r, c]) => goal[r][c] === clip) : [];
+  const from = cells.filter(([r, c]) => now[r][c] && !goal[r][c] && cells.some(([r2, c2]) => goal[r2][c2] === now[r][c]));
+  const [t, act] = pasteTo.length ? [near(pasteTo), "paste"] : from.length ? [near(from), "cut"] : [near(cells), "edit"];
+  if (t[0] !== at[0]) return {keys: [[t[0] < at[0] ? "↑" : "↓"]], n: Math.abs(t[0] - at[0]), say: t[0] < at[0] ? "위 칸으로" : "아래 칸으로"};
+  if (t[1] !== at[1]) return t[1] > at[1] ? {keys: [["Tab"]], n: t[1] - at[1], say: "오른쪽 칸으로"} : {keys: [["Shift", "Tab"]], n: at[1] - t[1], say: "왼쪽 칸으로"};
+  const SEL = {keys: [["Ctrl", "A"]], say: "칸 안의 글자를 모두 선택"};
+  if (act === "paste") return v && !all ? SEL : {keys: [["Ctrl", "V"]], say: "잘라 둔 것을 붙여 넣기"};
+  if (act === "cut") return all ? {keys: [["Ctrl", "X"]], say: "잘라 내기 — 옮길 칸에 붙인다"} : SEL;
+  const want = goal[t[0]][t[1]];
+  if (!want) return all ? {keys: [["Backspace"]], say: "지우기"} : SEL;
+  if (!v) return {type: want};
+  let p = 0; while (p < v.length && p < want.length && v[p] === want[p]) p++;
+  let q = 0; while (q < v.length - p && q < want.length - p && v[v.length - 1 - q] === want[want.length - 1 - q]) q++;
+  if (p + q < Math.max(2, want.length / 2)) return all ? {type: want, say: "고른 글자 위에 그대로 치면 바뀐다"} : SEL;   // 거의 다 다르면 통째로
+  const hi = v.length - q, del = hi - p;
+  if (s !== e) return {keys: [["→"]], say: "선택을 풀고"};
+  if (s !== hi){
+    if (hi === v.length) return {keys: [["End"]], say: "칸 맨 끝으로"};
+    if (hi === 0) return {keys: [["Home"]], say: "칸 맨 앞으로"};
+    return {keys: [[s > hi ? "←" : "→"]], n: Math.abs(s - hi), say: "고칠 곳 바로 뒤로"};
+  }
+  if (del > 0) return {keys: [["Backspace"]], n: del, say: "다른 글자 지우기"};
+  return {type: want.slice(p, want.length - q)};
+}
+function toyTable(){
+  const t = $("pr4");
+  let cur = null, clip = "", busy = false, at = [1, 0];
+  const cell = (v, r, c) => `<td class="${r ? "" : "head"} ${c === 1 ? "num" : ""}"><input data-r="${r}" data-c="${c}" value="${esc(v)}" ${r ? "" : "readonly"} spellcheck="false" autocomplete="off"></td>`;
+  const cols = `<colgroup><col style="width:28%"><col style="width:20%"><col></colgroup>`;
+  const read = () => cur.G.map((row, r) => row.map((_, c) => t.querySelector(`[data-r="${r}"][data-c="${c}"]`).value));
+  const part = (a, b) => {
+    let p = 0, q = 0;
+    while (p < a.length && p < b.length && a[p] === b[p]) p++;
+    while (q < a.length - p && q < b.length - p && a[a.length - 1 - q] === b[b.length - 1 - q]) q++;
+    const mid = b.slice(p, b.length - q);
+    return esc(b.slice(0, p)) + `<mark class="chg ${mid ? "" : "gap"}">${esc(mid)}</mark>` + esc(b.slice(b.length - q));
+  };
+  const kind = (a, b) => a === b ? "" : a && b ? "part" : "diff";
+  const paint = () => {
+    const now = read();
+    $("p4goal").innerHTML = cols + cur.G.map((row, r) => `<tr>${row.map((v, c) => { const k = kind(now[r][c], v);
+      return `<td class="${r ? "" : "head"} ${c === 1 ? "num" : ""} ${k}">${k === "part" ? part(now[r][c], v) : esc(v)}</td>`; }).join("")}</tr>`).join("");
+    t.querySelectorAll("input").forEach(el => { const k = kind(el.value, cur.G[+el.dataset.r][+el.dataset.c]);
+      el.parentElement.classList.toggle("diff", k === "diff"); el.parentElement.classList.toggle("part", k === "part"); });
+    const a = document.activeElement, g = toyGuide(now, cur.G, t.contains(a) ? a : null, clip);
+    $("p4guide").innerHTML = !g ? "" : `<span class="lbl">다음</span>` +
+      (g.keys ? kb(g.keys) + (g.n > 1 ? `<span class="n">× ${g.n}</span>` : "") : g.type !== undefined ? `<b class="typ">「${esc(g.type)}」</b> 입력` : "") +
+      (g.say ? `<span class="sub" style="margin:0">— ${g.say}</span>` : "");
+    if (!busy && now.every((row, r) => row.every((v, c) => v === cur.G[r][c]))){   // 성공 — 잠깐 보여 주고 새 문제
+      busy = true; $("prOk").textContent = "성공!"; $("prOk").className = "toast big good";
+      setTimeout(() => { if (!$("pr4")) return; $("prOk").textContent = ""; busy = false; next(); }, 1200);
+    }
+  };
+  const next = () => {
+    const a = document.activeElement; if (t.contains(a) && a.dataset.r) at = [+a.dataset.r, +a.dataset.c];
+    cur = toyTask(cur && cur.k); clip = "";
+    $("p4task").textContent = cur.task;
+    t.innerHTML = cols + cur.S.map((row, r) => `<tr>${row.map((v, c) => cell(v, r, c)).join("")}</tr>`).join("");
+    const el = t.querySelector(`[data-r="${at[0]}"][data-c="${at[1]}"]`); if (el) el.focus();   // 커서는 있던 칸에 그대로
+    paint();
+  };
+  gridKeys(t); noMouse(t, "grid", "prOk");   // 먼저 단다 — 칸에 들어가면 커서를 끝에 둔 다음에 가이드를 다시 센다
+  t.addEventListener("keydown", e => {
+    if ((e.ctrlKey || e.metaKey) && (e.code === "KeyX" || e.code === "KeyC")){ const el = e.target; if (el.selectionStart !== el.selectionEnd) clip = el.value.slice(el.selectionStart, el.selectionEnd); }
+    setTimeout(() => !busy && paint(), 0);
+  });
+  t.addEventListener("input", () => { if (!busy) paint(); });
+  t.addEventListener("focusin", () => setTimeout(() => !busy && paint(), 0));
+  next();
+}
 function intro(){
   const e = V.ev;
   const head = `<h2 class="title">${e + 1}종목 · ${V.events[e]}</h2>` + teachBar("학생들이 안내를 보고 있습니다", `<button class="go" id="tgo">${e === 0 ? "조 고르기로" : "첫 판 대진 공개"}</button>`);
@@ -543,11 +651,10 @@ function intro(){
     <div class="practice"><h3>연습 — <span id="prHow">Ctrl + Shift + → 로 '김밥'을 한 번에 골라 '비빔밥'으로 바꿔 보자</span></h3>
       <textarea class="line" id="pr" rows="1" spellcheck="false">오늘 점심은 김밥이다.</textarea><p class="toast" id="prOk"></p></div>`;
   else body = `<p class="sub">표의 칸을 옮겨 다니며 고친다. 마우스보다 키보드가 빠르다.</p>${keyList(KEYS_E4)}
-    <div class="practice"><h3>연습 — Tab 으로 '비고' 칸에 가서 Ctrl + A, Ctrl + X 로 잘라 아래 빈 칸에 Ctrl + V</h3>
-      <table class="grid" id="pr4" style="max-width:640px"><colgroup><col style="width:30%"><col></colgroup>
-      <tr><td class="head"><input value="제품명" readonly data-r="0" data-c="0"></td><td class="head"><input value="비고" readonly data-r="0" data-c="1"></td></tr>
-      <tr><td><input value="산업용 제습기" data-r="1" data-c="0"></td><td><input value="재고 확인 바람." data-r="1" data-c="1"></td></tr>
-      <tr><td><input value="고속 문서 세단기" data-r="2" data-c="0"></td><td><input value="" data-r="2" data-c="1"></td></tr></table><p class="toast" id="prOk"></p></div>`;
+    <div class="practice" style="max-width:720px"><h3>연습 — 위 정답 표처럼 아래 내 표를 고친다 · <span id="p4task"></span></h3>
+      <p class="sub">정답 표</p><table class="grid goal" id="p4goal"></table>
+      <div class="guide" id="p4guide"></div>
+      <p class="sub">내 표</p><table class="grid" id="pr4"></table><p class="toast big" id="prOk"></p></div>`;
   $("stage").innerHTML = head + body;
   if (TEACH) $("tgo").onclick = () => act("go");
   if (e === 2){
@@ -558,13 +665,7 @@ function intro(){
     noMouse(pr, "line", "prOk");
     pr.focus(); pr.setSelectionRange(7, 7);
   }
-  if (e === 3){
-    const t = $("pr4");
-    t.oninput = () => { const v = [...t.querySelectorAll("input")].map(x => x.value);
-      $("prOk").textContent = v[3] === "" && v[5] === "재고 확인 바람." ? "잘했다! 그대로 옮겨졌다" : ""; $("prOk").className = "toast good"; };
-    gridKeys(t); noMouse(t, "grid", "prOk");
-    t.querySelectorAll("input")[2].focus();
-  }
+  if (e === 3) toyTable();
 }
 
 /* ───────── 1종목 조 고르기 · 조 발표 ───────── */
