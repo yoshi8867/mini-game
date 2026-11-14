@@ -43,6 +43,19 @@ const E2_SLOTS = 6;                             // 긴 인용문이 섞여도 �
 const LEAGUE_GAMES = 2;                         // 2·3·4종목 판 수
 const TIER_E3 = [2, 3];                         // 3종목은 고칠 곳 수 2·3·4
 const GOT = [null, "친 문장", "고친 문장", "완성한 표"];
+/* 대회 종류 — 종목 이름, 종목마다 경기 꼴(kind)과 한 판 길이(초).
+   keys(단축키 올림픽)는 세 종목 모두 4종목(표)처럼 각자 화면에서 풀고 다 풀었다는 알림을 믿는다 */
+const MODES = {
+  typing: {title: "타자 올림픽", events: EVENTS, kinds: ["word", "quote", "edit", "table"], limit: LIMIT, got: GOT},
+  keys:   {title: "단축키 올림픽", events: ["줄 옮기기", "주석과 들여쓰기", "이름 바꾸기와 저장"],
+           kinds: ["keys", "keys", "keys"], limit: [90, 90, 90], got: ["푼 문제", "푼 문제", "푼 문제"], items: true}
+};
+/* 아이템 (items 가 켜진 종류만) — 맞대결에서 진 팀이 다음 경기에 하나 받는다. 미리 보기 때 팀이 고른다.
+   nerf 상대 한 명의 득점을 2/3 로 · dark 상대 팀 전체의 화면을 10초 흐리게 · none 안 쓴다(상남자)
+   연막탄은 경기 중에 우리 팀 최하위(지금까지 득점이 가장 낮은 사람)가 눌러서 터뜨린다 — 한 번 */
+const ITEMS = ["nerf", "dark", "none"];
+const DARK = 10000, PREVIEW_ITEM = 30;          // 연막탄 길이(ms) · 아이템을 고르는 판의 미리 보기(초)
+const SOLO = k => k === "table" || k === "keys";   // 각자 자기 것을 푸는 경기
 
 /* ─── 순수 계산 ─────────────────────────────────────────────────────── */
 const CHO  = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ";
@@ -130,7 +143,9 @@ class Typing {
     opt = opt || {};
     this.code  = code;
     this.pin   = okPin(opt.pin) ? opt.pin : null;
-    this.title = String(opt.title || "타자 올림픽").slice(0, 40);
+    this.mode  = MODES[opt.mode] ? opt.mode : "typing";
+    this.cfg   = MODES[this.mode];
+    this.title = String(opt.title || this.cfg.title).slice(0, 40);
     this.state = "open";                     // open(팀 고르기) | running | done
     this.made  = Date.now();
     this.people = new Map();                 // pid → {pid, name, team, bot, cpm, edit}
@@ -149,20 +164,21 @@ class Typing {
     this.e1 = null;                          // {g, groups, gone, acc}
     this.lg = null;                          // {k, results, stat}
     this.races = [];
+    this.owed = [];                          // 다음 경기에 아이템을 받을 팀 — 바로 앞 판에서 진 팀
   }
 
   /* ─── 맡기기 · 되살리기 ─── 통째로 적는다. Map 만 배열로 푼다 */
   snapshot(){
     const o = {v: 1};
-    for (const k of ["code", "pin", "title", "state", "made", "lobby", "teams", "prev", "ev", "ph",
-                     "medals", "ranks", "res", "rec", "picks", "e1", "lg", "races", "x", "bonus"]) o[k] = this[k];
+    for (const k of ["code", "pin", "title", "mode", "state", "made", "lobby", "teams", "prev", "ev", "ph",
+                     "medals", "ranks", "res", "rec", "picks", "e1", "lg", "races", "x", "bonus", "owed"]) o[k] = this[k];
     o.people = [...this.people.values()];
     return o;
   }
   static revive(d){
-    const g = new Typing(d.code, {pin: d.pin, title: d.title});
+    const g = new Typing(d.code, {pin: d.pin, title: d.title, mode: d.mode});
     for (const k of ["state", "made", "lobby", "teams", "prev", "ev", "ph", "medals", "ranks",
-                     "res", "rec", "picks", "e1", "lg", "races", "x", "bonus"]) if (d[k] !== undefined) g[k] = d[k];
+                     "res", "rec", "picks", "e1", "lg", "races", "x", "bonus", "owed"]) if (d[k] !== undefined) g[k] = d[k];
     (d.people || []).forEach(p => g.people.set(p.pid, p));
     return g;
   }
@@ -231,7 +247,7 @@ class Typing {
     const k = this.ph.k;
     if (this.state !== "running") return {err: "notrunning"};
     if (k === "intro"){
-      if (this.ev === 0){ this.e1 = {g: 0, acc: {}}; return this.pick(); }
+      if (this.word()){ this.e1 = {g: 0, acc: {}}; return this.pick(); }
       this.lg = {k: 0, results: [], stat: {}};
       return this.round(now);
     }
@@ -241,7 +257,7 @@ class Typing {
     if (k === "play") return this.endPlay(now);
     if (k === "after"){
       if (this.x){ this.x = null; this.state = "done"; this.races = []; this.ph = {k: "finale"}; return {ok: true}; }   // 한 게임 더 — 끝
-      if (this.ev === 0){
+      if (this.word()){
         if (this.e1.g + 1 < E1_GAMES){ this.e1.g++; return this.pick(); }
         return this.finishE1(now);
       }
@@ -250,7 +266,7 @@ class Typing {
     }
     if (k === "ceremony"){
       this.ev++; this.races = []; this.res = null;
-      if (this.ev >= EVENTS.length){ this.state = "done"; this.ph = {k: "finale"}; }
+      if (this.ev >= this.cfg.events.length){ this.state = "done"; this.ph = {k: "finale"}; }
       else this.ph = {k: "intro", ev: this.ev};
       return {ok: true};
     }
@@ -260,20 +276,24 @@ class Typing {
   extra(ev, now){
     ev = ev | 0;
     if (this.state !== "done" || this.ph.k !== "finale") return {err: "notdone"};
-    if (!(ev >= 0 && ev < EVENTS.length)) return {err: "bad"};
+    if (!(ev >= 0 && ev < this.cfg.events.length)) return {err: "bad"};
     this.state = "running"; this.ev = ev; this.res = null;
     this.x = {n: ++this.bonus, ev};
-    if (ev === 0){ this.e1 = {g: 0, acc: {}}; return this.pick(); }
+    if (this.word()){ this.e1 = {g: 0, acc: {}}; return this.pick(); }
     this.lg = {k: 0, results: [], stat: {}};
     return this.round(now);
   }
+  word(){ return this.cfg.kinds[this.ev] === "word"; }   // 지금 종목이 조별 개인전인가
   /* 시계로 넘어가는 단계와 연습 참가자. 바뀐 것이 있으면 true */
   tick(now){
     let moved = false;
     if (this.ph.until && now >= this.ph.until && ["preview", "play", "ceremony"].includes(this.ph.k)){
       this.go(now); moved = true;
     }
-    if (this.ph.k === "play") for (const r of this.races) if (this.botsAct(r, now)) moved = true;
+    if (this.ph.k === "play") for (const r of this.races){
+      if (this.botsAct(r, now)) moved = true;
+      for (const x of Object.values(r.it || {})) if (x.auto && !x.at && now >= x.auto && this.fire(x.holder, now).ok) moved = true;
+    }
     return moved;
   }
 
@@ -320,14 +340,18 @@ class Typing {
   round(now){
     const pairs = this.pairs();
     this.prev = pairs;
+    const owed = this.cfg.items ? this.owed : [];
+    this.owed = [];                            // 받은 아이템은 이 판에서 쓰든 안 쓰든 사라진다
     this.races = pairs.map(([a, b]) => {
       const ps = [...this.members(a), ...this.members(b)].map(p => p.pid);
-      const kind = ["", "quote", "edit", "table"][this.ev];
+      const kind = this.cfg.kinds[this.ev];
       const deck = kind === "quote" ? shuffle(QUOTES) : kind === "edit" ? shuffle(E3_BANK) : [];
       const slots = kind === "quote" ? E2_SLOTS : kind === "edit" ? Math.round(ps.length * 1.5) : 0;
-      return this.race(kind, ps, {a, b, deck, slots});
+      const r = this.race(kind, ps, {a, b, deck, slots});
+      [a, b].forEach(t => { if (owed.includes(t)) (r.it ??= {})[t] = {kind: null, target: null}; });
+      return r;
     });
-    this.ph = {k: "preview", ev: this.ev, rd: this.lg.k, until: now + PREVIEW * 1000};
+    this.ph = {k: "preview", ev: this.ev, rd: this.lg.k, until: now + (this.races.some(r => r.it) ? PREVIEW_ITEM : PREVIEW) * 1000};
     return {ok: true};
   }
   /* 1번: 이 종목에서 만난 팀, 바로 앞 판에서 만난 팀과는 다시 붙지 않는다 (앞 종목은 그 한 판만 본다)
@@ -340,13 +364,62 @@ class Typing {
     else (this.ranks[this.x ? this.ev : this.ev - 1] || []).forEach((t, i) => power[t] = -i);
     return matchUp(shuffle(this.teams), power, ban);
   }
+  /* 아이템 고르기 — 미리 보기 동안, 아이템을 받은 팀의 누구나. 마지막에 고른 것이 쓰인다 */
+  setItem(pid, kind, target){
+    const r = this.raceOf(pid), me = this.people.get(pid);
+    if (this.ph.k !== "preview" || !r || !me || !r.it || !r.it[me.team]) return {err: "noitem"};
+    if (!ITEMS.includes(kind)) return {err: "bad"};
+    if (kind !== "nerf") target = null;        // 연막탄은 상대 팀 전체다 — 사람을 고르지 않는다
+    else {
+      const foe = this.people.get(String(target));
+      if (!foe || !r.ps.includes(foe.pid) || foe.team === me.team) return {err: "bad"};
+      target = foe.pid;
+    }
+    r.it[me.team] = {kind, target, by: pid};
+    return {ok: true};
+  }
+  /* 경기가 시작될 때 고른 아이템을 건다. 너프는 처음부터, 연막탄은 버튼을 가진 사람(holder)이 누를 때 */
+  arm(r, now, limit){
+    for (const [t, x] of Object.entries(r.it || {})){
+      const foes = this.members(+t === r.a ? r.b : r.a);
+      if (!x.kind && foes.length && this.members(+t).every(p => p.bot))     // 연습 참가자뿐인 팀은 아무거나
+        Object.assign(x, {kind: ITEMS[(Math.random() * ITEMS.length) | 0], target: foes[(Math.random() * foes.length) | 0].pid});
+      if (x.kind !== "nerf") x.target = null;
+      if (x.kind === "nerf") (r.nerf ??= {})[x.target] = true;
+      if (x.kind === "dark"){
+        x.holder = this.weakest(+t);
+        if ((this.people.get(x.holder) || {}).bot) x.auto = now + rand(10000, Math.max(10000, limit - DARK - 10000));   // 연습 참가자는 아무 때나
+      }
+    }
+  }
+  /* 팀 최하위 — 이 대회에서 지금까지 낸 득점(끝난 종목 + 이 종목의 끝난 판)이 가장 낮은 사람. 같으면 먼저 들어온 사람 */
+  weakest(t){
+    const tot = pid => (this.rec[pid] || []).reduce((n, v) => n + (v || 0), 0) + (((this.lg && this.lg.stat[pid]) || {}).score || 0);
+    return this.members(t).reduce((w, p) => tot(p.pid) < tot(w.pid) ? p : w).pid;
+  }
+  /* 연막탄 터뜨리기 — 버튼을 가진 사람만, 경기 중에 한 번. 상대 팀 모두의 화면이 10초 흐려진다 */
+  fire(pid, now){
+    const r = this.raceOf(pid), me = this.people.get(pid);
+    if (this.ph.k !== "play" || !r || !me || now >= r.until) return {err: "notplaying"};
+    const x = r.it && r.it[me.team];
+    if (!x || x.kind !== "dark" || x.holder !== pid || x.at) return {err: "noitem"};
+    x.at = now;
+    (r.dark ??= {})[me.team === r.a ? r.b : r.a] = {at: now, until: now + DARK};
+    return {ok: true};
+  }
+  used(r){
+    const nm = id => (this.people.get(id) || {}).name || "?";
+    return Object.entries(r.it || {}).filter(([, x]) => x.kind && x.kind !== "none")
+      .map(([t, x]) => ({team: +t, foe: +t === r.a ? r.b : r.a, kind: x.kind, target: x.target || undefined, name: x.target ? nm(x.target) : undefined,
+                         holder: x.holder ? nm(x.holder) : undefined, fired: x.kind === "dark" ? !!x.at : undefined}));
+  }
   finishLeague(now){
     const st = standings(this.lg.results, this.teams);
     st.slice(0, 3).forEach((x, place) => this.medals.push({ev: this.ev, place, team: x.team}));
     const fmt = x => +x.toFixed(1);
     this.res = {ev: this.ev,
       teams: st.map(x => ({team: x.team, val: `승점 ${x.pts} · ${x.w}승 ${x.d}무 ${x.l}패 · 득점 ${fmt(x.score)}`})),
-      cols: ["득점", GOT[this.ev], "경기"],
+      cols: ["득점", this.cfg.got[this.ev], "경기"],
       rows: Object.entries(this.lg.stat).map(([pid, s]) => ({pid, v: [s.score, s.got, s.n], key: s.score}))};
     return this.ceremony(now, st.map(x => x.team));
   }
@@ -367,15 +440,16 @@ class Typing {
     return r;
   }
   play(now){
-    const limit = LIMIT[this.ev] * 1000;
+    const limit = this.cfg.limit[this.ev] * 1000;
     for (const r of this.races){
       r.t0 = now; r.until = now + limit;
       while (r.items.length < r.n) r.items.push(this.gen(r, now));
       r.slots = r.items.map((_, i) => i);
-      if (r.kind === "table") r.ps.forEach(pid => r.goals[pid] = this.goal(r, pid, now));
+      if (SOLO(r.kind)) r.ps.forEach(pid => r.goals[pid] = this.goal(r, pid, now));
+      this.arm(r, now, limit);
     }
-    this.ph = {k: "play", ev: this.ev, g: this.e1 && this.ev === 0 ? this.e1.g : undefined,
-               rd: this.lg && this.ev > 0 ? this.lg.k : undefined, until: now + limit};
+    this.ph = {k: "play", ev: this.ev, g: this.word() ? this.e1.g : undefined,
+               rd: this.word() ? undefined : this.lg.k, until: now + limit};
     return {ok: true};
   }
   late(r, now){ return now - r.t0 >= (r.until - r.t0) / 2; }
@@ -392,7 +466,8 @@ class Typing {
     const sa = this.teamScore(r, r.a), sb = this.teamScore(r, r.b);
     if (Math.abs(sa - sb) < 1e-9) return null;
     const lose = this.members(sa < sb ? r.a : r.b);
-    return lose.length ? lose.reduce((w, p) => (p.cpm || 0) < (w.cpm || 0) ? p : w).pid : null;
+    const weak = p => this.mode === "keys" ? r.sc[p.pid].score : (p.cpm || 0);   // 타수가 없으면 이 판 득점으로
+    return lose.length ? lose.reduce((w, p) => weak(p) < weak(w) ? p : w).pid : null;
   }
   gen(r, now){
     const late = r.t0 !== null && this.late(r, now), P = PTS[late ? 1 : 0];
@@ -414,7 +489,7 @@ class Typing {
   claim(pid, i, text, now){
     const r = this.raceOf(pid);
     if (this.ph.k !== "play" || !r || now >= r.until) return {err: "notplaying"};
-    if (r.kind === "table") return {err: "bad"};
+    if (SOLO(r.kind)) return {err: "bad"};
     const pos = r.slots.indexOf(i | 0);
     if (pos < 0) return {err: "gone"};
     const it = r.items[i | 0];
@@ -476,10 +551,11 @@ class Typing {
   /* 4종목 — 표 하나를 다 고쳤다. tier 는 그 과제의 등급(0·1·2) */
   tableDone(pid, tier, now){
     const r = this.raceOf(pid);
-    if (this.ph.k !== "play" || !r || now >= r.until || r.kind !== "table") return {err: "notplaying"};
+    if (this.ph.k !== "play" || !r || now >= r.until || !SOLO(r.kind)) return {err: "notplaying"};
     tier = Math.max(0, Math.min(2, tier | 0));
     const g = r.goals[pid] || {late: false, x2: false};
-    const val = PTS[g.late ? 1 : 0][tier] * (g.x2 ? 2 : 1);
+    let val = PTS[g.late ? 1 : 0][tier] * (g.x2 ? 2 : 1);
+    if (r.nerf && r.nerf[pid]) val = Math.round(val * 2 / 3);     // 너프
     const s = r.sc[pid]; s.score += val; s.got++;
     (r.feed ??= []).push({pid, val});
     r.goals[pid] = this.goal(r, pid, now);
@@ -487,7 +563,7 @@ class Typing {
   }
   endPlay(now){
     for (const r of this.races) if (r.until > now) r.until = now;
-    if (this.ev === 0){
+    if (this.word()){
       const g = this.e1.g, acc = this.e1.acc;
       this.races.forEach(r => {
         const secs = (r.until - r.t0) / 1000;
@@ -500,7 +576,9 @@ class Typing {
       });
     } else {
       this.races.forEach(r => {
-        this.lg.results.push({a: r.a, b: r.b, sa: this.teamScore(r, r.a), sb: this.teamScore(r, r.b)});
+        const sa = this.teamScore(r, r.a), sb = this.teamScore(r, r.b);
+        this.lg.results.push({a: r.a, b: r.b, sa, sb});
+        if (this.cfg.items && Math.abs(sa - sb) > 1e-9) this.owed.push(sa < sb ? r.a : r.b);   // 진 팀은 다음 경기에 아이템
         r.ps.forEach(pid => { const s = this.lg.stat[pid] ??= {score: 0, got: 0, n: 0};
           s.score += r.sc[pid].score; s.got += r.sc[pid].got; s.n++; });
       });
@@ -516,7 +594,7 @@ class Typing {
       const p = this.people.get(pid);
       if (!p || !p.bot || now >= r.until) continue;
       const b = r.bot[pid] ??= {cur: null, at: 0};
-      if (r.kind === "table"){
+      if (SOLO(r.kind)){
         if (!b.at) b.at = now + (p.edit + 1) * 4000 * rand(0.8, 1.2);
         else if (now >= b.at){ this.tableDone(pid, (Math.random() * 3) | 0, now); b.at = 0; moved = true; }
         continue;
@@ -539,7 +617,7 @@ class Typing {
   view(pid, now){
     const name = id => (this.people.get(id) || {}).name || "?";
     const out = {code: this.code, title: this.title, state: this.state, now, ph: this.ph, ev: this.ev, extra: this.x || undefined,
-      lobby: this.lobby, n: this.people.size, events: EVENTS,
+      lobby: this.lobby, n: this.people.size, events: this.cfg.events, mode: this.mode, limit: this.cfg.limit[this.ev],
       teams: [...Array(TEAMS).keys()].map(t => ({t, ps: this.members(t).map(p => ({pid: p.pid, name: p.name, cpm: p.cpm}))})),
       medals: this.medals.map(m => m.who ? Object.assign({}, m, {name: name(m.who)}) : m),
       ranks: this.ranks};
@@ -554,7 +632,9 @@ class Typing {
       const brief = r => ({a: r.a, b: r.b, th: r.th !== undefined ? E1_THEMES[r.th].name : undefined,
         sa: r.a !== undefined ? this.teamScore(r, r.a) : undefined, sb: r.a !== undefined ? this.teamScore(r, r.b) : undefined,
         ps: r.ps.map(id => Object.assign({pid: id, name: name(id), team: (this.people.get(id) || {}).team,
-          cpm: (this.people.get(id) || {}).cpm}, r.sc[id])), table: r.table, until: r.until});
+          cpm: (this.people.get(id) || {}).cpm}, r.sc[id])), table: r.table, until: r.until,
+        has: r.it ? Object.keys(r.it).map(Number) : undefined,              // 아이템을 받은 팀
+        used: r.it && k !== "preview" ? this.used(r) : undefined});         // 고른 것은 경기가 시작되면 드러난다
       out.races = this.races.map(brief);
       const r = (me && this.raceOf(pid)) || this.races[0];
       if (r){
@@ -563,7 +643,15 @@ class Typing {
         if (k === "play") out.mine.items = r.slots.map(i => { const it = r.items[i];
           return {i, text: it.text, segs: it.segs, tier: it.tier, pts: it.pts, late: it.late, src: it.src,
                   x2: !!(me && it.x2 === pid)}; });
-        if (r.kind === "table" && me) out.mine.goal = r.goals[pid];
+        if (SOLO(r.kind) && me) out.mine.goal = r.goals[pid];
+        if (me && r.it){
+          if (k === "preview" && r.it[me.team]) out.mine.item = Object.assign({}, r.it[me.team],
+            {foes: r.ps.filter(id => (this.people.get(id) || {}).team !== me.team).map(id => ({pid: id, name: name(id)}))});
+          if (r.dark && r.dark[me.team]) out.mine.dark = r.dark[me.team];
+          const mi = r.it[me.team];
+          if (k === "play" && mi && mi.kind === "dark" && mi.holder === pid && !mi.at) out.mine.fire = true;   // 연막탄 버튼
+          if (r.nerf && r.nerf[pid]) out.mine.nerf = true;
+        }
       }
     }
     if (k === "finale") out.mvp = mvp(this.rec, id => (this.people.get(id) || {}).team).map(x => Object.assign(x, {name: name(x.pid)}));
@@ -574,10 +662,10 @@ class Typing {
 
   /* 관리 화면에 내려 줄 것 */
   full(){
-    return {code: this.code, title: this.title, pin: this.pin, state: this.state, made: this.made,
+    return {code: this.code, title: this.title, mode: this.mode, pin: this.pin, state: this.state, made: this.made,
             people: this.people.size, ph: this.ph, ev: this.ev, lobby: this.lobby};
   }
 }
 
-module.exports = {Typing, MAX_ENTRANTS, TEAMS, EVENTS, PTS, LIMIT, PREVIEW, RESULT, E1_GAMES, E1_MIN,
+module.exports = {Typing, MODES, ITEMS, DARK, PREVIEW_ITEM, MAX_ENTRANTS, TEAMS, EVENTS, PTS, LIMIT, PREVIEW, RESULT, E1_GAMES, E1_MIN,
                   matchUp, standings, formGroups, keys, tierOf, segText, LEAGUE_GAMES};

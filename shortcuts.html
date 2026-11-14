@@ -1,0 +1,971 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VS Code 단축키 실습</title>
+<style>
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font-family:"Pretendard","Malgun Gothic",system-ui,sans-serif;background:#eef1f5;color:#1c2330;display:flex;flex-direction:column}
+main{flex:1;display:flex;gap:28px;padding:28px 36px 8px;min-height:0}
+#left{flex:0 0 40%;min-width:0;overflow:auto;user-select:none}
+#right{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center}
+body.info #left{flex:1;max-width:900px;margin:auto}
+body.info #right{display:none}
+#timer{display:none;float:right;font:700 30px Consolas,monospace;color:#0b5cad}
+body.game #timer{display:block}
+#desc button{margin:6px 8px 0 0}
+#count{font-size:14px;color:#667;letter-spacing:.08em}
+h1{font-size:34px;margin:6px 0 14px;line-height:1.25}
+#keys{display:flex;flex-wrap:wrap;gap:8px 22px;margin-bottom:14px}
+kbd{display:inline-block;font:600 20px Consolas,monospace;background:#fff;border:1px solid #b8c0cc;border-bottom-width:4px;border-radius:8px;padding:6px 12px;min-width:44px;text-align:center}
+#desc{font-size:19px;line-height:1.65}
+#desc p{margin:0 0 10px}
+#desc b{color:#0b5cad}
+#desc kbd{font-size:15px;padding:1px 8px;min-width:0;border-bottom-width:3px}
+#desc td{padding:3px 18px 3px 0;font-size:17px}
+#goalbox{margin-top:16px;background:#1e1e1e;border-radius:10px;padding:10px 16px 12px}
+#goalbox h3{margin:0 0 4px;font-size:13px;color:#7fd18b;letter-spacing:.06em}
+#goal{margin:0;font:16px/24px Consolas,"D2Coding",monospace;color:#d4d4d4;white-space:pre;overflow:hidden}
+i{font-style:normal}.c{color:#6a9955}.s{color:#ce9178}.k{color:#c586c0}.b{color:#dcdcaa}.n{color:#b5cea8}.v{color:#9cdcfe}
+
+#ed{background:#1e1e1e;border-radius:10px;overflow:hidden;box-shadow:0 10px 30px #0003;outline:4px solid transparent;transition:outline-color .2s}
+#ed.ok{outline-color:#2ea043}
+#tabs{background:#252526;display:flex;align-items:center;height:38px}
+#tab{background:#1e1e1e;color:#fff;padding:0 16px;height:100%;display:flex;align-items:center;gap:8px;font-size:14px;border-top:2px solid #007acc}
+#bar{margin-left:auto;margin-right:14px;color:#75beff;letter-spacing:10px;font-size:15px;visibility:hidden}
+#ed.dbg #bar{visibility:visible}
+#body{display:flex;font:18px/28px Consolas,"D2Coding",monospace;color:#d4d4d4;padding:10px 0}
+#gut{flex:0 0 70px;color:#858585;text-align:right}
+#gut div{display:flex;align-items:center;height:28px;padding-right:14px}
+#gut b{width:12px;height:12px;border-radius:50%;margin-left:8px}
+#gut .bp b{background:#e51400}
+#gut u{width:16px;text-decoration:none;color:#ffcc00;font-size:13px}
+#gut .at u::before{content:"▶"}
+#gut span{flex:1}
+#code{flex:1;position:relative;min-height:308px;overflow:hidden}
+#cur,#dl{position:absolute;left:0;right:0;height:28px;pointer-events:none}
+#cur{background:#ffffff0d}
+#dl{background:#ffff0030;display:none}
+#hl,#ta{position:absolute;inset:0;margin:0;padding:0;border:0;font:inherit;white-space:pre;overflow:hidden;tab-size:4}
+#hl{pointer-events:none}
+#ta{width:100%;height:100%;background:none;color:transparent;caret-color:#fff;resize:none;outline:0}
+#ta::selection{background:#264f78;color:transparent}
+#rn{position:absolute;display:none;z-index:5;background:#252526;border:1px solid #007acc;padding:4px;box-shadow:0 4px 12px #0008}
+#rni{font:inherit;background:#3c3c3c;color:#fff;border:1px solid #007acc;padding:0 6px;width:14em;outline:0}
+#rn small{display:block;color:#999;font:12px sans-serif;margin-top:3px}
+#vars{flex:0 0 210px;border-left:1px solid #333;padding:0 14px;font-size:15px;line-height:24px;display:none}
+body.debug #vars{display:block}
+#vars h4{margin:0 0 2px;font:600 12px sans-serif;color:#bbb}
+#vars div+h4{margin-top:10px}
+#vars p{margin:0;color:#888;font:13px sans-serif}
+#status{background:#007acc;color:#fff;font-size:13px;padding:3px 12px;display:flex;justify-content:space-between;min-height:24px}
+#ed.dbg #status{background:#cc6633}
+#toast{height:28px;margin-top:10px;text-align:center;color:#8a3b12;font-size:15px;opacity:0;transition:opacity .2s}
+#toast.on{opacity:1}
+
+footer{display:flex;align-items:center;gap:12px;padding:10px 36px 20px}
+#prog{flex:1;height:6px;background:#d5dae2;border-radius:3px;overflow:hidden}
+#prog i{display:block;height:100%;background:#2ea043;transition:width .3s}
+button{font-family:inherit;font-weight:600;font-size:16px;padding:10px 18px;border-radius:8px;border:1px solid #b8c0cc;background:#fff;cursor:pointer}
+button:disabled{opacity:.4;cursor:not-allowed}
+#next{background:#0b5cad;color:#fff;border-color:#0b5cad}
+#ok{position:fixed;top:22px;left:50%;transform:translate(-50%,-160px);background:#2ea043;color:#fff;font-weight:700;font-size:22px;padding:12px 28px;border-radius:999px;transition:transform .25s;box-shadow:0 8px 24px #0003}
+#ok.on{transform:translate(-50%,0)}
+</style>
+</head>
+<body>
+<main>
+  <section id="left">
+    <div id="timer"></div><div id="count"></div><h1 id="title"></h1><div id="keys"></div><div id="desc"></div>
+    <div id="goalbox"><h3>목표 — 이렇게 만들어 보세요</h3><pre id="goal"></pre></div>
+  </section>
+  <section id="right">
+    <div id="ed">
+      <div id="tabs"><div id="tab">main.py <b id="dot">●</b></div><div id="bar">▶⤼⤓⤒⟲■</div></div>
+      <div id="body">
+        <div id="gut"></div>
+        <div id="code">
+          <div id="cur"></div><div id="dl"></div>
+          <textarea id="ta" spellcheck="false" wrap="off" autocomplete="off"></textarea><pre id="hl"></pre>
+          <div id="rn"><input id="rni" spellcheck="false" autocomplete="off"><small>Enter: 이름 바꾸기 · Esc: 취소</small></div>
+        </div>
+        <div id="vars"></div>
+      </div>
+      <div id="status"><span id="stl"></span><span id="str"></span></div>
+    </div>
+    <div id="toast"></div>
+  </section>
+</main>
+<footer>
+  <button id="prev">← 이전</button><button id="reset">↻ 다시 하기</button>
+  <div id="prog"><i></i></div>
+  <button id="next">다음 →</button>
+</footer>
+<div id="ok">✔ 잘했어요!</div>
+
+<script>
+const $=id=>document.getElementById(id), ta=$('ta'), LH=28;
+
+// ───────── 디버깅용 예제와 실행 기록 ─────────
+// ponytail: 파이썬 해석기 대신 예제별 실행 순서를 미리 적어 둔 기록. 예제 코드를 바꾸면 바로 아래 기록도 같이 바꿔야 함.
+function tracer(){
+  const t=[],g={};
+  return {t,g,stop:(line,loc,ret)=>t.push({line,depth:loc?1:0,g:{...g},loc:loc&&{...loc},ret})};
+}
+const DBG0=`number = 1
+even_sum = 0
+odd_sum = 0
+
+while number <= 6:
+    if number % 2 == 0:
+        even_sum = even_sum + number
+    else:
+        odd_sum = odd_sum + number
+    number = number + 1
+
+if even_sum > odd_sum:
+    print("짝수의 합이 더 큽니다")
+else:
+    print("홀수의 합이 더 큽니다")`;
+const T0=(()=>{
+  const {t,g,stop}=tracer();
+  stop(1);g.number=1;stop(2);g.even_sum=0;stop(3);g.odd_sum=0;
+  for(;;){
+    stop(5);if(g.number>6)break;
+    stop(6);
+    if(g.number%2===0){stop(7);g.even_sum+=g.number}else{stop(9);g.odd_sum+=g.number}
+    stop(10);g.number++;
+  }
+  stop(12);stop(13);t.out='짝수의 합이 더 큽니다';return t;
+})();
+const DBG1=`def square(n):
+    result = n * n
+    return result
+
+total = 0
+for i in range(1, 4):
+    total = total + square(i)
+
+print(total)`;
+const T1=(()=>{
+  const {t,g,stop}=tracer();
+  stop(1);stop(5);g.total=0;
+  for(let i=1;i<4;i++){stop(6);g.i=i;stop(7);const loc={n:i};stop(2,loc);loc.result=i*i;stop(3,loc);stop(7,null,true);g.total+=i*i}
+  stop(6);stop(9);t.out='14';t.fn='square';return t;
+})();
+const DBG2=`def is_even(n):
+    r = n % 2
+    return r == 0
+
+count = 0
+for x in range(3, 7):
+    if is_even(x):
+        count = count + 1
+
+print(count)`;
+const T2=(()=>{
+  const {t,g,stop}=tracer();
+  stop(1);stop(5);g.count=0;
+  for(const x of [3,4,5,6]){stop(6);g.x=x;stop(7);const loc={n:x};stop(2,loc);loc.r=x%2;stop(3,loc);stop(7,null,true);if(x%2===0){stop(8);g.count++}}
+  stop(6);stop(10);t.out='2';t.fn='is_even';return t;
+})();
+let T=T1;
+
+// ───────── 슬라이드 ─────────
+const UNDO1=`price = 3000
+count = 4
+
+print(price * count)`;
+const UNDO2=`name = "민수"
+score = 90
+print(name, score)`;
+const LESSON=[
+{info:1,title:'VS Code 단축키 훈련',desc:`<p>오른쪽 <b>내 편집기</b>를 단축키로 조작해서 <b>목표</b>와 똑같이 만들면 초록불이 켜지고 다음 문제로 넘어갑니다.</p>
+<p>· 글자 입력은 막혀 있어요. 오직 단축키로만!<br>· 방향키나 마우스로 커서를 옮기고, <kbd>Shift</kbd>+방향키 또는 드래그로 여러 줄을 선택합니다.<br>· 꼬였다면 아래 <b>↻ 다시 하기</b>를 누르세요.</p>
+<p>연습부터 하려면 <kbd>Enter</kbd></p><p><b>게임 · 90초 동안 많이 풀기</b><br><button onclick="startGame(1)">1종목 · 줄 옮기기</button><button onclick="startGame(2)">2종목 · + 주석, 들여쓰기</button><button onclick="startGame(3)">3종목 · + 이름 바꾸기, 저장</button></p>`},
+
+// ── 줄 옮기기 ──
+{title:'줄 옮기기',keys:['Alt+↑','Alt+↓'],
+desc:`<p>커서가 있는 줄을 통째로 위아래로 옮깁니다. 잘라내기·붙여넣기가 필요 없어요.</p><p>순서가 틀린 줄을 클릭한 다음 눌러 보세요.</p>`,
+code:`print("1. 물을 끓인다")
+print("3. 면을 넣는다")
+print("2. 스프를 넣는다")
+print("4. 맛있게 먹는다")`,
+target:`print("1. 물을 끓인다")
+print("2. 스프를 넣는다")
+print("3. 면을 넣는다")
+print("4. 맛있게 먹는다")`},
+
+{title:'줄 옮기기 2',keys:['Alt+↑','Alt+↓'],
+desc:`<p>주사위를 굴리기도 전에 결과부터 말하고 있네요.</p><p>이번에는 두 줄을 옮겨야 합니다.</p>`,
+code:`import random
+print("당신의 숫자:", number)
+number = random.randint(1, 6)
+print("주사위를 굴립니다")`,
+target:`import random
+print("주사위를 굴립니다")
+number = random.randint(1, 6)
+print("당신의 숫자:", number)`},
+
+{title:'줄 옮기기 3',keys:['Alt+↑','Alt+↓'],
+desc:`<p>결과를 출력하는 줄이 맨 위에 있습니다. 계산이 끝난 뒤로 보내세요.</p><p>키를 꾹 누르고 있으면 계속 움직입니다.</p>`,
+code:`print("결과:", total)
+total = 0
+total = total + 10
+total = total + 20`,
+target:`total = 0
+total = total + 10
+total = total + 20
+print("결과:", total)`},
+
+{title:'여러 줄 한꺼번에 옮기기',keys:['Alt+↑','Alt+↓'],
+desc:`<p>여러 줄을 <b>선택한 채로</b> 누르면 묶음으로 움직입니다.</p><p>계산도 하기 전에 출력부터 하고 있네요. <kbd>Shift</kbd>+<kbd>↓</kbd> 또는 드래그로 출력 두 줄을 선택하고 계산 뒤로 옮기세요.</p>`,
+code:`print("합계:", total)
+print("끝")
+total = 0
+for i in range(1, 4):
+    total = total + i`,
+target:`total = 0
+for i in range(1, 4):
+    total = total + i
+print("합계:", total)
+print("끝")`},
+
+// ── 들여쓰기 ──
+{title:'들여쓰기',keys:['Tab'],
+desc:`<p>파이썬은 들여쓰기가 틀리면 실행조차 되지 않습니다.</p><p>2번 줄을 클릭하고 <kbd>Home</kbd>으로 줄 맨 앞에 간 뒤 <kbd>Tab</kbd>을 누르세요.</p>`,
+code:`for i in range(3):
+print("반복", i)`,
+target:`for i in range(3):
+    print("반복", i)`},
+
+{title:'여러 줄 들여쓰기',keys:['Tab'],
+desc:`<p>여러 줄을 선택하고 <kbd>Tab</kbd>을 누르면 선택한 줄이 전부 한 칸씩 들어갑니다.</p><p>3~4번 줄을 선택하고 눌러 보세요.</p>`,
+code:`score = 85
+if score >= 60:
+print("합격")
+print("축하합니다")
+print("끝")`,
+target:`score = 85
+if score >= 60:
+    print("합격")
+    print("축하합니다")
+print("끝")`},
+
+{title:'두 칸 들여쓰기',keys:['Tab'],
+desc:`<p>반복문 안에 반복문이 있으면 두 칸 들어가야 합니다.</p><p>3번 줄을 안쪽 반복문에 넣으세요.</p>`,
+code:`for i in range(2):
+    for j in range(3):
+print(i, j)`,
+target:`for i in range(2):
+    for j in range(3):
+        print(i, j)`},
+
+{title:'내어쓰기',keys:['Shift+Tab'],
+desc:`<p><kbd>Tab</kbd>의 반대입니다. 줄을 왼쪽으로 한 칸 당깁니다. 커서가 줄 어디에 있든 상관없어요.</p>`,
+code:`name = "지영"
+    print(name)
+    print("반가워")`,
+target:`name = "지영"
+print(name)
+print("반가워")`},
+
+{title:'내어쓰기 2',keys:['Shift+Tab'],
+desc:`<p>"반복 끝"이 세 번이나 출력됩니다. 반복문 <b>밖으로</b> 꺼내서 한 번만 출력되게 하세요.</p>`,
+code:`for i in range(3):
+    print(i)
+    print("반복 끝")`,
+target:`for i in range(3):
+    print(i)
+print("반복 끝")`},
+
+{title:'들여쓰기 바로잡기',keys:['Tab','Shift+Tab'],
+desc:`<p>들여쓰기가 엉망입니다. 넣을 줄은 넣고 뺄 줄은 빼세요.</p>`,
+code:`age = 15
+if age >= 14:
+print("가입 가능")
+else:
+print("가입 불가")
+    print("확인 완료")`,
+target:`age = 15
+if age >= 14:
+    print("가입 가능")
+else:
+    print("가입 불가")
+print("확인 완료")`},
+
+// ── 주석 ──
+{title:'주석으로 만들기',keys:['Ctrl+/'],
+desc:`<p>지우기는 아깝고 잠깐 꺼 두고 싶은 줄은 <b>주석</b>으로 만듭니다. 줄 앞에 <kbd>#</kbd>이 붙어 실행되지 않아요.</p><p>2번 줄을 주석으로 만드세요.</p>`,
+code:`print("안녕")
+print("테스트 출력")
+print("잘 가")`,
+target:`print("안녕")
+# print("테스트 출력")
+print("잘 가")`},
+
+{title:'주석 풀기',keys:['Ctrl+/'],
+desc:`<p>같은 키를 한 번 더 누르면 주석이 풀립니다. 여러 줄을 선택하면 한꺼번에 됩니다.</p><p>1~3번 줄의 주석을 푸세요.</p>`,
+code:`# total = 0
+# for i in range(5):
+#     total = total + i
+print(total)`,
+target:`total = 0
+for i in range(5):
+    total = total + i
+print(total)`},
+
+{title:'여러 줄 주석',keys:['Ctrl+/'],
+desc:`<p>확인용으로 넣어 둔 출력 두 줄을 한꺼번에 꺼 두세요.</p><p>들여쓴 줄은 <kbd>#</kbd>도 들여쓴 자리에 붙습니다.</p>`,
+code:`for i in range(3):
+    print(i)
+    print("확인:", i * 2)
+    print("여기까지 옴")
+print("끝")`,
+target:`for i in range(3):
+    print(i)
+    # print("확인:", i * 2)
+    # print("여기까지 옴")
+print("끝")`},
+
+{title:'주석 바꿔 끼우기',keys:['Ctrl+/'],
+desc:`<p>지금은 속도가 100으로 설정돼 있습니다. 100은 꺼 두고 <b>10을 켜세요</b>.</p><p>두 줄을 한꺼번에 선택하고 누르면 어떻게 되는지도 살펴보세요.</p>`,
+code:`# speed = 10
+speed = 100
+print(speed)`,
+target:`speed = 10
+# speed = 100
+print(speed)`},
+
+// ── 되돌리기 · 저장 ──
+{title:'되돌리기',keys:['Ctrl+Z'],
+desc:`<p>앗, 방금 실수로 코드 두 줄을 지워 버렸습니다!</p><p>당황하지 말고 <kbd>Ctrl</kbd>+<kbd>Z</kbd>. 누를 때마다 한 단계씩 과거로 돌아갑니다.</p>`,
+code:`price = 3000
+`,
+history:[UNDO1,`price = 3000
+
+print(price * count)`],
+target:UNDO1},
+
+{title:'되돌리기 2',keys:['Ctrl+Z'],
+desc:`<p>자리를 비운 사이 누가 코드를 마구 건드려 놓았습니다. 몇 번을 건드렸는지는 모릅니다.</p><p>목표와 같아질 때까지 되돌리세요. 한 단계씩 무엇이 돌아오는지 지켜보세요.</p>`,
+code:`score = 90
+# print(name, score)`,
+history:[UNDO2,`score = 90
+name = "민수"
+print(name, score)`,`score = 90
+name = "민수"
+# print(name, score)`,`score = 90
+    name = "민수"
+# print(name, score)`],
+target:UNDO2},
+
+{title:'저장하기',keys:['Ctrl+S'],dirty:1,
+desc:`<p>탭의 파일 이름 옆에 <b>●</b>가 보이나요? 아직 저장하지 않았다는 표시입니다.</p><p>저장하지 않은 코드는 실행해도 반영되지 않아요. 저장해서 ●를 없애세요.</p><p>앞으로 <b>종합 문제</b>는 저장까지 해야 정답입니다.</p>`,
+code:`print("저장하는 습관!")`,
+check:st=>!st.dirty},
+
+// ── 이름 바꾸기 ──
+{title:'이름 한꺼번에 바꾸기',keys:['F2'],
+desc:`<p>변수 이름 <b>total_of_numbers</b>가 너무 깁니다. <b>s</b>로 줄입시다.</p><p>이름 위에 커서를 두고 <kbd>F2</kbd> → <b>s</b> 입력 → <kbd>Enter</kbd>. 파일 안의 같은 이름이 전부 바뀝니다.</p><p>(영어로 입력되는지 한/영 키를 확인하세요)</p>`,
+code:`total_of_numbers = 0
+for i in range(1, 11):
+    total_of_numbers = total_of_numbers + i
+print(total_of_numbers)`,
+target:`s = 0
+for i in range(1, 11):
+    s = s + i
+print(s)`},
+
+{title:'이름 한꺼번에 바꾸기 2',keys:['F2'],
+desc:`<p><b>number_of_students</b>를 <b>n</b>으로 줄이세요.</p><p>if 조건 안과 맨 아랫줄까지 같이 바뀌는 것을 확인하세요.</p>`,
+code:`number_of_students = 30
+if number_of_students > 25:
+    print("교실이 꽉 찼습니다")
+else:
+    print("자리가 남았습니다")
+print(number_of_students, "명")`,
+target:`n = 30
+if n > 25:
+    print("교실이 꽉 찼습니다")
+else:
+    print("자리가 남았습니다")
+print(n, "명")`},
+
+{title:'이름 두 개 바꾸기',keys:['F2'],
+desc:`<p>이름 두 개를 줄입니다. <b>rectangle_width → w</b>, <b>rectangle_height → h</b>로 바꾸세요.</p>`,
+code:`rectangle_width = 5
+rectangle_height = 3
+print("넓이:", rectangle_width * rectangle_height)
+print("둘레:", (rectangle_width + rectangle_height) * 2)`,
+target:`w = 5
+h = 3
+print("넓이:", w * h)
+print("둘레:", (w + h) * 2)`},
+
+{title:'반복 변수 이름 바꾸기',keys:['F2'],
+desc:`<p>반복문의 변수 <b>current_number</b>를 <b>i</b>로 줄이세요.</p><p>네 군데 중 어느 것 위에서 눌러도 됩니다.</p>`,
+code:`for current_number in range(1, 6):
+    if current_number % 2 == 0:
+        print(current_number, "짝수")
+    else:
+        print(current_number, "홀수")`,
+target:`for i in range(1, 6):
+    if i % 2 == 0:
+        print(i, "짝수")
+    else:
+        print(i, "홀수")`},
+
+// ── 종합 ──
+{title:'종합 문제 1',save:1,
+desc:`<p>이번에는 힌트가 없습니다. 지금까지 배운 단축키를 모두 써서 목표와 똑같이 만들고, <b>저장까지</b> 하세요.</p>`,
+code:`print("테스트")
+price_of_one_item = 1000
+if price_of_one_item > 500:
+print("비싸다")
+else:
+    print("싸다")
+    print("가격:", price_of_one_item)`,
+target:`p = 1000
+if p > 500:
+    print("비싸다")
+else:
+    print("싸다")
+print("가격:", p)
+# print("테스트")`},
+
+{title:'종합 문제 2',save:1,
+desc:`<p>줄 순서, 들여쓰기, 주석, 변수 이름까지 손봐야 합니다. <b>저장</b>도 잊지 마세요.</p>`,
+code:`print("합계:", sum_of_numbers)
+sum_of_numbers = 0
+for n in range(1, 4):
+sum_of_numbers = sum_of_numbers + n
+print("중간값", sum_of_numbers)`,
+target:`s = 0
+for n in range(1, 4):
+    s = s + n
+    # print("중간값", s)
+print("합계:", s)`},
+
+{title:'종합 문제 3',save:1,
+desc:`<p>마지막 종합 문제입니다. 온도를 낮춘 뒤 출력하는 프로그램을 깔끔하게 정리하고 <b>저장</b>하세요.</p>`,
+code:`temperature_in_celsius = 30
+    # print("섭씨:", temperature_in_celsius)
+    print("화씨:", temperature_in_celsius * 9 / 5 + 32)
+while temperature_in_celsius > 28:
+temperature_in_celsius = temperature_in_celsius - 1`,
+target:`c = 30
+while c > 28:
+    c = c - 1
+print("화씨:", c * 9 / 5 + 32)
+print("섭씨:", c)`},
+
+// ── 디버깅 1: 함수 없는 코드 (if · else · while) ──
+{debug:1,title:'중단점 걸기',keys:['F9'],code:DBG0,trace:T0,
+desc:`<p><b>디버깅</b>은 프로그램을 멈춰 놓고 속을 들여다보는 일입니다. 멈출 곳을 정하는 빨간 점이 <b>중단점</b>이에요.</p><p><b>6번 줄</b>을 클릭하고 <kbd>F9</kbd>를 누르세요. 한 번 더 누르면 사라집니다.</p>`,
+check:st=>st.bps.size===1&&st.bps.has(6)},
+
+{debug:1,title:'중단점 옮기기',keys:['F9'],code:DBG0,trace:T0,bps:[6],
+desc:`<p>6번 줄의 중단점을 <b>지우고</b>, <b>10번 줄</b>에 새로 거세요.</p>`,
+check:st=>st.bps.size===1&&st.bps.has(10)},
+
+{debug:1,title:'디버깅 시작',keys:['F5'],code:DBG0,trace:T0,bps:[6],
+desc:`<p><kbd>F5</kbd>를 누르면 프로그램이 달리다가 중단점에서 멈춥니다.</p><p>노란 화살표는 <b>이제 실행할 줄</b>입니다. 오른쪽 변수 창에서 지금 값도 볼 수 있어요.</p>`,
+check:(st,P)=>P&&st.last==='go'},
+
+{debug:1,title:'한 줄 실행',keys:['F10'],code:DBG0,trace:T0,bps:[6],pre:['go'],
+desc:`<p><kbd>F10</kbd>은 화살표가 가리키는 줄 <b>딱 한 줄</b>만 실행하고 다시 멈춥니다.</p><p>지금 number는 1, 홀수입니다. if와 else 중 어느 쪽으로 갈지 예상한 다음 눌러 보세요.</p>`,
+check:(st,P)=>P&&st.last==='over'&&P.line===9},
+
+{debug:1,title:'한 줄씩 따라가기',keys:['F10'],code:DBG0,trace:T0,bps:[6],pre:['go'],
+desc:`<p><kbd>F10</kbd>을 여러 번 눌러 while 반복문이 한 바퀴 도는 것을 따라가 보세요. 줄마다 변수 창의 값이 어떻게 바뀌는지 보세요.</p><p><b>number가 2가 되는 순간</b>에 멈추세요.</p>`,
+check:(st,P)=>P&&st.last==='over'&&P.g.number===2},
+
+{debug:1,title:'이번에는 어느 쪽?',keys:['F10'],code:DBG0,trace:T0,bps:[6],pre:['go','go'],
+desc:`<p>이번에는 number가 2입니다. 화살표가 어디로 갈까요?</p><p><kbd>F10</kbd>으로 따라가서 <b>even_sum이 2가 되는 순간</b>에 멈추세요.</p>`,
+check:(st,P)=>P&&st.last==='over'&&P.g.even_sum===2},
+
+{debug:1,title:'다음 중단점까지 계속',keys:['F5'],code:DBG0,trace:T0,bps:[6],pre:['go'],
+desc:`<p>한 줄씩 가기엔 너무 멀 때가 있습니다. 멈춘 상태에서 <kbd>F5</kbd>를 또 누르면 <b>다음 중단점</b>을 만날 때까지 달립니다.</p><p>반복문이 한 바퀴 돌아 number가 2가 되는 것을 확인하세요.</p>`,
+check:(st,P)=>P&&st.last==='go'&&P.g.number===2},
+
+{debug:1,title:'여러 바퀴 건너뛰기',keys:['F5'],code:DBG0,trace:T0,bps:[6],pre:['go'],
+desc:`<p><kbd>F5</kbd>를 누를 때마다 반복문이 한 바퀴씩 돕니다.</p><p><b>number가 5일 때</b> 6번 줄에 멈춰 있도록 하세요.</p>`,
+check:(st,P)=>P&&P.line===6&&P.g.number===5},
+
+{debug:1,title:'끝까지 실행하기',keys:['F9','F5'],code:DBG0,trace:T0,bps:[6],pre:['go'],
+desc:`<p>중단점이 없으면 <kbd>F5</kbd>는 프로그램 끝까지 달립니다.</p><p>6번 줄의 중단점을 지우고 끝까지 실행해서, 변수 창 자리에 나오는 <b>출력</b>을 확인하세요.</p>`,
+check:st=>!st.dbg&&!!st.out},
+
+{debug:1,title:'마지막 판정 지켜보기',keys:['F9','F5','F10'],code:DBG0,trace:T0,
+desc:`<p>반복문이 다 끝난 뒤의 값이 궁금합니다. <b>12번 줄</b>에 중단점을 걸고 실행해서 even_sum과 odd_sum의 최종 값을 확인하세요.</p><p>그다음 한 줄 실행해서 화살표가 if와 else 중 어디로 가는지 보세요.</p>`,
+check:(st,P)=>P&&st.last==='over'&&P.line===13},
+
+{debug:1,title:'원하는 순간 찾기',code:DBG0,trace:T0,
+desc:`<p>힌트 없이 해 봅시다.</p><p><b>even_sum이 6이 된 순간</b>에 프로그램을 멈춰 세우세요.</p><p>중단점을 어디에 걸지, 그다음 무엇을 몇 번 누를지 생각해 보세요.</p>`,
+check:(st,P)=>P&&P.g.even_sum===6},
+
+// ── 디버깅 2: 함수가 있는 코드 ──
+{debug:1,title:'함수가 있는 줄에서 한 줄 실행',keys:['F10'],code:DBG1,bps:[7],pre:['go'],
+desc:`<p>이번 코드에는 <b>함수</b>가 있습니다. 7번 줄은 square() 함수를 부르는 줄이에요.</p><p><kbd>F10</kbd>은 함수 속으로 들어가지 않고 <b>그 줄을 통째로</b> 실행합니다. 눌러서 total이 0에서 1로 바뀌는 것을 확인하세요.</p>`,
+check:(st,P)=>P&&st.last==='over'&&P.g.total===1},
+
+{debug:1,title:'함수 안으로 들어가기',keys:['F11'],code:DBG1,bps:[7],pre:['go'],
+desc:`<p>같은 자리에서 이번에는 <kbd>F11</kbd>. 화살표가 square() <b>함수 안으로</b> 들어갑니다.</p><p>변수 창에 함수의 지역 변수 n이 나타나는 것을 확인하세요.</p>`,
+check:(st,P)=>P&&st.last==='into'&&P.depth===1},
+
+{debug:1,title:'들어가서 한 줄 실행',keys:['F11','F10'],code:DBG1,bps:[7],pre:['go'],
+desc:`<p>함수 안으로 들어간 다음, 그 안에서 한 줄을 실행해 보세요.</p><p>변수 창에 <b>result</b>가 생기면 성공입니다.</p>`,
+check:(st,P)=>P&&P.loc&&P.loc.result===1},
+
+{debug:1,title:'새 프로그램 살펴보기',keys:['F9','F5'],code:DBG2,trace:T2,
+desc:`<p>이 프로그램은 짝수의 개수를 셉니다. count가 늘어나는 곳은 <b>8번 줄</b>이에요.</p><p>8번 줄에 중단점을 걸고 실행해서, <b>x가 몇일 때</b> 처음 멈추는지 확인하세요.</p>`,
+check:(st,P)=>P&&P.line===8},
+
+{debug:1,title:'함수 안의 순간 찾기',code:DBG2,trace:T2,
+desc:`<p>is_even 함수 <b>안에서 n이 6인 순간</b>에 프로그램을 멈춰 세우세요.</p><p>방법은 여러 가지입니다.</p>`,
+check:(st,P)=>P&&P.loc&&P.loc.n===6},
+
+{debug:1,title:'값이 바뀌는 순간',code:DBG2,trace:T2,bps:[7],pre:['go'],
+desc:`<p>지금 x는 3, count는 0입니다.</p><p><b>count가 2가 되는 순간</b>까지 가서 멈추세요. F5와 F10을 섞어 쓰면 편합니다.</p>`,
+check:(st,P)=>P&&P.g.count===2},
+
+{debug:1,title:'탐정 미션',code:DBG1,
+desc:`<p>마지막 문제입니다.</p><p>square 함수 안에서 <b>result가 9가 된 순간</b>에 프로그램을 멈춰 세우세요.</p><p>중단점을 어디에 걸지, 그다음 무엇을 몇 번 눌러야 할지 생각해 보세요.</p>`,
+check:(st,P)=>P&&P.loc&&P.loc.result===9},
+
+{info:1,title:'훈련 완료!',desc:`<p>이제 진짜 VS Code에서 써 볼 차례입니다.</p><table>
+<tr><td><kbd>Alt</kbd>+<kbd>↑</kbd><kbd>↓</kbd></td><td>줄 옮기기</td><td><kbd>F9</kbd></td><td>중단점</td></tr>
+<tr><td><kbd>Tab</kbd></td><td>들여쓰기</td><td><kbd>F5</kbd></td><td>디버깅 시작 · 계속</td></tr>
+<tr><td><kbd>Shift</kbd>+<kbd>Tab</kbd></td><td>내어쓰기</td><td><kbd>F10</kbd></td><td>한 줄 실행</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>/</kbd></td><td>주석 켜기 · 끄기</td><td><kbd>F11</kbd></td><td>함수 안으로</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td><td>되돌리기</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>저장</td></tr>
+<tr><td><kbd>F2</kbd></td><td>이름 한꺼번에 바꾸기</td></tr>
+</table>`}
+];
+
+let S=LESSON;
+
+// ───────── 상태 ─────────
+// 주소 끝에 ?teacher 를 붙이면 잠금 없이 넘길 수 있고, #7 처럼 쓰면 그 쪽부터 시작
+// 테스트 기간: 누구나 건너뛸 수 있게 열어 둠. 수업 때는 false로 바꾸면 ?teacher 를 붙인 경우에만 열림
+const SKIP_OPEN=false;
+const free=SKIP_OPEN||location.search.includes('teacher');
+let idx=0, st, timer, tt, rn=null;
+const solved=new Set();
+
+// ───────── 구문 강조 ─────────
+const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+function hl(src){
+  return src.replace(/(#.*)|("[^"\n]*"|'[^'\n]*')|\b(def|for|in|return|if|else|elif|while|import)\b|\b([A-Za-z_]\w*)(?=\()|\b(\d+)\b|([&<>])/g,
+    (m,c,s,k,b,n)=>c?`<i class=c>${esc(c)}</i>`:s?`<i class=s>${esc(s)}</i>`:k?`<i class=k>${k}</i>`:b?`<i class=b>${b}</i>`:n?`<i class=n>${n}</i>`:esc(m));
+}
+
+// ───────── 편집 명령 ─────────
+const lineOf=p=>ta.value.slice(0,p).split('\n').length-1;
+function range(){ // 선택이 걸친 줄 범위. 선택 끝이 줄 맨 앞이면 그 줄은 빼는 것이 VS Code 방식
+  const s=ta.selectionStart,e=ta.selectionEnd; let a=lineOf(s),b=lineOf(e);
+  if(e>s&&ta.value[e-1]==='\n')b--;
+  return [a,b];
+}
+function set(v,s,e){ta.value=v;ta.setSelectionRange(s,e);st.text=v}
+function commit(v,s,e){
+  st.undo.push({v:ta.value,s:ta.selectionStart,e:ta.selectionEnd});st.redo=[];st.dirty=true;set(v,s,e);
+}
+const OPS={
+  up:(L,a,b)=>{if(!a)return;L.splice(b,0,L.splice(a-1,1)[0]);return [a-1,b-1]},
+  down:(L,a,b)=>{if(b>=L.length-1)return;L.splice(a,0,L.splice(b+1,1)[0]);return [a+1,b+1]},
+  // ponytail: 한 줄 안의 일부만 선택하고 Tab을 누르면 VS Code는 선택을 지우지만, 여기서는 그 줄을 들여쓴다
+  indent:(L,a,b,col,sel)=>{
+    if(!sel)L[a]=L[a].slice(0,col)+' '.repeat(4-col%4)+L[a].slice(col);
+    else for(let k=a;k<=b;k++)if(L[k].trim())L[k]='    '+L[k];
+    return [a,b];
+  },
+  outdent:(L,a,b)=>{for(let k=a;k<=b;k++)L[k]=L[k].replace(/^ {1,4}/,'');return [a,b]},
+  comment:(L,a,b)=>{
+    const R=[];for(let k=a;k<=b;k++)if(L[k].trim())R.push(k);
+    if(!R.length)return;
+    if(R.every(k=>/^\s*#/.test(L[k])))R.forEach(k=>L[k]=L[k].replace(/^(\s*)# ?/,'$1'));
+    else{const m=Math.min(...R.map(k=>L[k].search(/\S/)));R.forEach(k=>L[k]=L[k].slice(0,m)+'# '+L[k].slice(m))}
+    return [a,b];
+  }
+};
+function edit(fn){
+  const v=ta.value,s=ta.selectionStart,e=ta.selectionEnd,L=v.split('\n'),[a,b]=range();
+  const col=s-(v.slice(0,s).lastIndexOf('\n')+1),len=L[a].length;
+  const r=fn(L,a,b,col,s!==e);if(!r)return;
+  const off=(n,c)=>L.slice(0,n).join('\n').length+(n?1:0)+c;
+  const ns=s!==e?off(r[0],0):off(r[0],Math.max(0,Math.min(L[r[0]].length,col+L[r[0]].length-len)));
+  commit(L.join('\n'),ns,s!==e?off(r[1],L[r[1]].length):ns);
+}
+function hist(cmd){
+  const from=cmd==='undo'?st.undo:st.redo,to=cmd==='undo'?st.redo:st.undo;
+  if(!from.length)return;
+  to.push({v:ta.value,s:ta.selectionStart,e:ta.selectionEnd});
+  const x=from.pop();set(x.v,x.s,x.e);st.dirty=true;
+}
+
+// ───────── F2 이름 바꾸기 ─────────
+function openRn(){
+  const v=ta.value,p=ta.selectionStart,W=/[\w가-힣]/;let a=p,b=p;
+  while(a&&W.test(v[a-1]))a--;while(b<v.length&&W.test(v[b]))b++;
+  if(a===b)return toast('바꿀 이름 위에 커서를 두고 F2를 누르세요.');
+  rn={word:v.slice(a,b),a};
+  const pre=v.slice(0,a).split('\n'),box=$('rn');
+  box.style.display='block';box.style.top=pre.length*LH+'px';box.style.left=Math.min(pre[pre.length-1].length,20)+'ch';
+  $('rni').value=rn.word;$('rni').focus();$('rni').select();
+}
+function closeRn(){rn=null;$('rn').style.display='none'}
+function applyRn(){
+  const nv=$('rni').value.trim(),{word,a}=rn,v=ta.value;closeRn();ta.focus();
+  if(!/^[A-Za-z_]\w*$/.test(nv))return toast('이름에 쓸 수 없는 글자가 있어요. 한/영 키를 확인하세요.');
+  if(nv===word)return;
+  // ponytail: 글자가 같은 낱말을 전부 바꾼다(문자열·주석 안 포함). 진짜 VS Code는 같은 변수만 바꿈
+  const re=new RegExp(`(?<![\\w가-힣])${word}(?![\\w가-힣])`,'g'),c=v.slice(0,a).replace(re,nv).length;
+  commit(v.replace(re,nv),c,c);st.last='rename';render();check();
+}
+
+// ───────── 디버거 ─────────
+const DBG=new Set(['go','stop','restart','bp','over','into','out']);
+function dbg(cmd){
+  const hit=j=>st.bps.has(T[j].line)&&!T[j].ret;
+  if(cmd==='bp'){const n=lineOf(ta.selectionStart)+1;st.bps.has(n)?st.bps.delete(n):st.bps.add(n);return true}
+  if(!st.dbg&&cmd!=='go')return toast('먼저 F5로 디버깅을 시작하세요.');
+  if(cmd==='stop'){st.dbg=null;return true}
+  if(cmd==='restart'){st.dbg=null;cmd='go'}
+  const i=st.dbg?st.dbg.i:-1;let j=i+1;
+  if(cmd==='go')while(j<T.length&&!hit(j))j++;
+  else if(cmd!=='into'){
+    const d=T[i].depth,lim=cmd==='over'?d:d-1;
+    while(j<T.length&&T[j].depth>lim&&!hit(j))j++;
+    if(cmd==='over'&&j<T.length&&j>i+1&&T[j].ret)j++; // 호출을 통째로 넘겼으면 '돌아온 순간'은 건너뜀
+  }
+  st.out='';
+  if(j>=T.length){st.dbg=null;st.out=T.out;toast('프로그램이 끝까지 실행됐습니다.')}
+  else st.dbg={i:j};
+  return true;
+}
+
+// ───────── 실행·판정 ─────────
+function run(cmd){
+  const s=S[idx];if(st.done||s.info)return;
+  if(cmd==='save'){st.dirty=false;toast('저장했습니다.')}
+  else if(DBG.has(cmd)){
+    if(!s.debug)return toast('디버깅 단축키는 뒤쪽 디버깅 단계에서 연습해요.');
+    if(!dbg(cmd))return render();
+  }
+  else if(s.debug)return toast('디버깅 단계에서는 코드를 고치지 않아요.');
+  else if(cmd==='rename')return openRn();
+  else if(cmd==='undo'||cmd==='redo')hist(cmd);
+  else edit(OPS[cmd]);
+  st.last=cmd;render();check();
+}
+const norm=t=>t.split('\n').map(l=>l.trimEnd()).join('\n').trimEnd();
+function ok(){
+  const s=S[idx];
+  return !s.info&&(s.target==null||norm(ta.value)===norm(s.target))&&(!s.save||!st.dirty)&&(!s.check||!!s.check(st,st.dbg&&T[st.dbg.i]));
+}
+function check(){if(!st.done&&ok())win()}
+function win(){
+  st.done=true;solved.add(idx);$('ok').classList.add('on');render();
+  if(game){game.score++;S.splice(S.length-1,0,genProblem(game.ev))}const i=idx;timer=setTimeout(()=>go(i+1),game?400:1300);
+}
+
+// ───────── 화면 ─────────
+function toast(m){
+  const t=$('toast');t.textContent=m;t.classList.toggle('on',!!m);
+  clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),2600);
+}
+function render(){
+  const s=S[idx],v=ta.value,cl=lineOf(ta.selectionStart),P=st.dbg&&T[st.dbg.i];
+  $('hl').innerHTML=hl(v)+'\n';
+  $('gut').innerHTML=v.split('\n').map((_,n)=>`<div class="${st.bps.has(n+1)?'bp ':''}${P&&P.line===n+1?'at':''}"><b></b><u></u><span>${n+1}</span></div>`).join('');
+  $('cur').style.top=cl*LH+'px';
+  $('dl').style.display=P?'block':'none';if(P)$('dl').style.top=(P.line-1)*LH+'px';
+  $('dot').hidden=!st.dirty;
+  $('ed').classList.toggle('dbg',!!P);$('ed').classList.toggle('ok',st.done);
+  const sec=(t,o)=>o&&Object.keys(o).length?`<h4>${t}</h4>`+Object.entries(o).map(([k,x])=>`<div><i class=v>${k}</i> = <i class=n>${x}</i></div>`).join(''):'';
+  $('vars').innerHTML=P?sec(`지역 변수 (${T.fn})`,P.loc)+sec('전역 변수',P.g):'<p>디버깅 중이 아닙니다.</p>'+(st.out?`<h4 style="margin-top:10px">출력</h4><div>${st.out}</div>`:'');
+  $('stl').textContent=P?`디버깅 중 · ${P.line}번 줄에서 멈춤`:'';
+  $('str').textContent=`줄 ${cl+1} · Python`;
+  $('prev').textContent=game?'✕ 그만두기':'← 이전';$('prev').disabled=!game&&!idx;
+  $('next').disabled=idx===S.length-1||!((free&&!game)||s.info||solved.has(idx));
+  $('reset').hidden=!!s.info;
+  if(!game)$('prog').firstElementChild.style.width=idx/(S.length-1)*100+'%';
+}
+function load(i){
+  clearTimeout(timer);idx=i;const s=S[i];
+  document.body.className=(s.info?'info ':'')+(s.debug?'debug ':'')+(game?'game':'');
+  $('count').textContent=game?`맞힌 문제 ${game.score}개`:`${i+1} / ${S.length}`;$('title').textContent=s.title;
+  $('keys').innerHTML=(s.keys||[]).map(k=>'<span>'+k.split('+').map(x=>`<kbd>${x}</kbd>`).join(' + ')+'</span>').join('');
+  $('desc').innerHTML=s.desc;
+  $('goalbox').hidden=s.target==null;if(s.target!=null)$('goal').innerHTML=hl(s.target);
+  closeRn();
+  st={undo:(s.history||[]).map(v=>({v,s:0,e:0})),redo:[],dirty:!!s.dirty,bps:new Set(s.bps),dbg:null,last:'',done:false,out:''};
+  T=s.trace||T1;
+  set(s.code||'',0,0);(s.pre||[]).forEach(c=>dbg(c));st.last='';
+  $('ok').classList.remove('on');toast('');
+  render();if(!s.info)ta.focus();
+}
+function go(i){
+  if(i<0||i>=S.length)return;
+  if(i>idx&&!((free&&!game)||S[idx].info||solved.has(idx)))return;
+  load(i);
+}
+
+// ───────── 게임: 종목별 시간 재기 ─────────
+// 종목은 누적: 1종목 줄 옮기기 → 2종목 + 주석·들여쓰기 → 3종목 + 이름 바꾸기·저장
+const GAME_MS=90000; // 한 게임 제한 시간(90초). 그동안 맞힌 문제 수가 점수
+const EVENTS={
+  1:{name:'1종목 · 줄 옮기기',keys:['Alt+↑','Alt+↓'],desc:'<p>줄 순서를 바로잡아 목표와 똑같이 만드세요.</p>'},
+  2:{name:'2종목 · 주석과 들여쓰기',keys:['Alt+↑','Alt+↓','Ctrl+/','Tab','Shift+Tab'],desc:'<p>줄 순서, 주석, 들여쓰기를 목표와 똑같이 만드세요.</p>'},
+  3:{name:'3종목 · 이름 바꾸기와 저장',keys:['Alt+↑','Alt+↓','Ctrl+/','Tab','Shift+Tab','F2','Ctrl+S'],desc:'<p>긴 변수 이름을 목표처럼 짧게 바꾸고, 다 고친 뒤 <b>저장까지</b> 해야 정답입니다.</p>'}
+};
+// 문제 재료. ren = [목표에 쓰는 짧은 이름, 3종목 시작 화면에 쓰는 긴 이름]
+const POOL=[
+{ren:['s','sum_of_numbers'],code:`s = 0
+for i in range(1, 6):
+    s = s + i
+    print("더하는 중", i)
+print("합계:", s)
+print("계산 끝")`},
+{ren:['a','age_of_user'],code:`a = 15
+if a >= 14:
+    print("가입할 수 있습니다")
+    print("환영합니다")
+else:
+    print("가입할 수 없습니다")
+print("나이:", a)`},
+{ren:['c','countdown_number'],code:`c = 5
+while c > 0:
+    print(c)
+    c = c - 1
+print("발사!")
+print("임무 완료")`},
+{ren:['p','price_of_item'],code:`p = 1200
+k = 3
+print("가격:", p)
+print("개수:", k)
+if p * k > 3000:
+    print("배송비 무료")
+else:
+    print("배송비 2500원")`},
+{ren:['h','hour_of_day'],code:`h = 14
+if h < 12:
+    print("오전입니다")
+else:
+    print("오후입니다")
+    print("점심은 드셨나요?")
+print("현재", h, "시")`},
+{ren:['e','even_count'],code:`e = 0
+for i in range(1, 11):
+    if i % 2 == 0:
+        e = e + 1
+        print(i, "짝수 발견")
+print("짝수 개수:", e)`},
+{ren:['w','password_try'],code:`w = 0
+while w < 3:
+    w = w + 1
+    print(w, "번째 시도")
+print("시도 횟수 초과")
+print("잠시 후 다시 하세요")`},
+{ren:['t','temperature'],code:`t = 31
+if t >= 30:
+    print("덥습니다")
+    print("물을 자주 마시세요")
+else:
+    print("괜찮습니다")
+print("기온:", t)`},
+{ren:['m','money_left'],code:`m = 10000
+m = m - 3500
+print("빵을 샀습니다")
+m = m - 1800
+print("우유를 샀습니다")
+print("남은 돈:", m)`},
+{ren:['g','grade_score'],code:`g = 82
+if g >= 90:
+    print("A")
+else:
+    if g >= 80:
+        print("B")
+    else:
+        print("C")
+print("점수:", g)`}
+];
+const rnd=n=>Math.floor(Math.random()*n), any=a=>a[rnd(a.length)];
+// 목표 코드를 단축키의 '반대 동작'으로 흐트러뜨려 시작 코드를 만든다.
+// 흐트러뜨릴 때마다 되돌리는 조작을 sol에 적어 두므로, 모든 문제는 반드시 풀 수 있다(자체 점검에서 실제로 풀어 봄).
+function genProblem(ev){
+  for(;;){
+    const sn=any(POOL),T=sn.code.split('\n'),L=[...T],sol=[],und=g=>sol.unshift(...g);
+    const cm=l=>l.replace(/^(\s*)/,'$1# '),prints=A=>A.map((l,i)=>/^\s*print\(/.test(l)?i:-1).filter(i=>i>=0);
+    const K=['indent','comment','move'];
+    let kinds=ev===1?(rnd(2)?['move']:['move','move'])
+      :ev===2?[['indent'],['comment'],['indent','comment']][rnd(3)].concat(rnd(2)?['move']:[])
+      :[any(K)].concat(rnd(2)?[any(K)]:[]);
+    kinds=[...new Set(kinds.filter(x=>x!=='move'))].concat(kinds.filter(x=>x==='move'));
+    if(kinds.includes('comment')&&rnd(2)){ // 목표 쪽에 주석이 있는 변형: 학생이 주석을 걸어야 함
+      const i=any(prints(T));T[i]=cm(T[i]);und([`L${i+1}`,'comment']);kinds=kinds.filter(x=>x!=='comment');
+    }
+    for(const kd of kinds){
+      if(kd==='move'){
+        const len=rnd(3)?1:2,a=rnd(L.length-len+1),b=a+len-1;let d=(rnd(3)+1)*(rnd(2)?1:-1);
+        if(a+d<0||b+d>L.length-1)d=-d;
+        if(a+d<0||b+d>L.length-1)continue;
+        L.splice(a+d,0,...L.splice(a,len));
+        und([len>1?`L${a+d+1}-${b+d+1}`:`L${a+d+1}`,...Array(Math.abs(d)).fill(d>0?'up':'down')]);
+      }else if(kd==='indent'){
+        const i=rnd(L.length);
+        if(/^ {4}/.test(L[i])&&rnd(2)){L[i]=L[i].slice(4);und([`L${i+1}`,'indent'])}
+        else{L[i]='    '+L[i];und([`L${i+1}`,'outdent'])}
+      }else{
+        const i=any(prints(L));L[i]=cm(L[i]);und([`L${i+1}`,'comment']);
+      }
+    }
+    let code=L.join('\n');const target=T.join('\n');
+    if(code===target)continue;
+    if(ev===3){const [sh,lg]=sn.ren;code=code.replace(new RegExp(`(?<!\\w)${sh}(?!\\w)`,'g'),lg);sol.push(`N:${lg}>${sh}`,'save')}
+    return {title:EVENTS[ev].name,keys:EVENTS[ev].keys,desc:EVENTS[ev].desc,code,target,save:ev===3,sol};
+  }
+}
+let game=null;
+function startGame(ev){
+  game={ev,t0:Date.now(),score:0};solved.clear();$('timer').textContent=(GAME_MS/1000).toFixed(1)+'초';
+  S=[genProblem(ev),{info:1,title:'',desc:''}]; // 문제는 맞힐 때마다 하나씩 뒤에 붙는다
+  load(0);
+}
+function endGame(){
+  game.end=Date.now();const n=game.score,ev=game.ev,key='vsc-best-score-'+ev;let best=0;
+  try{best=+localStorage.getItem(key)||0;if(n>best)localStorage.setItem(key,n)}catch(e){}
+  const r=S[S.length-1];
+  r.title=EVENTS[ev].name+' 종료!';
+  r.desc=`<p style="font-size:46px;margin:6px 0"><b>${n}문제</b></p>
+<p>${!best?'첫 기록입니다.':n>best?`신기록! (이전 최고 ${best}문제)`:`내 최고 기록은 ${best}문제`}</p>
+<p><button onclick="startGame(${ev})">같은 종목 다시</button>${ev<3?`<button onclick="startGame(${ev+1})">다음 종목 도전</button>`:''}<button onclick="quitGame()">처음으로</button></p>`;
+  $('timer').textContent='0.0초';$('prog').firstElementChild.style.width='0%';
+  load(S.length-1);
+}
+function quitGame(){game=null;S=LESSON;solved.clear();load(0)}
+setInterval(()=>{
+  if(!game||game.end)return;
+  const left=GAME_MS-(Date.now()-game.t0);
+  if(left<=0)return endGame();
+  $('timer').textContent=(left/1000).toFixed(1)+'초';
+  $('prog').firstElementChild.style.width=left/GAME_MS*100+'%';
+},100);
+
+// ───────── 입력 ─────────
+function keyCmd(e){
+  const k=e.key,c=e.ctrlKey,sh=e.shiftKey,a=e.altKey;
+  if(k==='F5')return c&&sh?'restart':sh?'stop':'go';
+  if(k==='F9')return 'bp';
+  if(k==='F10')return 'over';
+  if(k==='F11')return sh?'out':'into';
+  if(k==='F2')return 'rename';
+  if(k==='Tab')return sh?'outdent':'indent';
+  if(a&&!c&&k==='ArrowUp')return 'up';
+  if(a&&!c&&k==='ArrowDown')return 'down';
+  // 한글 입력 상태에서도 잡히도록 글자 키는 e.code로 판별
+  if(c&&e.code==='Slash')return 'comment';
+  if(c&&e.code==='KeyS')return 'save';
+  if(c&&e.code==='KeyZ')return sh?'redo':'undo';
+  if(c&&e.code==='KeyY')return 'redo';
+}
+addEventListener('keydown',e=>{
+  if(e.key==='Alt')return e.preventDefault(); // Alt만 눌렀다 떼면 브라우저 메뉴로 포커스가 가는 것을 막음
+  const cmd=keyCmd(e),s=S[idx];
+  if(rn){if(cmd&&cmd!=='undo'&&cmd!=='redo')e.preventDefault();return}
+  if(s.info){if(cmd)e.preventDefault();if(e.key==='Enter'){e.preventDefault();go(idx+1)}return}
+  if(!cmd)return;
+  e.preventDefault();run(cmd);
+},true);
+addEventListener('keyup',e=>{if(e.key==='Alt')e.preventDefault()});
+$('rni').addEventListener('keydown',e=>{
+  if(e.isComposing)return;
+  if(e.key==='Enter'){e.preventDefault();applyRn()}
+  else if(e.key==='Escape'){closeRn();ta.focus()}
+});
+$('rni').addEventListener('blur',()=>{if(rn)closeRn()});
+
+// 글자 입력 차단: 단축키를 써야만 풀리게 한다
+const NOTYPE='글자 입력은 막혀 있어요. 단축키로 풀어 보세요!';
+function revert(){
+  if(ta.value!==st.text){const p=Math.min(ta.selectionStart,st.text.length);ta.value=st.text;ta.setSelectionRange(p,p)}
+  toast(NOTYPE);
+}
+ta.addEventListener('beforeinput',e=>{e.preventDefault();if(!e.isComposing)toast(NOTYPE)});
+ta.addEventListener('input',revert);           // 한글 조합 입력은 beforeinput으로 못 막아서 여기서 되돌림
+ta.addEventListener('compositionend',revert);
+
+document.addEventListener('selectionchange',()=>{if(document.activeElement===ta)render()});
+document.addEventListener('mouseup',e=>{if(!rn&&!S[idx].info&&e.target.id!=='rni')ta.focus()});
+$('prev').onclick=()=>game?quitGame():go(idx-1);
+$('next').onclick=()=>go(idx+1);
+$('reset').onclick=()=>load(idx);
+addEventListener('beforeunload',e=>{if(solved.size&&idx<S.length-1){e.preventDefault();e.returnValue=''}});
+
+// ───────── 자체 점검: 주소 끝에 ?test → 모든 문제를 모범 답안으로 풀어 보고 결과를 탭 제목에 표시 ─────────
+function selfTest(){
+  const SOL=[
+    ['L2','down'],['L4','up','up','L3','down'],['L1','down','down','down'],['L1-2','down','down','down'],
+    ['L2','indent'],['L3-4','indent'],['L3','indent','indent'],['L2-3','outdent'],['L3','outdent'],['L3','indent','L5','indent','L6','outdent'],
+    ['L2','comment'],['L1-3','comment'],['L3-4','comment'],['L1','comment','L2','comment'],
+    ['undo','undo'],['undo','undo','undo','undo'],['save'],
+    ['L1','rename','R:s'],['L1','rename','R:n'],['L1','rename','R:w','L2','rename','R:h'],['W1:4','rename','R:i'],
+    ['L1','comment','down','down','down','down','down','down','L3','indent','L6','outdent','L1','rename','R:p','save'],
+    ['L1','down','down','down','down','L3-4','indent','L4','comment','L1','rename','R:s','save'],
+    ['L2-3','outdent','L2','comment','L2','down','L2-3','down','down','L3','indent','L1','rename','R:c','save'],
+    ['L6','bp'],['L6','bp','L10','bp'],['go'],['over'],['over','over','over'],['over','over'],['go'],['go','go','go','go'],['L6','bp','go'],['L12','bp','go','over'],['L10','bp','go','go','go','go'],
+    ['over'],['into'],['into','over'],
+    ['L8','bp','go'],['L2','bp','go','go','go','go'],['go','go','go','over','over'],['L3','bp','go','go','go']
+  ];
+  const pick=(a,b,col,sel)=>{
+    const L=ta.value.split('\n'),o=k=>L.slice(0,k).join('\n').length+(k?1:0);
+    ta.setSelectionRange(o(a)+col,sel?o(b)+L[b].length:o(a)+col);
+  };
+  const step=x=>{
+    let m;
+    if(m=x.match(/^L(\d+)(?:-(\d+))?$/))pick(m[1]-1,(m[2]||m[1])-1,0,!!m[2]);
+    else if(m=x.match(/^W(\d+):(\d+)$/))pick(m[1]-1,m[1]-1,+m[2]);
+    else if(m=x.match(/^R:(.+)/)){$('rni').value=m[1];applyRn()}
+    else if(m=x.match(/^N:(\w+)>(\w+)$/)){const p=ta.value.search(new RegExp('(?<!\\w)'+m[1]+'(?!\\w)'));ta.setSelectionRange(p,p);run('rename');$('rni').value=m[2];applyRn()}
+    else run(x);
+  };
+  let n=0;const fail=[];
+  S.forEach((s,i)=>{
+    if(s.info)return;
+    load(i);if(ok())fail.push(i+' 시작부터 정답');
+    const sol=SOL[n++]||[];
+    for(const x of sol){
+      if(st.done&&x!==sol[sol.length-1]){fail.push(i+' 답안 중간에 정답 처리');break}
+      let m;
+      if(m=x.match(/^L(\d+)(?:-(\d+))?$/))pick(m[1]-1,(m[2]||m[1])-1,0,!!m[2]);
+      else if(m=x.match(/^W(\d+):(\d+)$/))pick(m[1]-1,m[1]-1,+m[2]);
+      else if(m=x.match(/^R:(.+)/)){$('rni').value=m[1];applyRn()}
+      else run(x);
+    }
+    if(!st.done)fail.push(i+' '+s.title);
+  });
+  // 게임 문제: 종목마다 300개씩 만들어 보고, 생성기가 적어 둔 풀이로 실제로 풀리는지 확인
+  let gn=0;
+  for(let ev=1;ev<=3&&!fail.length;ev++)for(let k=0;k<300;k++){
+    const p=genProblem(ev);S=[p];load(0);
+    if(ok()){fail.push('게임 '+ev+'종목: 시작부터 정답');break}
+    p.sol.forEach(step);
+    if(!st.done){fail.push('게임 '+ev+'종목 풀이 실패 '+p.sol.join(','));break}
+    gn++;
+  }
+  S=LESSON;n+='+'+gn;
+  document.title=fail.length?'TEST FAIL '+fail.join(' | '):'TEST OK '+n;
+}
+
+if(location.search.includes('test'))selfTest();
+load(free?Math.max(0,Math.min(S.length-1,(+location.hash.slice(1)||1)-1)):0);
+// 주소 끝에 ?game=2 처럼 붙이면 그 종목 게임으로 바로 시작
+if(EVENTS[+new URLSearchParams(location.search).get('game')])startGame(+new URLSearchParams(location.search).get('game'));
+</script>
+</body>
+</html>

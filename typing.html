@@ -249,6 +249,7 @@ kbd{display:inline-block;font-family:"Gothic A1",sans-serif;font-size:22px;font-
 .boards{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:var(--s3)}
 </style>
 
+<script src="shared/keyed.js"></script>
 <div class="spop" id="spop"></div>
 <div class="offline" id="offline" hidden>연결이 끊겼습니다 — 다시 붙는 중입니다</div>
 <header>
@@ -412,13 +413,15 @@ function paintList(){
 }
 async function teacherGate(why){
   $("stage").innerHTML = `<div class="gate"><h2 class="title">교사 화면 — 타자 올림픽</h2>
-    <h3>새 대회 열기</h3><label>대회 이름</label><input id="ntitle" value="타자 올림픽">
+    <h3>새 대회 열기</h3><label>종류</label><select id="nmode"><option value="typing">타자 올림픽 — 네 종목</option><option value="keys"${Q.has("keys") ? " selected" : ""}>단축키 올림픽 — 세 종목</option></select>
+    <label>대회 이름</label><input id="ntitle" value="${Q.has("keys") ? "단축키 올림픽" : "타자 올림픽"}">
     <label>학생 비밀번호 (숫자 네 자리)</label><input id="npin" inputmode="numeric" maxlength="4" value="${String(1000 + Math.floor(Math.random() * 9000))}">
     <div class="row" style="margin-top:var(--s3)"><button class="go" id="open">열기</button></div>
     <h3 style="margin-top:var(--s5)">열려 있는 대회</h3><div id="tlist" class="sub">불러오는 중…</div><p class="msg ${why ? "bad" : ""}" id="msg">${esc(why || "")}</p></div>`;
   const watch = (code, pin) => { watchPin = pin || ""; try { localStorage.setItem("type-seat-pin", watchPin); } catch (e) {} seat(code); send("typewatch", {code, pin: watchPin}); };
+  $("nmode").onchange = () => { $("ntitle").value = $("nmode").selectedOptions[0].textContent.split(" — ")[0]; };
   $("open").onclick = async () => {
-    const j = await call("typeopen", {title: $("ntitle").value, pin: $("npin").value.replace(/\D/g, "")});
+    const j = await call("typeopen", {mode: $("nmode").value, title: $("ntitle").value, pin: $("npin").value.replace(/\D/g, "")});
     if (j.ok) watch(j.typing.code, j.typing.pin);
   };
   const j = await call("typelist", {});
@@ -442,6 +445,7 @@ const medalCount = c => `<span style="white-space:nowrap"><span class="medal g">
 const teamMedals = t => [0, 1, 2].map(i => V.medals.filter(m => m.team === t && m.place === i).length);
 function draw(){
   const k = V.state === "open" ? "lobby" : V.ph.k;
+  $("ttl").textContent = KEYS() ? "단축키 올림픽" : "타자 올림픽";
   const key = [k, V.ev, V.ph.g, V.ph.rd, k === "play" && V.mine ? V.mine.i : ""].join("|");
   board();
   if (key !== screen){ clearHooks(); $("hdrInfo").innerHTML = ""; screen = key; ({lobby, intro, pick: pickTheme, formed, preview, play, after, ceremony, finale}[k] || (() => {}))(); }
@@ -515,6 +519,16 @@ function lobby(){
 }
 
 /* ───────── 종목 소개 ───────── */
+/* 단축키 올림픽 — 종목은 누적이다. 소개에는 그 종목까지의 단축키를 모두 보인다 */
+const KEYS = () => !!V && V.mode === "keys";
+const KEYS_K = [
+  [[["Alt", "↑"], ["Alt", "↓"]], "줄 옮기기"],
+  [[["Ctrl", "/"]], "주석 켜기 · 끄기", [["Tab"]], "들여쓰기", [["Shift", "Tab"]], "내어쓰기"],
+  [[["F2"]], "이름 바꾸기", [["Ctrl", "S"]], "저장"]];
+const keysIntro = e => `<p class="sub">${KeyEd.EVENTS[e].how} 글자는 칠 수 없다 — 단축키로만 고친다.${e ? " 앞 종목의 단축키도 함께 쓴다." : ""}</p>
+  ${keyList(KEYS_K.slice(0, e + 1).flat()).replace(`class="keys"`, `class="keys" style="display:grid;grid-template-columns:repeat(${e ? 2 : 1},minmax(0,1fr));gap:0 28px"`)}
+  ${e === 2 ? `<p class="sub">F2 는 바꿀 이름 위에 커서를 두고 누른 뒤 새 이름을 치고 Enter. 다 고치고 Ctrl+S 로 저장하면 탭의 ● 가 사라진다.</p>` : ""}
+  ${TEACH ? "" : `<div class="practice" style="max-width:none"><h3>연습 — 점수는 없다. 목표처럼 고치면 다음 문제가 나온다</h3><div id="kedPr"></div></div>`}`;
 const RULES = [
   ["개인전. 칠 어휘(음식 · 고사성어 · 도시 · 가을)를 골라 조에 들어간다. 3명 이하인 조는 없어지고 그 사람들은 다른 조로 흩어진다.",
    "카드 10장 — 먼저 친 사람이 갖고, 그 자리에 새 단어가 들어온다. 치기 시작하면 맞는 단어를 알아서 찾는다.",
@@ -768,9 +782,10 @@ function editLesson(){
 }
 function intro(){
   const e = V.ev;
-  const head = `<h2 class="title">${e + 1}종목 · ${V.events[e]}</h2>` + teachBar("학생들이 안내를 보고 있습니다", `<button class="go" id="tgo">${e === 0 ? "조 고르기로" : "첫 판 대진 공개"}</button>`);
+  const head = `<h2 class="title">${e + 1}종목 · ${V.events[e]}</h2>` + teachBar("학생들이 안내를 보고 있습니다", `<button class="go" id="tgo">${e === 0 && !KEYS() ? "조 고르기로" : "첫 판 대진 공개"}</button>`);
   let body;
-  if (e < 2) body = `<ul class="rules">${RULES[e].map(r => `<li>${r}</li>`).join("")}</ul>`;
+  if (KEYS()) body = keysIntro(e);
+  else if (e < 2) body = `<ul class="rules">${RULES[e].map(r => `<li>${r}</li>`).join("")}</ul>`;
   else if (e === 2) body = `<p class="sub">문장에서 바뀐 곳을 찾아 고친다. 단축키를 쓰면 훨씬 빠르다.</p>${keyList(KEYS_E3)}
     <div class="practice"><h3>연습 — 하나씩 따라 해 보자. 안내한 키 말고는 먹히지 않는다</h3>
       <p class="how" id="prHow"></p><div class="mirror" id="prMirror"></div>
@@ -782,6 +797,7 @@ function intro(){
       <p class="sub">내 표</p><table class="grid" id="pr4"></table><p class="toast big" id="prOk"></p></div>`;
   $("stage").innerHTML = head + body;
   if (TEACH) $("tgo").onclick = () => act("go");
+  if (KEYS()){ if (!TEACH) KeyEd.mount($("kedPr"), {next: () => KeyEd.gen(e)}); return; }
   if (e === 2) editLesson();
   if (e === 3) toyTable();
 }
@@ -832,20 +848,40 @@ const gname = () => V.extra ? xname() : `${V.ph.g + 1}게임`;
 const leagueHead = () => `<h2 class="title">${V.ev + 1}종목 · ${V.events[V.ev]} <span class="sub">${V.extra ? xname() : `${V.ph.rd + 1}판 / 2판`}</span></h2>`;
 const others = res => V.races.filter((r, i) => !V.mine || i !== V.mine.i).map(r =>
   `${tname(r.a)} ${res ? fmt1(r.sa) + " : " + fmt1(r.sb) : "vs"} ${tname(r.b)}`).join(" · ");
+/* 아이템 — 진 팀이 다음 경기 미리 보기에서 고른다. 고른 것은 경기가 시작되면 모두에게 드러난다 */
+const ITEM_NAME = {nerf: "너프", dark: "연막탄", none: "상남자"};
+const itemLine = r => (r.used || []).map(u => u.kind === "dark"
+  ? `${tname(u.team)} 연막탄 → ${tname(u.foe)} 전체 (${u.fired ? "썼다" : "버튼은 " + esc(u.holder || "?")})`
+  : `${tname(u.team)} 너프 → ${esc(u.name)}`).join(" · ");
+function itemBox(){
+  const it = V.mine && V.mine.item;
+  if (TEACH){ const ts = V.races.flatMap(r => r.has || []); return ts.length ? `<p class="sub">아이템을 고르는 팀 (지난 판 패배) — ${ts.map(tname).join(" ")}</p>` : ""; }
+  if (!it) return "";
+  const on = (k, p) => it.kind === k && (k === "none" || it.target === p) ? "go" : "";
+  const pick = !it.kind ? "아직 안 골랐다 — 안 고르면 상남자" : "지금 선택: " + ITEM_NAME[it.kind] + (it.target ? " → " + esc((it.foes.find(f => f.pid === it.target) || {}).name || "") : it.kind === "dark" ? " → 상대 팀 전체" : "");
+  return `<div class="practice" style="max-width:none"><h3>아이템 — 지난 판에 진 팀이 받는다. 팀에서 마지막에 고른 것이 쓰인다</h3>
+    <p class="sub" style="margin:0"><b>너프</b> — 상대 한 명을 골라 그 사람의 득점을 2/3 로</p>
+    <div class="row" style="margin:6px 0 12px;flex-wrap:wrap">${it.foes.map(f => `<button class="${on("nerf", f.pid)}" data-item="nerf" data-pid="${esc(f.pid)}">${esc(f.name)}</button>`).join("")}</div>
+    <p class="sub" style="margin:0"><b>연막탄</b> — 상대 팀 모두의 화면을 10초 동안 흐리게. 언제 터뜨릴지는 경기 중에 우리 팀 최하위가 버튼으로 정한다</p>
+    <div class="row" style="margin:6px 0 12px"><button class="${it.kind === "dark" ? "go" : ""}" data-item="dark">연막탄</button></div>
+    <div class="row" style="align-items:center"><button class="${on("none")}" data-item="none">상남자 — 아이템 없이 싸운다</button><b>${pick}</b></div></div>`;
+}
 function preview(){
   const body = TEACH ? V.races.map(r => vsCard(r, false)).join("")
     : vsCard(V.mine, false) + `<p class="sub">같은 시간 다른 경기 — ${others(false)}</p>`;
   $("stage").innerHTML = leagueHead() + teachBar("맞대결 공개", `<button class="go" id="tgo">바로 시작</button>`)
-    + `<p class="countdown">${clock("경기가 #초 후에 시작됩니다.")}</p>` + body;
+    + `<p class="countdown">${clock("경기가 #초 후에 시작됩니다.")}</p><div id="itemwrap">${itemBox()}</div>` + body;
   if (TEACH) $("tgo").onclick = () => act("go");
+  $("itemwrap").onclick = e => { const b = e.target.closest("[data-item]"); if (b) send("typeitem", {kind: b.dataset.item, target: b.dataset.pid}); };
+  upd = () => { const h = itemBox(); if ($("itemwrap").innerHTML !== h) $("itemwrap").innerHTML = h; };
 }
 
 /* ───────── 경기 ───────── */
 const badge = it => `<span class="pts t${it.tier}${it.late ? " late" : ""}">${it.pts}점</span>` + (it.x2 ? `<span class="pts x2">×2</span>` : "");
-const isLate = () => { const lim = [60, 120, 120, 120][V.ev]; return V.ph.until && (V.ph.until - now()) <= lim * 500; };
+const isLate = () => { const lim = V.limit || [60, 120, 120, 120][V.ev]; return V.ph.until && (V.ph.until - now()) <= lim * 500; };
 function play(){
   if (TEACH) return playBoard();
-  ({word: playWords, quote: playQuote, edit: playEdit, table: playTable})[V.mine.kind]();
+  ({word: playWords, quote: playQuote, edit: playEdit, table: playTable, keys: playKeys})[V.mine.kind]();
 }
 /* 교실 앞 — 모든 경기의 점수 */
 function playBoard(){
@@ -855,7 +891,7 @@ function playBoard(){
       const head = r.th ? `<h3>${esc(r.th)}조</h3>` : `<h3>${tname(r.a)} <b>${fmt1(r.sa)}</b> : <b>${fmt1(r.sb)}</b> ${tname(r.b)}</h3>`;
       return `<div class="grp">${head}<table class="t"><tr><th>이름</th><th>팀</th><th>점수</th><th>맞힌 수</th></tr>${ps.map(p => `<tr><td>${esc(p.name)}</td><td>${tname(p.team)}</td><td>${p.score}</td><td>${p.got}</td></tr>`).join("")}</table></div>`;
     }).join("");
-    $("stage").innerHTML = `<h2 class="title">${V.ev + 1}종목 · ${V.events[V.ev]} <span class="sub">${V.extra ? xname() : V.ev ? `${V.ph.rd + 1}판` : `${V.ph.g + 1}게임`}</span></h2>
+    $("stage").innerHTML = `<h2 class="title">${V.ev + 1}종목 · ${V.events[V.ev]} <span class="sub">${V.extra ? xname() : V.ph.rd !== undefined ? `${V.ph.rd + 1}판` : `${V.ph.g + 1}게임`}</span></h2>
       <div class="hud"><div><b id="hT">${left(V.ph.until)}</b><span>남은 초</span></div><div class="late">${isLate() ? "후반! 새로 나오는 문제는 30·40·50점" : ""}</div></div>
       ${teachBar("경기 중", `<button id="tgo">경기 끝내기</button>`)}<div class="boards">${tables}</div>`;
     $("tgo").onclick = () => { if (confirm("남은 시간을 버리고 경기를 끝낼까요?")) act("go"); };
@@ -1295,17 +1331,51 @@ function playTable(){
   frame(); upd = frame;
 }
 
+/* ───────── 단축키 올림픽 — 각자 편집기에서 목표처럼 고친다 ─────────
+   문제는 화면에서 만들고(shared/keyed.js), 풀었다는 알림만 보낸다 — 4종목과 같은 창구(typetable)다 */
+function playKeys(){
+  const r = V.mine; let cur = null;
+  const gb = () => { const g = V.mine.goal || {}; return cur ? badge({tier: cur.tier, late: g.late, pts: PTS[g.late ? 1 : 0][cur.tier], x2: g.x2}) : ""; };
+  $("stage").innerHTML = `<h2 class="title">${V.ev + 1}종목 · ${tname(r.a)} vs ${tname(r.b)}</h2>
+    <div class="hud"><div><b id="hT">${left(V.ph.until)}</b><span>남은 초</span></div><div><b id="hU">0</b><span>우리 팀 점수</span></div><div><b id="hO">0</b><span>상대 팀 점수</span></div><div><b id="hC">0</b><span>내가 푼 문제</span></div><div class="late" id="hL"></div></div>
+    <p class="sub">${KeyEd.EVENTS[V.ev].how} <span id="gb"></span></p><p class="sub" id="itemNote"></p><div style="position:relative"><div id="ked"></div><div id="smokeN" style="position:absolute;transform:translate(-50%,-50%);font:900 120px/1 system-ui,sans-serif;color:#fff;text-shadow:0 2px 18px #000a;pointer-events:none;display:none"></div></div><div class="toast" id="toast"></div>`;
+  /* 연막탄 — 서버가 정한 10초 동안 내 편집기가 흐려진다 */
+  const dk = setInterval(() => {
+    const box = $("ked"); if (!box) return clearInterval(dk);
+    const d = V.mine && V.mine.dark, on = !!d && now() >= d.at && now() < d.until;
+    box.style.transition = "filter .3s"; box.style.filter = on ? "blur(20px)" : "";
+    /* 남은 초 — 흐려진 편집기 한가운데에 숫자만. 흐림 밖(형제 요소)에 둬야 숫자는 또렷하다 */
+    const n = $("smokeN"), ed = box.querySelector(".ked-ed");
+    n.style.display = on ? "block" : "none";
+    if (on && ed){ n.textContent = Math.ceil((d.until - now()) / 1000); n.style.left = ed.offsetLeft + ed.offsetWidth / 2 + "px"; n.style.top = ed.offsetTop + ed.offsetHeight / 2 + "px"; }
+  }, 200);
+  hooks.got = () => {};   // 득점 팝업은 typescore 로
+  KeyEd.mount($("ked"), {next: () => (cur = KeyEd.gen(V.ev)), onSolve: p => send("typetable", {tier: p.tier}), onLoad: () => { $("gb").innerHTML = gb(); }});
+  const frame = () => {
+    $("hU").textContent = fmt1(ourScore()); $("hO").textContent = fmt1(theirScore()); $("hC").textContent = myScore().got;
+    $("hL").textContent = isLate() ? "후반! 새 문제는 30·40·50점" : "";
+    $("gb").innerHTML = gb() + (V.mine.nerf ? ` <span class="pts x2">너프 — 내 득점 ×2/3</span>` : "");
+    /* 연막탄 버튼 — 우리 팀 최하위에게만 뜬다. 한 번 누르면 상대 팀 화면이 10초 흐려진다 */
+    const il = itemLine(V.mine), h = (V.mine.fire ? `<button class="go" id="fire">연막탄 터뜨리기 — 상대 팀 화면 10초 (한 번뿐)</button> ` : "") + (il ? "아이템 — " + il : "");
+    if ($("itemNote").innerHTML !== h) $("itemNote").innerHTML = h;
+    $("itemNote").onclick = e => { if (e.target.id === "fire"){ send("typefire"); const ta = $("ked").querySelector("textarea"); if (ta) ta.focus(); } };
+  };
+  frame(); upd = frame;
+}
+
 /* ───────── 경기 결과 ───────── */
 function after(){
   const render = () => {
-    if (V.ev === 0){
+    if (V.ev === 0 && !KEYS()){
       const table = r => { const ps = (r.table || []).map(pid => r.ps.find(p => p.pid === pid));
         return `<table class="t"><tr><th>순위</th><th>이름</th><th>팀</th><th>점수</th><th>맞힌 단어</th></tr>${ps.map((p, i) => `<tr class="${meP() && p.pid === V.me.pid ? "me" : ""}"><td>${i < 3 && p.score > 0 ? `<span class="medal ${MEDAL[i]}">${MEDAL_TXT[i]}</span>` : i + 1}</td><td>${pname(p.pid, p.name)}</td><td>${tname(p.team)}</td><td>${p.score}</td><td>${p.got}</td></tr>`).join("")}</table>`; };
       const body = TEACH ? `<div class="boards">${V.races.map(r => `<div class="grp"><h3>${esc(r.th)}조</h3>${table(r)}</div>`).join("")}</div>`
         : `<h3>${esc(V.mine.th)}조</h3>${table(V.mine)}<p class="sub">다른 조 금메달 — ${V.races.filter((r, i) => i !== V.mine.i).map(r => { const p = r.ps.find(x => x.pid === r.table[0]); return `${esc(r.th)}조 ${esc(p.name)}`; }).join(" · ")}</p>`;
       $("stage").innerHTML = `<h2 class="title">1종목 · ${gname()} 끝</h2>` + teachBar("게임 결과", `<button class="go" id="tgo">${V.extra ? "종합 발표로" : V.ph.g === 0 ? "2게임 조 고르기" : "1종목 결과 발표"}</button>`) + body;
     } else {
-      const body = TEACH ? V.races.map(r => vsCard(r, true)).join("") : vsCard(V.mine, true) + `<p class="sub">같은 시간 다른 경기 — ${others(true)}</p>`;
+      const card = r => vsCard(r, true) + (itemLine(r) ? `<p class="sub">아이템 — ${itemLine(r)}</p>` : "");
+      const lost = !TEACH && KEYS() && !V.extra && ourScore() < theirScore() && !(V.ev === V.events.length - 1 && V.ph.rd === 1);
+      const body = TEACH ? V.races.map(card).join("") : card(V.mine) + (lost ? `<p class="sub"><b>졌지만 다음 경기에서 아이템을 고른다.</b></p>` : "") + `<p class="sub">같은 시간 다른 경기 — ${others(true)}</p>`;
       $("stage").innerHTML = leagueHead() + teachBar("판 결과", `<button class="go" id="tgo">${V.extra ? "종합 발표로" : V.ph.rd === 0 ? "다음 판 대진 공개" : V.ev + 1 + "종목 결과 발표"}</button>`) + body;
     }
     if (TEACH) $("tgo").onclick = () => act("go");
@@ -1357,11 +1427,12 @@ function finale(){
   if (TEACH) $("stage").querySelectorAll("[data-xev]").forEach(b => b.onclick = () => act("extra", {ev: +b.dataset.xev}));
 }
 
-/* ?practice=3 · ?practice=4 — 서버 없이 그 종목 소개의 연습 칸만 띄운다 (교사가 미리 해 보기) */
-const PRACTICE = {"3": 2, "4": 3}[Q.get("practice")];
+/* ?practice=3 · ?practice=4 (타자) · ?practice=k1 · k2 · k3 (단축키) — 서버 없이 그 종목 소개의 연습 칸만 띄운다 (교사가 미리 해 보기) */
+const PRACTICE = {"3": 2, "4": 3, k1: 0, k2: 1, k3: 2}[Q.get("practice")];
 if (PRACTICE !== undefined){
   V = {ev: PRACTICE, ph: {k: "intro", ev: PRACTICE}, events: ["단어 개인전", "문장 팀전", "문장 편집 팀전", "표 편집 팀전"]};
+  if (/^k/.test(Q.get("practice"))) Object.assign(V, {mode: "keys", events: KeyEd.EVENTS.map(e => e.name)});
   intro();
-  $("stage").insertAdjacentHTML("afterbegin", `<p class="sub">연습만 해 보기 · <a href="?practice=3">3종목 연습</a> · <a href="?practice=4">4종목 연습</a></p>`);
+  $("stage").insertAdjacentHTML("afterbegin", `<p class="sub">연습만 해 보기 · <a href="?practice=3">3종목 연습</a> · <a href="?practice=4">4종목 연습</a> · 단축키 <a href="?practice=k1">1</a> · <a href="?practice=k2">2</a> · <a href="?practice=k3">3</a>종목</p>`);
 } else { gate(); connect(); }
 </script>

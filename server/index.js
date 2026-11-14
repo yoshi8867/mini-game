@@ -477,7 +477,7 @@ function pushProg(g, now){
   for (const [r, ps] of g.progs(now)) toRace(g, r, "typeprog", {ps});
 }
 function typeList(){
-  const out = [...typings.values()].map(g => ({code: g.code, title: g.title, state: g.state, people: g.people.size}));
+  const out = [...typings.values()].map(g => ({code: g.code, title: g.title, mode: g.mode, state: g.state, people: g.people.size}));
   out.sort((a, b) => (a.state === b.state ? 0 : a.state === "open" ? -1 : 1));
   return out;
 }
@@ -520,6 +520,8 @@ function onTypeDo(ws, msg){
   else if (msg.t === "typetheme") r = g.setTheme(pid, msg.i);
   else if (msg.t === "typeprog") return g.progress(pid, msg.i, msg.n);   // 내려보내기는 시계가 묶어서
   else if (msg.t === "typeclaim") r = g.claim(pid, msg.i, msg.text, now);
+  else if (msg.t === "typeitem") r = g.setItem(pid, msg.kind, msg.target);
+  else if (msg.t === "typefire") r = g.fire(pid, now);
   else r = g.tableDone(pid, msg.tier, now);
   if (r.err) return send(ws, "typemiss", {why: r.err, i: msg.i});
   if (r.val) send(ws, "typegot", {val: r.val, i: msg.i});
@@ -890,7 +892,7 @@ function onAdmin(what, m, done, ip){
       if (!okPin(m.pin)) return done(400, {ok: false, why: "badpin"});
       const code = newCode(c => cups.has(c) || rooms.has(c) || quizzes.has(c) ||
                                 bids.has(c) || omrs.has(c) || typings.has(c));
-      const g = new Typing(code, {pin: m.pin, title: m.title});
+      const g = new Typing(code, {pin: m.pin, title: m.title, mode: m.mode});
       typings.set(code, g);
       keep("typing", g);
       return done(200, {ok: true, typing: g.full()});
@@ -997,6 +999,8 @@ wss.on("connection", ws => {
       case "typeteam":
       case "typetheme":
       case "typeclaim":
+      case "typeitem":
+      case "typefire":
       case "typeprog":
       case "typetable":return onTypeDo(ws, msg);
       case "watch":   return onWatch(ws, msg);
