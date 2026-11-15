@@ -21,6 +21,7 @@ const bots = require("./bots.js");
 const {Room, newCode, okPin, LIMIT_MS} = require("./room.js");
 const players = require("./players.js");
 const admin = require("./admin.js");
+const lesson = require("./lesson.js");
 const {Tourney, roundName, MAX_ENTRANTS} = require("./tourney.js");
 const {Quiz, MAX_ENTRANTS: QUIZ_MAX} = require("./quiz.js");
 const {Bid, MAX_ENTRANTS: BID_MAX} = require("./bid.js");
@@ -595,6 +596,9 @@ function onAdmin(what, m, done, ip){
   const omr  = () => omrs.get(String(m.code || "").toUpperCase());
 
   switch (what){
+    case "lesson":                       // 연습 페이지 구간 열기. open 이 없으면 현황만 본다
+      lesson.set(m.open);
+      return done(200, lesson.state(Date.now()));
     case "state": {
       const list = [...cups.values()].map(c => c.full());
       list.sort((a, b) => b.made - a.made);
@@ -954,6 +958,7 @@ const server = httpSide.create({
             quizzes: quizzes.size, bids: bids.size, omrs: omrs.size, typings: typings.size};
   },
   admin: (what, m, done, ip) => onAdmin(what, m, done, ip),
+  lesson: (id, at) => lesson.ping(id, at, Date.now()),
 });
 const wss = new WebSocketServer({server, path: "/ws"});
 

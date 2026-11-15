@@ -125,6 +125,12 @@ function create(hooks){
       });
     }
 
+    /* 단축키 연습 페이지의 구간 문. 학생 화면이 몇 초마다 묻는다 */
+    if (url === "/lesson"){
+      const q = new URL(req.url, "http://x").searchParams;
+      return done(200, hooks.lesson(q.get("id"), +q.get("at")));
+    }
+
     /* 검사는 서버에서 한다. 페이지에서 하면 소스를 열어 건너뛴다 */
     if (url.slice(0, 7) === "/admin/"){
       if (req.method !== "POST") return done(405, {ok: false, why: "post only"});

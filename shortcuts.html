@@ -96,6 +96,14 @@ button:disabled{opacity:.4;cursor:not-allowed}
       <div id="status"><span id="stl"></span><span id="str"></span></div>
     </div>
     <div id="toast"></div>
+<div id="gate" hidden></div>
+<style>
+#gate{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:50;background:#1f6feb;color:#fff;padding:10px 16px;border-radius:10px;font-size:16px;box-shadow:0 4px 18px #0006;white-space:nowrap}
+body:not(.t) .tonly{display:none}
+#gate a{color:#fff;font-weight:700}
+#gate button,#tp button{margin-left:8px}
+#tp{position:fixed;left:12px;bottom:12px;z-index:50;background:#222;color:#eee;padding:10px 14px;border-radius:10px;font-size:14px;border:1px solid #555;line-height:1.7}
+</style>
   </section>
 </main>
 <footer>
@@ -184,7 +192,7 @@ print(name, score)`;
 const LESSON=[
 {info:1,title:'VS Code 단축키 훈련',desc:`<p>오른쪽 <b>내 편집기</b>를 단축키로 조작해서 <b>목표</b>와 똑같이 만들면 초록불이 켜지고 다음 문제로 넘어갑니다.</p>
 <p>· 글자 입력은 막혀 있어요. 오직 단축키로만!<br>· 방향키나 마우스로 커서를 옮기고, <kbd>Shift</kbd>+방향키 또는 드래그로 여러 줄을 선택합니다.<br>· 꼬였다면 아래 <b>↻ 다시 하기</b>를 누르세요.</p>
-<p>연습부터 하려면 <kbd>Enter</kbd></p><p><b>게임 · 90초 동안 많이 풀기</b><br><button onclick="startGame(1)">1종목 · 줄 옮기기</button><button onclick="startGame(2)">2종목 · + 주석, 들여쓰기</button><button onclick="startGame(3)">3종목 · + 이름 바꾸기, 저장</button></p>`},
+<p>연습부터 하려면 <kbd>Enter</kbd></p><p class="tonly"><b>게임 · 90초 동안 많이 풀기</b><br><button onclick="startGame(1)">1종목 · 줄 옮기기</button><button onclick="startGame(2)">2종목 · + 주석, 들여쓰기</button><button onclick="startGame(3)">3종목 · + 이름 바꾸기, 저장</button></p>`},
 
 // ── 줄 옮기기 ──
 {title:'줄 옮기기',keys:['Alt+↑','Alt+↓'],
@@ -695,11 +703,14 @@ function render(){
   $('next').disabled=idx===S.length-1||!((free&&!game)||s.info||solved.has(idx));
   $('reset').hidden=!!s.info;
   if(!game)$('prog').firstElementChild.style.width=idx/(S.length-1)*100+'%';
+  if(!game&&idx>=lim())$('next').disabled=true;
+  gate();
 }
 function load(i){
   clearTimeout(timer);idx=i;const s=S[i];
-  document.body.className=(s.info?'info ':'')+(s.debug?'debug ':'')+(game?'game':'');
-  $('count').textContent=game?`맞힌 문제 ${game.score}개`:`${i+1} / ${S.length}`;$('title').textContent=s.title;
+  if(!game&&!free&&S===LESSON)try{sessionStorage.vscIdx=i}catch(e){}
+  document.body.className=(free?'t ':'')+(s.info?'info ':'')+(s.debug?'debug ':'')+(game?'game':'');
+  $('count').textContent=game?`맞힌 문제 ${game.score}개`:`${i+1} / ${S.length}`;$('title').textContent=game&&game.more?'연습문제':s.title;
   $('keys').innerHTML=(s.keys||[]).map(k=>'<span>'+k.split('+').map(x=>`<kbd>${x}</kbd>`).join(' + ')+'</span>').join('');
   $('desc').innerHTML=s.desc;
   $('goalbox').hidden=s.target==null;if(s.target!=null)$('goal').innerHTML=hl(s.target);
@@ -712,6 +723,7 @@ function load(i){
 }
 function go(i){
   if(i<0||i>=S.length)return;
+  if(!game&&i>lim())return;
   if(i>idx&&!((free&&!game)||S[idx].info||solved.has(idx)))return;
   load(i);
 }
@@ -832,8 +844,9 @@ function genProblem(ev){
   }
 }
 let game=null;
-function startGame(ev){
-  game={ev,t0:Date.now(),score:0};solved.clear();$('timer').textContent=(GAME_MS/1000).toFixed(1)+'초';
+function startGame(ev,more){ // more = 시간·기록 없이 연습문제만 계속 내는 모드(구간을 먼저 끝낸 학생용)
+  if(!game)back={idx,sv:[...solved]}; // 게임이 끝나면 하던 자리로 돌아온다
+  game={ev,t0:Date.now(),score:0,more};solved.clear();$('timer').textContent=more?'':(GAME_MS/1000).toFixed(1)+'초';
   S=[genProblem(ev),{info:1,title:'',desc:''}]; // 문제는 맞힐 때마다 하나씩 뒤에 붙는다
   load(0);
 }
@@ -848,9 +861,9 @@ function endGame(){
   $('timer').textContent='0.0초';$('prog').firstElementChild.style.width='0%';
   load(S.length-1);
 }
-function quitGame(){game=null;S=LESSON;solved.clear();load(0)}
+function quitGame(){game=null;S=LESSON;solved.clear();back.sv.forEach(x=>solved.add(x));load(back.idx)}
 setInterval(()=>{
-  if(!game||game.end)return;
+  if(!game||game.end||game.more)return;
   const left=GAME_MS-(Date.now()-game.t0);
   if(left<=0)return endGame();
   $('timer').textContent=(left/1000).toFixed(1)+'초';
@@ -901,11 +914,11 @@ ta.addEventListener('input',revert);           // 한글 조합 입력은 before
 ta.addEventListener('compositionend',revert);
 
 document.addEventListener('selectionchange',()=>{if(document.activeElement===ta)render()});
-document.addEventListener('mouseup',e=>{if(!rn&&!S[idx].info&&e.target.id!=='rni')ta.focus()});
+document.addEventListener('mouseup',e=>{if(!rn&&!S[idx].info&&e.target.id!=='rni'&&!e.target.closest('#tp'))ta.focus()});
 $('prev').onclick=()=>game?quitGame():go(idx-1);
 $('next').onclick=()=>go(idx+1);
 $('reset').onclick=()=>load(idx);
-addEventListener('beforeunload',e=>{if(solved.size&&idx<S.length-1){e.preventDefault();e.returnValue=''}});
+addEventListener('beforeunload',e=>{if(solved.size&&idx<S.length-1&&open<6){e.preventDefault();e.returnValue=''}});
 
 // ───────── 자체 점검: 주소 끝에 ?test → 모든 문제를 모범 답안으로 풀어 보고 결과를 탭 제목에 표시 ─────────
 function selfTest(){
@@ -962,8 +975,55 @@ function selfTest(){
   document.title=fail.length?'TEST FAIL '+fail.join(' | '):'TEST OK '+n;
 }
 
+// ───────── 구간 문: 교사가 연 구간까지만 넘어갈 수 있다 ─────────
+// 열린 구간(open)은 서버가 알려 준다. 1~5 = 구간, 6 = 올림픽 링크까지. 교사는 ?teacher 로 들어와 조작판에서 연다
+const ENDS=[4,14,24,35,42]; // 구간 1~5의 마지막 쪽(0부터 셈): 줄 옮기기 / 들여쓰기·주석 / 되돌리기·저장·이름 / 디버깅 기초 / F11
+const API=/^(localhost|127.)/.test(location.hostname)?'http://'+location.hostname+':3000':'https://class-live-62tz.onrender.com';
+const ss=(k,v)=>{try{if(v===undefined)return sessionStorage.getItem(k)||'';v===''?sessionStorage.removeItem(k):sessionStorage.setItem(k,v)}catch(e){return ''}};
+let open=1,at=+ss('vscAt')||0,hide=0,back={idx:0,sv:[]};
+function lim(){return free||open>=5?S.length-1:ENDS[open-1]}
+function keep(){hide=open;gate()} // 인라인 onclick 안에서 open 은 document.open 으로 읽히므로 함수로 뺀다
+function jump(){if(game)quitGame();load(ENDS[open-2]+1)}
+function gate(){
+  const g=$('gate');if(free)return;
+  if(!game)ENDS.forEach((e,k)=>{if(solved.has(e)&&at<k+1)ss('vscAt',at=k+1)});
+  const cur=game?back.idx:idx,more=game?'':`<button onclick="startGame(${Math.min(open,3)},1)">연습문제 더 풀어보기</button>`;
+  let h='';
+  if(open>=6)h='<b>단축키 올림픽을 시작합니다!</b> <a href="typing.html">게임 페이지로 가기 →</a>';
+  else if(open>1&&cur<=ENDS[open-2]&&hide!==open)h=`<b>구간 ${open}이(가) 열렸습니다.</b><button onclick="jump()">구간 ${open}(으)로 이동</button><button onclick="keep()">하던 것 계속</button>`;
+  else if(open<5&&cur===ENDS[open-1]&&(game?back.sv.includes(cur):solved.has(cur)))h=`<b>구간 ${open} 끝!</b> 선생님이 다음 구간을 열 때까지 기다리세요.`+more;
+  else if(open===5&&cur===LESSON.length-1)h='<b>모든 구간 끝!</b> 선생님 안내를 기다리세요.'+more;
+  if(g.dataset.h!==h){g.dataset.h=h;g.innerHTML=h;g.hidden=!h}
+}
+const cid=ss('vscId')||(ss('vscId',Math.random().toString(36).slice(2)),ss('vscId'))||Math.random().toString(36).slice(2);
+async function poll(){
+  try{const j=await(await fetch(`${API}/lesson?id=${cid}&at=${at}`)).json();if(j.open!==open){open=j.open;render()}}catch(e){}
+}
+// 교사 조작판
+const TP=['','줄 옮기기','들여쓰기·주석','되돌리기·저장·이름 바꾸기','디버깅 기초','F11 함수 안으로','올림픽 링크'];
+let tok=ss('vscTok');
+const post=async(what,b)=>(await fetch(API+'/admin/'+what,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(b)})).json();
+async function tp(v){
+  const p=$('tp');
+  if(!tok){
+    p.innerHTML='<input id=tpw type=password placeholder="관리자 비밀번호"><button id=tpl>구간 관리 시작</button>';
+    $('tpl').onclick=async()=>{
+      try{const j=await post('login',{pw:$('tpw').value});if(!j.ok)return toast('비밀번호가 다릅니다.');ss('vscTok',tok=j.token);tp()}
+      catch(e){toast('서버에 연결하지 못했습니다. 잠시 뒤 다시 눌러 주세요.')}
+    };
+    return;
+  }
+  let j;try{j=await post('lesson',{token:tok,open:v})}catch(e){return}
+  if(!j.ok){ss('vscTok',tok='');return tp()}
+  const o=j.open,h=`<b>${o<6?`구간 ${o} 열림 · ${TP[o]}`:'올림픽 링크까지 열림'}</b><br>접속 ${j.n}명 · 끝낸 학생: `+j.done.map((d,k)=>`${k+1}구간 ${d}`).join(' / ')+'<br>'
+    +(o>1?`<button onclick="tp(${o-1})">◀ 한 단계 닫기</button>`:'')+(o<6?`<button onclick="tp(${o+1})">▶ ${o<5?`구간 ${o+1} 열기`:'올림픽 링크 열기'} (${TP[o+1]})</button>`:'');
+  if(p.dataset.h!==h){p.dataset.h=h;p.innerHTML=h}
+}
+
 if(location.search.includes('test'))selfTest();
-load(free?Math.max(0,Math.min(S.length-1,(+location.hash.slice(1)||1)-1)):0);
+load(free?Math.max(0,Math.min(S.length-1,(+location.hash.slice(1)||1)-1)):Math.min(S.length-1,+ss('vscIdx')||0));
+if(!free&&!location.search.includes('test')){poll();setInterval(poll,4000)}
+if(location.search.includes('teacher')){const p=document.createElement('div');p.id='tp';document.body.append(p);tp();setInterval(()=>tok&&tp(),3000)}
 // 주소 끝에 ?game=2 처럼 붙이면 그 종목 게임으로 바로 시작
 if(EVENTS[+new URLSearchParams(location.search).get('game')])startGame(+new URLSearchParams(location.search).get('game'));
 </script>
